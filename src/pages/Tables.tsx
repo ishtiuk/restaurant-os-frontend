@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { restaurantTables, tableOrders, items, categories } from "@/data/mockData";
-import { RestaurantTable, CartItem } from "@/types";
+import { categories } from "@/data/mockData";
+import { RestaurantTable, CartItem, PaymentMethod } from "@/types";
+import { useAppData } from "@/contexts/AppDataContext";
 import {
   Users,
   Plus,
@@ -19,6 +20,7 @@ import {
   Wallet,
   Smartphone,
   X,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Dialog,
@@ -69,16 +71,23 @@ const getStatusBadge = (status: RestaurantTable["status"]) => {
 };
 
 export default function Tables() {
+  const { items, tables, tableOrders, saveTableOrder, finalizeTableBill } = useAppData();
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(null);
   const [showOrderDialog, setShowOrderDialog] = useState(false);
   const [showBillDialog, setShowBillDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [billPayment, setBillPayment] = useState<PaymentMethod>("cash");
+  const [billLoading, setBillLoading] = useState(false);
 
-  const currentOrder = selectedTable?.currentOrderId
-    ? tableOrders.find((o) => o.id === selectedTable.currentOrderId)
-    : null;
+  const currentOrder = useMemo(() => {
+    if (!selectedTable) return null;
+    if (selectedTable.currentOrderId) {
+      return tableOrders.find((o) => o.id === selectedTable.currentOrderId) || null;
+    }
+    return tableOrders.find((o) => o.tableId === selectedTable.id && o.status !== "completed") || null;
+  }, [selectedTable, tableOrders]);
 
   const handleTableClick = (table: RestaurantTable) => {
     setSelectedTable(table);
@@ -94,6 +103,7 @@ export default function Tables() {
       }
       setShowOrderDialog(true);
     } else if (table.status === "billing") {
+      setBillPayment("cash");
       setShowBillDialog(true);
     }
   };
@@ -163,19 +173,32 @@ export default function Tables() {
       toast({ title: "Cart is empty", variant: "destructive" });
       return;
     }
-    toast({ title: `Order saved for ${selectedTable?.tableNo}` });
-    setShowOrderDialog(false);
-    setCart([]);
+    if (!selectedTable) return;
+    saveTableOrder(selectedTable.id, cart).then(() => {
+      toast({ title: `Order saved for ${selectedTable.tableNo}` });
+      setShowOrderDialog(false);
+      setCart([]);
+    });
   };
 
   const handleFinalizeBill = () => {
-    toast({ title: `Bill finalized for ${selectedTable?.tableNo}`, description: `Total: ${formatCurrency(currentOrder?.total || 0)}` });
-    setShowBillDialog(false);
+    if (!selectedTable || !currentOrder) return;
+    setBillLoading(true);
+    finalizeTableBill(selectedTable.id, billPayment)
+      .then((sale) => {
+        toast({
+          title: `Bill finalized for ${selectedTable.tableNo}`,
+          description: `Total: ${formatCurrency(sale.total)}`,
+        });
+        setShowBillDialog(false);
+      })
+      .catch(() => toast({ title: "Unable to finalize bill", variant: "destructive" }))
+      .finally(() => setBillLoading(false));
   };
 
-  const occupiedCount = restaurantTables.filter((t) => t.status === "occupied").length;
-  const billingCount = restaurantTables.filter((t) => t.status === "billing").length;
-  const emptyCount = restaurantTables.filter((t) => t.status === "empty").length;
+  const occupiedCount = tables.filter((t) => t.status === "occupied").length;
+  const billingCount = tables.filter((t) => t.status === "billing").length;
+  const emptyCount = tables.filter((t) => t.status === "empty").length;
 
   return (
     <div className="space-y-6">
@@ -191,7 +214,7 @@ export default function Tables() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-fade-in stagger-1">
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">Total Tables</p>
-          <p className="text-2xl font-display font-bold">{restaurantTables.length}</p>
+          <p className="text-2xl font-display font-bold">{tables.length}</p>
         </GlassCard>
         <GlassCard className="p-4" glow="accent">
           <p className="text-sm text-muted-foreground">Empty</p>
@@ -209,7 +232,7 @@ export default function Tables() {
 
       {/* Table Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 animate-fade-in stagger-2">
-        {restaurantTables.map((table) => {
+        {tables.map((table) => {
           const order = table.currentOrderId
             ? tableOrders.find((o) => o.id === table.currentOrderId)
             : null;
@@ -247,7 +270,7 @@ export default function Tables() {
             <DialogTitle className="font-display gradient-text">
               {selectedTable?.tableNo} - {selectedTable?.status === "occupied" ? "Update Order" : "New Order"}
             </DialogTitle>
-            <DialogDescription>অর্ডার যোগ করুন</DialogDescription>
+            <DialogDescription>অর্ডার যোগ করুন • Items will persist to this table</DialogDescription>
           </DialogHeader>
 
           <div className="flex gap-4 h-[60vh]">
@@ -346,6 +369,25 @@ export default function Tables() {
                 <Check className="w-4 h-4 mr-2" />
                 Save Order
               </Button>
+              <Button
+                variant="outline"
+                className="mt-2"
+                onClick={async () => {
+                  if (!selectedTable) return;
+                  if (cart.length > 0) {
+                    await saveTableOrder(selectedTable.id, cart);
+                    setCart([]);
+                  }
+                  if (currentOrder || cart.length > 0) {
+                    setShowOrderDialog(false);
+                    setShowBillDialog(true);
+                  } else {
+                    toast({ title: "No order yet", variant: "destructive" });
+                  }
+                }}
+              >
+                Go to Billing
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -400,33 +442,38 @@ export default function Tables() {
 
               {/* Payment Methods */}
               <div className="grid grid-cols-4 gap-2">
-                <Button variant="outline" className="flex-col h-auto py-3">
-                  <Wallet className="w-5 h-5 mb-1" />
-                  <span className="text-xs">Cash</span>
-                </Button>
-                <Button variant="outline" className="flex-col h-auto py-3">
-                  <CreditCard className="w-5 h-5 mb-1" />
-                  <span className="text-xs">Card</span>
-                </Button>
-                <Button variant="outline" className="flex-col h-auto py-3">
-                  <Smartphone className="w-5 h-5 mb-1" />
-                  <span className="text-xs">bKash</span>
-                </Button>
-                <Button variant="outline" className="flex-col h-auto py-3">
-                  <Smartphone className="w-5 h-5 mb-1" />
-                  <span className="text-xs">Nagad</span>
-                </Button>
+                {[
+                  { id: "cash", label: "Cash", icon: <Wallet className="w-5 h-5 mb-1" /> },
+                  { id: "card", label: "Card", icon: <CreditCard className="w-5 h-5 mb-1" /> },
+                  { id: "bkash", label: "bKash", icon: <Smartphone className="w-5 h-5 mb-1" /> },
+                  { id: "nagad", label: "Nagad", icon: <Smartphone className="w-5 h-5 mb-1" /> },
+                ].map((pm) => (
+                  <Button
+                    key={pm.id}
+                    variant={billPayment === pm.id ? "default" : "outline"}
+                    className="flex-col h-auto py-3"
+                    onClick={() => setBillPayment(pm.id as PaymentMethod)}
+                  >
+                    {pm.icon}
+                    <span className="text-xs">{pm.label}</span>
+                  </Button>
+                ))}
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1">
+                <Button variant="outline" className="flex-1" onClick={() => window.print()}>
                   <Receipt className="w-4 h-4 mr-2" />
                   Print Bill
                 </Button>
-                <Button variant="glow" className="flex-1" onClick={handleFinalizeBill}>
+                <Button variant="glow" className="flex-1" onClick={handleFinalizeBill} disabled={billLoading}>
                   <Check className="w-4 h-4 mr-2" />
-                  Complete
+                  {billLoading ? "Completing..." : "Complete"}
                 </Button>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CheckCircle2 className="w-3 h-3" />
+                Table will be marked empty after completion.
               </div>
             </div>
           )}

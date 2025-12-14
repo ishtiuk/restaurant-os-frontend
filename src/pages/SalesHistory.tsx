@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { recentSales } from "@/data/mockData";
+import { useAppData } from "@/contexts/AppDataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Sale } from "@/types";
 import {
   Search,
@@ -37,6 +38,9 @@ import { toast } from "@/hooks/use-toast";
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
 export default function SalesHistoryPage() {
+  const { sales, updateSaleTotalWithAudit, replaceSale } = useAppData();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -44,14 +48,20 @@ export default function SalesHistoryPage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editReason, setEditReason] = useState("");
   const [editAmount, setEditAmount] = useState("");
+  const [undoStack, setUndoStack] = useState<Record<string, Sale[]>>({});
+  const [redoStack, setRedoStack] = useState<Record<string, Sale[]>>({});
 
-  const filteredSales = recentSales.filter((sale) => {
-    const matchesSearch =
-      sale.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sale.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === "all" || sale.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredSales = useMemo(
+    () =>
+      sales.filter((sale) => {
+        const matchesSearch =
+          sale.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          sale.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus = filterStatus === "all" || sale.status === filterStatus;
+        return matchesSearch && matchesStatus;
+      }),
+    [sales, searchQuery, filterStatus]
+  );
 
   const handleViewSale = (sale: Sale) => {
     setSelectedSale(sale);
@@ -70,15 +80,49 @@ export default function SalesHistoryPage() {
       toast({ title: "Please provide a reason", variant: "destructive" });
       return;
     }
+    if (!selectedSale) return;
 
-    toast({
-      title: "Sale Updated",
-      description: `Sale ${selectedSale?.id} has been modified. Audit log created.`,
+    const current = sales.find((s) => s.id === selectedSale.id);
+    if (current) {
+      setUndoStack((prev) => ({
+        ...prev,
+        [current.id]: [...(prev[current.id] || []), current],
+      }));
+      setRedoStack((prev) => ({ ...prev, [current.id]: [] }));
+    }
+
+    updateSaleTotalWithAudit(selectedSale.id, {
+      newTotal: parseFloat(editAmount),
+      editedBy: user?.name || "Admin",
+      reason: editReason,
+    }).then(() => {
+      toast({
+        title: "Sale Updated",
+        description: `Sale ${selectedSale.id} has been modified. Audit log created.`,
+      });
     });
 
     setShowEditDialog(false);
     setEditReason("");
     setEditAmount("");
+  };
+
+  const handleUndo = (sale: Sale) => {
+    const stack = undoStack[sale.id] || [];
+    if (stack.length === 0) return;
+    const prev = stack[stack.length - 1];
+    setUndoStack((s) => ({ ...s, [sale.id]: stack.slice(0, -1) }));
+    setRedoStack((s) => ({ ...s, [sale.id]: [...(s[sale.id] || []), sale] }));
+    replaceSale(prev);
+  };
+
+  const handleRedo = (sale: Sale) => {
+    const stack = redoStack[sale.id] || [];
+    if (stack.length === 0) return;
+    const next = stack[stack.length - 1];
+    setRedoStack((s) => ({ ...s, [sale.id]: stack.slice(0, -1) }));
+    setUndoStack((s) => ({ ...s, [sale.id]: [...(s[sale.id] || []), sale] }));
+    replaceSale(next);
   };
 
   const getStatusBadge = (status: Sale["status"]) => {
@@ -125,14 +169,14 @@ export default function SalesHistoryPage() {
       </div>
 
       {/* Admin Warning */}
-      <GlassCard className="p-4 border-2 border-destructive/30 bg-destructive/10 animate-fade-in stagger-1">
+      <GlassCard className={`p-4 border-2 ${isAdmin ? "border-primary/30 bg-primary/5" : "border-destructive/30 bg-destructive/10"} animate-fade-in stagger-1`}>
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
+          <AlertTriangle className={`w-5 h-5 ${isAdmin ? "text-primary" : "text-destructive"} mt-0.5`} />
           <div>
-            <p className="font-semibold text-destructive">Admin Access Required</p>
+            <p className="font-semibold">{isAdmin ? "Audit logging enabled" : "Admin Access Required"}</p>
             <p className="text-sm text-muted-foreground">
               Editing sales records is a sensitive operation. All changes are logged for audit purposes.
-              Only authorized administrators can modify completed transactions.
+              {isAdmin ? " You can edit and undo/redo changes." : " Only authorized administrators can modify completed transactions."}
             </p>
           </div>
         </div>
@@ -226,8 +270,25 @@ export default function SalesHistoryPage() {
                         size="sm"
                         onClick={() => handleEditSale(sale)}
                         className="text-destructive hover:text-destructive"
+                        disabled={!isAdmin}
                       >
                         <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={(undoStack[sale.id] || []).length === 0}
+                        onClick={() => handleUndo(sale)}
+                      >
+                        <Undo2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={(redoStack[sale.id] || []).length === 0}
+                        onClick={() => handleRedo(sale)}
+                      >
+                        <History className="w-4 h-4" />
                       </Button>
                     </div>
                   </td>

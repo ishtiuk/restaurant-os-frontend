@@ -1,13 +1,18 @@
 import React from "react";
-import { Menu, Bell, Search, Utensils } from "lucide-react";
+import { Menu, Bell, Search, Utensils, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 interface MobileHeaderProps {
   onMenuClick: () => void;
 }
 
 export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
   return (
     <header className="h-16 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-30 lg:hidden">
       <div className="flex items-center justify-between h-full px-4">
@@ -30,6 +35,17 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="w-5 h-5" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title={user ? `Logout ${user.name}` : "Logout"}
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+          >
+            <LogOut className="w-5 h-5" />
           </Button>
         </div>
       </div>

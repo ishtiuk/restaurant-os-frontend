@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Utensils, Eye, EyeOff, LogIn } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -20,15 +22,16 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate login
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await login({ email, password, rememberMe });
       toast({
         title: "Welcome back!",
         description: "স্বাগতম! Login successful.",
       });
       navigate("/dashboard");
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

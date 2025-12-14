@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -13,9 +13,13 @@ import {
   Shield,
   X,
   Utensils,
+  LogOut,
+  User,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarProps {
   className?: string;
@@ -29,6 +33,8 @@ const navItems = [
   { path: "/purchases", label: "Purchases", labelBn: "ক্রয়", icon: Truck },
   { path: "/suppliers", label: "Suppliers", labelBn: "সরবরাহকারী", icon: Users },
   { path: "/customers", label: "Customers", labelBn: "গ্রাহক", icon: UserCircle },
+  { path: "/staff", label: "Staff", labelBn: "কর্মী", icon: User },
+  { path: "/attendance", label: "Attendance", labelBn: "হাজিরা", icon: Clock },
   { path: "/finance", label: "Finance", labelBn: "আর্থিক", icon: Wallet },
   { path: "/reports", label: "Reports", labelBn: "রিপোর্ট", icon: BarChart3 },
   { path: "/settings", label: "Settings", labelBn: "সেটিংস", icon: Settings },
@@ -36,7 +42,9 @@ const navItems = [
 ];
 
 export function Sidebar({ className, onClose }: SidebarProps) {
+  const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   return (
     <aside
@@ -96,6 +104,26 @@ export function Sidebar({ className, onClose }: SidebarProps) {
 
       {/* Footer */}
       <div className="p-4 border-t border-sidebar-border space-y-3">
+        <div className="flex items-center gap-3 rounded-lg bg-muted/40 p-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-hero flex items-center justify-center text-primary-foreground font-bold">
+            {user?.name?.[0] ?? "U"}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium truncate">{user?.name ?? "Guest"}</p>
+            <p className="text-xs text-muted-foreground truncate">{user ? `${user.role} role` : "Not signed in"}</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </Button>
+        </div>
         <div className="flex items-center justify-between">
           <div className="glass-card p-3 rounded-lg flex-1 mr-2">
             <p className="text-xs text-muted-foreground">Currency</p>

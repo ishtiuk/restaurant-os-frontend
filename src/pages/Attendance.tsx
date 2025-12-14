@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { staffMembers, attendanceRecords } from "@/data/mockData";
+import { useAppData } from "@/contexts/AppDataContext";
 import { Attendance as AttendanceType } from "@/types";
 import {
   Calendar,
@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -25,6 +26,7 @@ const MONTHS = [
 ];
 
 export default function AttendancePage() {
+  const { staff, attendance, upsertAttendance } = useAppData();
   const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 20)); // January 2024
   const [selectedDate, setSelectedDate] = useState<string>("2024-01-20");
 
@@ -54,9 +56,7 @@ export default function AttendancePage() {
     return `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   };
 
-  const getAttendanceForDate = (date: string) => {
-    return attendanceRecords.filter((a) => a.date === date);
-  };
+  const getAttendanceForDate = (date: string) => attendance.filter((a) => a.date === date);
 
   const selectedDateAttendance = getAttendanceForDate(selectedDate);
   const presentCount = selectedDateAttendance.filter((a) => a.status === "present" || a.status === "late").length;
@@ -81,10 +81,16 @@ export default function AttendancePage() {
 
   const toggleAttendance = (staffId: string, currentStatus: AttendanceType["status"] | undefined) => {
     const newStatus = currentStatus === "present" ? "absent" : "present";
-    toast({
-      title: `Attendance Updated`,
-      description: `Marked as ${newStatus}`,
-    });
+    upsertAttendance({
+      staffId,
+      date: selectedDate,
+      status: newStatus,
+    }).then(() =>
+      toast({
+        title: `Attendance Updated`,
+        description: `Marked as ${newStatus}`,
+      })
+    );
   };
 
   const calendarDays = [];
@@ -179,26 +185,26 @@ export default function AttendancePage() {
             </h3>
             <Badge variant="glass">
               <Users className="w-4 h-4 mr-1" />
-              {staffMembers.length} Staff
+            {staff.length} Staff
             </Badge>
           </div>
 
           <div className="space-y-3 max-h-[500px] overflow-auto custom-scrollbar">
-            {staffMembers.map((staff) => {
-              const record = selectedDateAttendance.find((a) => a.staffId === staff.id);
+          {staff.map((member) => {
+            const record = selectedDateAttendance.find((a) => a.staffId === member.id);
 
               return (
                 <div
-                  key={staff.id}
+                key={member.id}
                   className="flex items-center justify-between p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-hero flex items-center justify-center text-primary-foreground font-bold">
-                      {staff.name.charAt(0)}
+                    {member.name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-medium">{staff.name}</p>
-                      <p className="text-sm text-muted-foreground capitalize">{staff.role}</p>
+                    <p className="font-medium">{member.name}</p>
+                    <p className="text-sm text-muted-foreground capitalize">{member.role}</p>
                     </div>
                   </div>
 
@@ -226,7 +232,7 @@ export default function AttendancePage() {
                         variant={record?.status === "present" ? "default" : "outline"}
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => toggleAttendance(staff.id, record?.status)}
+                        onClick={() => toggleAttendance(member.id, record?.status)}
                       >
                         <Check className="w-4 h-4" />
                       </Button>
@@ -234,7 +240,7 @@ export default function AttendancePage() {
                         variant={record?.status === "absent" ? "destructive" : "outline"}
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => toggleAttendance(staff.id, record?.status)}
+                        onClick={() => toggleAttendance(member.id, record?.status)}
                       >
                         <X className="w-4 h-4" />
                       </Button>
@@ -263,23 +269,23 @@ export default function AttendancePage() {
               </tr>
             </thead>
             <tbody>
-              {staffMembers.map((staff) => {
-                const staffRecords = attendanceRecords.filter((a) => a.staffId === staff.id);
+              {staff.map((member) => {
+                const staffRecords = attendance.filter((a) => a.staffId === member.id);
                 const present = staffRecords.filter((a) => a.status === "present").length;
                 const absent = staffRecords.filter((a) => a.status === "absent").length;
                 const late = staffRecords.filter((a) => a.status === "late").length;
                 const workingDays = present + late;
-                const dailyRate = staff.salary / 26;
+                const dailyRate = member.salary / 26;
                 const deduction = absent * dailyRate;
 
                 return (
-                  <tr key={staff.id} className="border-b border-border/50 table-row-hover">
+                  <tr key={member.id} className="border-b border-border/50 table-row-hover">
                     <td className="p-3">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-gradient-hero flex items-center justify-center text-primary-foreground text-sm font-bold">
-                          {staff.name.charAt(0)}
+                          {member.name.charAt(0)}
                         </div>
-                        <span className="font-medium">{staff.name}</span>
+                        <span className="font-medium">{member.name}</span>
                       </div>
                     </td>
                     <td className="p-3 text-center">
