@@ -1,4 +1,3 @@
-import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
@@ -16,6 +15,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface SidebarProps {
   className?: string;
@@ -95,10 +95,13 @@ export function Sidebar({ className, onClose }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-sidebar-border">
-        <div className="glass-card p-3 rounded-lg">
-          <p className="text-xs text-muted-foreground">Currency</p>
-          <p className="font-display font-semibold text-primary">৳ BDT</p>
+      <div className="p-4 border-t border-sidebar-border space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="glass-card p-3 rounded-lg flex-1 mr-2">
+            <p className="text-xs text-muted-foreground">Currency</p>
+            <p className="font-display font-semibold text-primary">৳ BDT</p>
+          </div>
+          <ThemeToggle />
         </div>
       </div>
     </aside>
