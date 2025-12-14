@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 
-export type UserRole = "admin" | "manager" | "cashier" | "staff";
+export type UserRole = "superadmin" | "admin" | "manager" | "cashier" | "staff";
 
 export type AuthUser = {
   id: string;
@@ -28,6 +28,7 @@ const STORAGE_KEY = "restaurant-os.auth.user";
 
 function roleFromEmail(email: string): UserRole {
   const e = email.toLowerCase().trim();
+  if (e.includes("super")) return "superadmin";
   if (e.includes("admin")) return "admin";
   if (e.includes("manager")) return "manager";
   if (e.includes("cashier")) return "cashier";

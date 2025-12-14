@@ -59,7 +59,7 @@ const App = () => (
                   <Route path="/sales-history" element={<SalesHistory />} />
                   <Route path="/settings" element={<Settings />} />
 
-                  <Route element={<RequireRole role="admin" />}>
+                  <Route element={<RequireRole role="superadmin" />}>
                     <Route path="/admin" element={<Admin />} />
                   </Route>
                 </Route>

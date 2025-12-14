@@ -26,20 +26,27 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-const navItems = [
+const mainNavigation = [
   { path: "/dashboard", label: "Dashboard", labelBn: "ড্যাশবোর্ড", icon: LayoutDashboard },
-  { path: "/items", label: "Items", labelBn: "আইটেম", icon: Package },
   { path: "/sales", label: "POS Sales", labelBn: "বিক্রয়", icon: ShoppingCart },
+  { path: "/items", label: "Items", labelBn: "আইটেম", icon: Package },
+];
+
+const operationsNavigation = [
   { path: "/purchases", label: "Purchases", labelBn: "ক্রয়", icon: Truck },
   { path: "/suppliers", label: "Suppliers", labelBn: "সরবরাহকারী", icon: Users },
   { path: "/customers", label: "Customers", labelBn: "গ্রাহক", icon: UserCircle },
   { path: "/staff", label: "Staff", labelBn: "কর্মী", icon: User },
   { path: "/attendance", label: "Attendance", labelBn: "হাজিরা", icon: Clock },
-  { path: "/finance", label: "Finance", labelBn: "আর্থিক", icon: Wallet },
-  { path: "/reports", label: "Reports", labelBn: "রিপোর্ট", icon: BarChart3 },
-  { path: "/settings", label: "Settings", labelBn: "সেটিংস", icon: Settings },
-  { path: "/admin", label: "Admin", labelBn: "অ্যাডমিন", icon: Shield },
 ];
+
+const analyticsNavigation = [
+  { path: "/reports", label: "Reports", labelBn: "রিপোর্ট", icon: BarChart3 },
+  { path: "/finance", label: "Finance", labelBn: "আর্থিক", icon: Wallet },
+  { path: "/settings", label: "Settings", labelBn: "সেটিংস", icon: Settings },
+];
+
+const adminNavigation = [{ path: "/admin", label: "Admin", labelBn: "অ্যাডমিন", icon: Shield }];
 
 export function Sidebar({ className, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
@@ -77,33 +84,116 @@ export function Sidebar({ className, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-3 overflow-y-auto custom-scrollbar">
-        <ul className="space-y-1">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            return (
-              <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  onClick={onClose}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  )}
-                >
-                  <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
-                  <span>{item.label}</span>
-                </NavLink>
-              </li>
-            );
-          })}
-        </ul>
+      <nav className="flex-1 min-h-0 py-4 px-3 overflow-y-auto custom-scrollbar space-y-4">
+        <div>
+          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Main</p>
+          <ul className="space-y-1">
+            {mainNavigation.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    onClick={onClose}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div>
+          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Operations</p>
+          <ul className="space-y-1">
+            {operationsNavigation.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    onClick={onClose}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div>
+          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Analytics & Settings</p>
+          <ul className="space-y-1">
+            {analyticsNavigation.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    onClick={onClose}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        {user?.role === "superadmin" && (
+          <div>
+            <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Administration</p>
+            <ul className="space-y-1">
+              {adminNavigation.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <li key={item.path}>
+                    <NavLink
+                      to={item.path}
+                      onClick={onClose}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-sidebar-border space-y-3">
+      {/* Footer pinned */}
+      <div className="sticky bottom-0 z-10 border-t border-sidebar-border bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/75 p-4 space-y-3">
         <div className="flex items-center gap-3 rounded-lg bg-muted/40 p-3">
           <div className="w-10 h-10 rounded-full bg-gradient-hero flex items-center justify-center text-primary-foreground font-bold">
             {user?.name?.[0] ?? "U"}
@@ -112,6 +202,7 @@ export function Sidebar({ className, onClose }: SidebarProps) {
             <p className="font-medium truncate">{user?.name ?? "Guest"}</p>
             <p className="text-xs text-muted-foreground truncate">{user ? `${user.role} role` : "Not signed in"}</p>
           </div>
+          <ThemeToggle />
           <Button
             variant="ghost"
             size="icon"
@@ -123,13 +214,6 @@ export function Sidebar({ className, onClose }: SidebarProps) {
           >
             <LogOut className="w-4 h-4" />
           </Button>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="glass-card p-3 rounded-lg flex-1 mr-2">
-            <p className="text-xs text-muted-foreground">Currency</p>
-            <p className="font-display font-semibold text-primary">৳ BDT</p>
-          </div>
-          <ThemeToggle />
         </div>
       </div>
     </aside>
