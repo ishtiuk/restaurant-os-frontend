@@ -1,4 +1,8 @@
-import { Item, Category, Supplier, Customer, Sale, DashboardStats, PurchaseOrder } from "@/types";
+import { 
+  Item, Category, Supplier, Customer, Sale, DashboardStats, PurchaseOrder,
+  RestaurantTable, TableOrder, Staff, StaffPayment, Attendance, VatEntry, 
+  Expense, ExpenseCategory, SupplierTransaction
+} from "@/types";
 
 export const categories: Category[] = [
   { id: "1", name: "Rice & Biriyani", nameBn: "ভাত ও বিরিয়ানি", icon: "🍚", itemCount: 12 },
@@ -146,6 +150,15 @@ export const suppliers: Supplier[] = [
   { id: "3", name: "Spice World BD", phone: "01911234567", email: "sales@spiceworld.bd", address: "Mirpur, Dhaka", dueBalance: 0, createdAt: "2024-01-01" },
 ];
 
+export const supplierTransactions: SupplierTransaction[] = [
+  { id: "ST001", supplierId: "1", type: "purchase", amount: 26000, description: "Beef & Mutton purchase", invoiceNo: "INV-2024-001", date: "2024-01-18", createdAt: "2024-01-18" },
+  { id: "ST002", supplierId: "1", type: "payment", amount: 11000, description: "Partial payment via bKash", date: "2024-01-19", createdAt: "2024-01-19" },
+  { id: "ST003", supplierId: "2", type: "purchase", amount: 14000, description: "Rice bags purchase", invoiceNo: "INV-2024-002", date: "2024-01-19", createdAt: "2024-01-19" },
+  { id: "ST004", supplierId: "2", type: "payment", amount: 9000, description: "Cash payment", date: "2024-01-20", createdAt: "2024-01-20" },
+  { id: "ST005", supplierId: "3", type: "purchase", amount: 8500, description: "Spices and masala", invoiceNo: "INV-2024-003", date: "2024-01-15", createdAt: "2024-01-15" },
+  { id: "ST006", supplierId: "3", type: "payment", amount: 8500, description: "Full payment - Card", date: "2024-01-15", createdAt: "2024-01-15" },
+];
+
 export const customers: Customer[] = [
   { id: "1", name: "Ahmed Rahman", phone: "01712345678", email: "ahmed@email.com", totalPurchases: 12500, loyaltyPoints: 125, createdAt: "2024-01-10" },
   { id: "2", name: "Fatima Begum", phone: "01812345678", totalPurchases: 8200, loyaltyPoints: 82, createdAt: "2024-01-12" },
@@ -185,6 +198,23 @@ export const recentSales: Sale[] = [
     customerName: "Ahmed Rahman",
     orderType: "takeaway",
     status: "completed",
+  },
+  {
+    id: "S003",
+    createdAt: "2024-01-20T16:00:00",
+    items: [
+      { itemId: "4", itemName: "Chicken Rezala", quantity: 3, unitPrice: 320, discount: 0, total: 960 },
+    ],
+    subtotal: 960,
+    vatAmount: 48,
+    discount: 0,
+    total: 1008,
+    paymentMethod: "card",
+    orderType: "delivery",
+    status: "completed",
+    editHistory: [
+      { id: "E001", editedAt: "2024-01-20T16:30:00", editedBy: "Admin", previousTotal: 1200, newTotal: 1008, reason: "Customer complaint - wrong item delivered" }
+    ]
   },
 ];
 
@@ -248,4 +278,155 @@ export const purchaseOrders: PurchaseOrder[] = [
     total: 14000,
     createdAt: "2024-01-19",
   },
+];
+
+// Restaurant Tables
+export const restaurantTables: RestaurantTable[] = [
+  { id: "T1", tableNo: "T1", capacity: 4, status: "empty" },
+  { id: "T2", tableNo: "T2", capacity: 4, status: "occupied", currentOrderId: "TO001" },
+  { id: "T3", tableNo: "T3", capacity: 6, status: "empty" },
+  { id: "T4", tableNo: "T4", capacity: 2, status: "reserved" },
+  { id: "T5", tableNo: "T5", capacity: 8, status: "occupied", currentOrderId: "TO002" },
+  { id: "T6", tableNo: "T6", capacity: 4, status: "billing", currentOrderId: "TO003" },
+  { id: "T7", tableNo: "T7", capacity: 6, status: "empty" },
+  { id: "T8", tableNo: "T8", capacity: 4, status: "empty" },
+  { id: "T9", tableNo: "T9", capacity: 2, status: "occupied", currentOrderId: "TO004" },
+  { id: "T10", tableNo: "T10", capacity: 10, status: "empty" },
+  { id: "T11", tableNo: "T11", capacity: 4, status: "empty" },
+  { id: "T12", tableNo: "T12", capacity: 6, status: "reserved" },
+];
+
+export const tableOrders: TableOrder[] = [
+  {
+    id: "TO001",
+    tableId: "T2",
+    tableNo: "T2",
+    items: [
+      { itemId: "1", itemName: "Kacchi Biriyani", quantity: 2, unitPrice: 350, discount: 0, total: 700, available: 45 },
+      { itemId: "7", itemName: "Mango Lassi", quantity: 2, unitPrice: 80, discount: 0, total: 160, available: 50 },
+    ],
+    subtotal: 860,
+    vatAmount: 43,
+    serviceCharge: 0,
+    discount: 0,
+    total: 903,
+    status: "active",
+    createdAt: "2024-01-20T12:30:00",
+    updatedAt: "2024-01-20T12:45:00",
+  },
+  {
+    id: "TO002",
+    tableId: "T5",
+    tableNo: "T5",
+    items: [
+      { itemId: "4", itemName: "Chicken Rezala", quantity: 4, unitPrice: 320, discount: 0, total: 1280, available: 25 },
+      { itemId: "6", itemName: "Butter Naan", quantity: 8, unitPrice: 60, discount: 0, total: 480, available: 100 },
+      { itemId: "8", itemName: "Firni", quantity: 4, unitPrice: 100, discount: 0, total: 400, available: 20 },
+    ],
+    subtotal: 2160,
+    vatAmount: 108,
+    serviceCharge: 108,
+    discount: 0,
+    total: 2376,
+    status: "active",
+    createdAt: "2024-01-20T13:00:00",
+    updatedAt: "2024-01-20T13:30:00",
+  },
+  {
+    id: "TO003",
+    tableId: "T6",
+    tableNo: "T6",
+    items: [
+      { itemId: "3", itemName: "Beef Bhuna", quantity: 2, unitPrice: 280, discount: 0, total: 560, available: 8 },
+      { itemId: "2", itemName: "Beef Tehari", quantity: 2, unitPrice: 220, discount: 0, total: 440, available: 30 },
+    ],
+    subtotal: 1000,
+    vatAmount: 50,
+    serviceCharge: 0,
+    discount: 100,
+    total: 950,
+    status: "billing",
+    createdAt: "2024-01-20T11:00:00",
+    updatedAt: "2024-01-20T12:00:00",
+  },
+  {
+    id: "TO004",
+    tableId: "T9",
+    tableNo: "T9",
+    items: [
+      { itemId: "5", itemName: "Seekh Kebab", quantity: 4, unitPrice: 180, discount: 0, total: 720, available: 5 },
+    ],
+    subtotal: 720,
+    vatAmount: 36,
+    serviceCharge: 0,
+    discount: 0,
+    total: 756,
+    status: "active",
+    createdAt: "2024-01-20T14:00:00",
+    updatedAt: "2024-01-20T14:00:00",
+  },
+];
+
+// Staff
+export const staffMembers: Staff[] = [
+  { id: "STF001", name: "Rahim Mia", nameBn: "রহিম মিয়া", phone: "01711111111", role: "chef", salary: 25000, joiningDate: "2023-06-01", isActive: true, address: "Mirpur, Dhaka" },
+  { id: "STF002", name: "Karim Ahmed", nameBn: "করিম আহমেদ", phone: "01722222222", role: "waiter", salary: 15000, joiningDate: "2023-08-15", isActive: true, address: "Mohammadpur, Dhaka" },
+  { id: "STF003", name: "Fatema Khatun", nameBn: "ফাতেমা খাতুন", phone: "01733333333", email: "fatema@email.com", role: "cashier", salary: 18000, joiningDate: "2023-07-01", isActive: true, address: "Dhanmondi, Dhaka" },
+  { id: "STF004", name: "Abdul Jabbar", nameBn: "আবদুল জব্বার", phone: "01744444444", role: "cleaner", salary: 12000, joiningDate: "2024-01-01", isActive: true, address: "Kamrangirchar, Dhaka" },
+  { id: "STF005", name: "Shahid Hossain", nameBn: "শহীদ হোসেন", phone: "01755555555", role: "delivery", salary: 14000, joiningDate: "2023-10-01", isActive: true, address: "Jatrabari, Dhaka" },
+  { id: "STF006", name: "Nasrin Begum", nameBn: "নাসরিন বেগম", phone: "01766666666", role: "manager", salary: 35000, joiningDate: "2023-01-01", isActive: true, email: "nasrin@restaurant.com", address: "Gulshan, Dhaka" },
+];
+
+export const staffPayments: StaffPayment[] = [
+  { id: "SP001", staffId: "STF001", amount: 25000, type: "salary", description: "December 2023 Salary", date: "2024-01-05", createdAt: "2024-01-05" },
+  { id: "SP002", staffId: "STF002", amount: 5000, type: "advance", description: "Emergency advance", date: "2024-01-10", createdAt: "2024-01-10" },
+  { id: "SP003", staffId: "STF003", amount: 18000, type: "salary", description: "December 2023 Salary", date: "2024-01-05", createdAt: "2024-01-05" },
+  { id: "SP004", staffId: "STF001", amount: 3000, type: "bonus", description: "Eid Bonus", date: "2024-01-15", createdAt: "2024-01-15" },
+  { id: "SP005", staffId: "STF004", amount: 1000, type: "deduction", description: "Absence deduction (2 days)", date: "2024-01-20", createdAt: "2024-01-20" },
+];
+
+export const attendanceRecords: Attendance[] = [
+  { id: "A001", staffId: "STF001", date: "2024-01-20", status: "present", checkIn: "08:00", checkOut: "17:00" },
+  { id: "A002", staffId: "STF002", date: "2024-01-20", status: "present", checkIn: "09:30", checkOut: "18:30" },
+  { id: "A003", staffId: "STF003", date: "2024-01-20", status: "late", checkIn: "10:15", checkOut: "19:00", notes: "Traffic jam" },
+  { id: "A004", staffId: "STF004", date: "2024-01-20", status: "absent", notes: "Sick leave" },
+  { id: "A005", staffId: "STF005", date: "2024-01-20", status: "present", checkIn: "11:00", checkOut: "20:00" },
+  { id: "A006", staffId: "STF006", date: "2024-01-20", status: "present", checkIn: "09:00", checkOut: "18:00" },
+  // Previous days
+  { id: "A007", staffId: "STF001", date: "2024-01-19", status: "present", checkIn: "08:00", checkOut: "17:00" },
+  { id: "A008", staffId: "STF002", date: "2024-01-19", status: "present", checkIn: "09:00", checkOut: "18:00" },
+  { id: "A009", staffId: "STF003", date: "2024-01-19", status: "present", checkIn: "09:00", checkOut: "18:00" },
+  { id: "A010", staffId: "STF004", date: "2024-01-19", status: "present", checkIn: "08:00", checkOut: "17:00" },
+];
+
+// VAT Entries
+export const vatEntries: VatEntry[] = [
+  { id: "VAT001", type: "sales", amount: 45680, vatRate: 5, vatAmount: 2284, description: "Daily sales VAT", date: "2024-01-20", createdAt: "2024-01-20" },
+  { id: "VAT002", type: "purchase", amount: 26000, vatRate: 5, vatAmount: 1300, description: "Meat purchase VAT credit", invoiceNo: "INV-2024-001", date: "2024-01-18", createdAt: "2024-01-18" },
+  { id: "VAT003", type: "service", amount: 5000, vatRate: 15, vatAmount: 750, description: "Equipment maintenance service", date: "2024-01-15", createdAt: "2024-01-15" },
+  { id: "VAT004", type: "sales", amount: 42300, vatRate: 5, vatAmount: 2115, description: "Daily sales VAT", date: "2024-01-19", createdAt: "2024-01-19" },
+  { id: "VAT005", type: "purchase", amount: 14000, vatRate: 5, vatAmount: 700, description: "Rice purchase VAT credit", invoiceNo: "INV-2024-002", date: "2024-01-19", createdAt: "2024-01-19" },
+];
+
+// Expense Categories & Expenses
+export const expenseCategories: ExpenseCategory[] = [
+  { id: "EC001", name: "Utilities", nameBn: "ইউটিলিটি", icon: "⚡", budget: 15000 },
+  { id: "EC002", name: "Rent", nameBn: "ভাড়া", icon: "🏠", budget: 50000 },
+  { id: "EC003", name: "Salaries", nameBn: "বেতন", icon: "💰", budget: 150000 },
+  { id: "EC004", name: "Supplies", nameBn: "সরবরাহ", icon: "📦", budget: 20000 },
+  { id: "EC005", name: "Maintenance", nameBn: "রক্ষণাবেক্ষণ", icon: "🔧", budget: 10000 },
+  { id: "EC006", name: "Marketing", nameBn: "মার্কেটিং", icon: "📣", budget: 15000 },
+  { id: "EC007", name: "Transport", nameBn: "পরিবহন", icon: "🚗", budget: 8000 },
+  { id: "EC008", name: "Miscellaneous", nameBn: "বিবিধ", icon: "📋", budget: 5000 },
+];
+
+export const expenses: Expense[] = [
+  { id: "EXP001", categoryId: "EC001", categoryName: "Utilities", amount: 8500, description: "Electricity bill - January", paymentMethod: "cash", date: "2024-01-15", createdAt: "2024-01-15" },
+  { id: "EXP002", categoryId: "EC001", categoryName: "Utilities", amount: 2500, description: "Water bill - January", paymentMethod: "cash", date: "2024-01-15", createdAt: "2024-01-15" },
+  { id: "EXP003", categoryId: "EC001", categoryName: "Utilities", amount: 1500, description: "Gas bill - January", paymentMethod: "bkash", date: "2024-01-16", createdAt: "2024-01-16" },
+  { id: "EXP004", categoryId: "EC002", categoryName: "Rent", amount: 35000, description: "Shop rent - January", paymentMethod: "cash", date: "2024-01-01", createdAt: "2024-01-01" },
+  { id: "EXP005", categoryId: "EC004", categoryName: "Supplies", amount: 5000, description: "Kitchen supplies", paymentMethod: "cash", date: "2024-01-18", createdAt: "2024-01-18" },
+  { id: "EXP006", categoryId: "EC005", categoryName: "Maintenance", amount: 3500, description: "AC repair", paymentMethod: "bkash", date: "2024-01-12", createdAt: "2024-01-12" },
+  { id: "EXP007", categoryId: "EC007", categoryName: "Transport", amount: 2000, description: "Delivery bike fuel", paymentMethod: "cash", date: "2024-01-20", createdAt: "2024-01-20" },
+  { id: "EXP008", categoryId: "EC006", categoryName: "Marketing", amount: 5000, description: "Facebook ads", paymentMethod: "card", date: "2024-01-10", createdAt: "2024-01-10" },
 ];
