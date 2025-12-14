@@ -193,7 +193,9 @@ export default function Admin() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
         <div>
           <h1 className="text-3xl font-display font-bold gradient-text">Admin Panel</h1>
-          <p className="text-muted-foreground">Superadmin creates tenants and admins; admins create managers.</p>
+          <p className="text-muted-foreground">
+            System superadmin provisions tenants and restaurant owners (admins); owners create their managers.
+          </p>
         </div>
         <Badge variant="warning" className="self-start">
           <Shield className="w-3 h-3 mr-1" />
@@ -400,7 +402,7 @@ export default function Admin() {
             <DialogTitle className="font-display gradient-text">
               {editingUser ? "Edit User" : "Add User"}
             </DialogTitle>
-            <DialogDescription>Superadmin creates Admin; Admin creates Manager.</DialogDescription>
+            <DialogDescription>System superadmin creates restaurant admins; admins create managers.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">

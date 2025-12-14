@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 
-export type UserRole = "superadmin" | "admin" | "manager" | "cashier" | "staff";
+export type UserRole = "superadmin" | "admin" | "manager";
 
 export type AuthUser = {
   id: string;
@@ -31,8 +31,8 @@ function roleFromEmail(email: string): UserRole {
   if (e.includes("super")) return "superadmin";
   if (e.includes("admin")) return "admin";
   if (e.includes("manager")) return "manager";
-  if (e.includes("cashier")) return "cashier";
-  return "staff";
+  // Default restaurant role is manager for daily operators
+  return "manager";
 }
 
 function displayNameFromEmail(email: string): string {

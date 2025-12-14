@@ -40,7 +40,7 @@ const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}
 export default function SalesHistoryPage() {
   const { sales, updateSaleTotalWithAudit, replaceSale } = useAppData();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const canEditSales = user?.role === "admin" || user?.role === "superadmin";
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -169,14 +169,16 @@ export default function SalesHistoryPage() {
       </div>
 
       {/* Admin Warning */}
-      <GlassCard className={`p-4 border-2 ${isAdmin ? "border-primary/30 bg-primary/5" : "border-destructive/30 bg-destructive/10"} animate-fade-in stagger-1`}>
+      <GlassCard className={`p-4 border-2 ${canEditSales ? "border-primary/30 bg-primary/5" : "border-destructive/30 bg-destructive/10"} animate-fade-in stagger-1`}>
         <div className="flex items-start gap-3">
-          <AlertTriangle className={`w-5 h-5 ${isAdmin ? "text-primary" : "text-destructive"} mt-0.5`} />
+          <AlertTriangle className={`w-5 h-5 ${canEditSales ? "text-primary" : "text-destructive"} mt-0.5`} />
           <div>
-            <p className="font-semibold">{isAdmin ? "Audit logging enabled" : "Admin Access Required"}</p>
+            <p className="font-semibold">{canEditSales ? "Audit logging enabled" : "Owner/Admin Access Required"}</p>
             <p className="text-sm text-muted-foreground">
               Editing sales records is a sensitive operation. All changes are logged for audit purposes.
-              {isAdmin ? " You can edit and undo/redo changes." : " Only authorized administrators can modify completed transactions."}
+              {canEditSales
+                ? " Owners (admins) and system superadmins can edit and undo/redo changes."
+                : " Only the restaurant owner (admin) or system superadmin can modify completed transactions."}
             </p>
           </div>
         </div>
@@ -270,7 +272,7 @@ export default function SalesHistoryPage() {
                         size="sm"
                         onClick={() => handleEditSale(sale)}
                         className="text-destructive hover:text-destructive"
-                        disabled={!isAdmin}
+                        disabled={!canEditSales}
                       >
                         <Edit className="w-4 h-4" />
                       </Button>

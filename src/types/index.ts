@@ -123,7 +123,7 @@ export interface User {
   createdAt: string;
 }
 
-export type UserRole = 'admin' | 'manager' | 'cashier' | 'staff';
+export type UserRole = 'superadmin' | 'admin' | 'manager';
 
 export interface DashboardStats {
   todaySales: number;

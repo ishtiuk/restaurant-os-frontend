@@ -68,7 +68,7 @@ export function Sidebar({ className, onClose }: SidebarProps) {
           </div>
           <div>
             <h1 className="font-display font-bold text-lg gradient-text">RestaurantOS</h1>
-            <p className="text-xs text-muted-foreground">ইনভেন্টরি সিস্টেম</p>
+            <p className="text-xs text-muted-foreground">রেস্টুরেন্ট ম্যানেজমেন্ট সিস্টেম</p>
           </div>
         </div>
         {onClose && (
