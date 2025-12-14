@@ -117,13 +117,16 @@ export interface Customer {
 export interface User {
   id: string;
   name: string;
+  nameBn?: string;
   email: string;
+  phone: string;
   role: UserRole;
   isActive: boolean;
   createdAt: string;
+  pin?: string; // 4-digit PIN for quick login
 }
 
-export type UserRole = 'superadmin' | 'admin' | 'manager';
+export type UserRole = 'owner' | 'manager' | 'waiter' | 'cashier' | 'chef' | 'admin';
 
 export interface DashboardStats {
   todaySales: number;
