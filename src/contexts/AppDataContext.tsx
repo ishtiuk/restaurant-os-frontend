@@ -53,27 +53,39 @@ type AppData = {
 
   // Placeholder APIs (async) - mutate local state only
   createSupplier: (input: Omit<Supplier, "id" | "createdAt" | "dueBalance"> & Partial<Pick<Supplier, "dueBalance">>) => Promise<Supplier>;
-  addSupplierTransaction: (input: Omit<SupplierTransaction, "id" | "createdAt">) => Promise<SupplierTransaction>;
-  createPurchaseOrder: (input: Omit<PurchaseOrder, "id" | "createdAt">) => Promise<PurchaseOrder>;
+  addSupplierTransaction: (
+    input: Omit<SupplierTransaction, "id" | "createdAt"> & Partial<Pick<SupplierTransaction, "createdAt">>
+  ) => Promise<SupplierTransaction>;
+  createPurchaseOrder: (
+    input: Omit<PurchaseOrder, "id" | "createdAt"> & Partial<Pick<PurchaseOrder, "id" | "createdAt">>
+  ) => Promise<PurchaseOrder>;
   markPurchaseOrderReceived: (poId: string) => Promise<void>;
 
-  saveTableOrder: (tableId: string, items: TableOrder["items"]) => Promise<void>;
+  saveTableOrder: (tableId: string, items: TableOrder["items"], opts?: { kotItems?: TableOrder["items"] }) => Promise<void>;
   finalizeTableBill: (tableId: string, paymentMethod: Sale["paymentMethod"]) => Promise<Sale>;
+  ensureTableSession: (tableId: string) => Promise<TableOrder>;
+  markTableBilling: (tableId: string) => Promise<void>;
 
   upsertAttendance: (input: { staffId: string; date: string; status: Attendance["status"]; checkIn?: string; checkOut?: string; notes?: string }) => Promise<void>;
 
-  createStaffPayment: (input: Omit<StaffPayment, "id" | "createdAt">) => Promise<StaffPayment>;
+  createStaffPayment: (
+    input: Omit<StaffPayment, "id" | "createdAt"> & Partial<Pick<StaffPayment, "createdAt">>
+  ) => Promise<StaffPayment>;
   createStaff: (input: Omit<Staff, "id">) => Promise<Staff>;
   updateStaff: (staffId: string, updates: Partial<Omit<Staff, "id">>) => Promise<void>;
 
   updateSaleTotalWithAudit: (saleId: string, input: { newTotal: number; editedBy: string; reason: string }) => Promise<void>;
   replaceSale: (sale: Sale) => void; // used for undo/redo in UI
 
-  createExpense: (input: Omit<Expense, "id" | "createdAt">) => Promise<Expense>;
-  createVatEntry: (input: Omit<VatEntry, "id" | "createdAt" | "vatAmount">) => Promise<VatEntry>;
+  createExpense: (input: Omit<Expense, "id" | "createdAt"> & Partial<Pick<Expense, "createdAt">>) => Promise<Expense>;
+  createVatEntry: (
+    input: Omit<VatEntry, "id" | "createdAt" | "vatAmount"> & Partial<Pick<VatEntry, "createdAt">>
+  ) => Promise<VatEntry>;
 
   upsertItem: (input: Item) => Promise<void>;
   updateItem: (itemId: string, updates: Partial<Omit<Item, "id">>) => Promise<void>;
+  
+  completeSale: (input: Omit<Sale, "id">) => Promise<Sale>;
 };
 
 const AppDataContext = createContext<AppData | undefined>(undefined);
@@ -197,8 +209,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         );
       },
 
-      saveTableOrder: async (tableId, orderItems) => {
+      saveTableOrder: async (tableId, orderItems, opts) => {
         await delay(150);
+        const { kotItems } = opts ?? {};
         let orderId: string | undefined;
         setTableOrders((prev) => {
           const existingOrderIdx = prev.findIndex((o) => o.tableId === tableId && o.status !== "completed");
@@ -216,6 +229,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               vatAmount,
               total,
               updatedAt: nowIso,
+              kots:
+                kotItems && kotItems.length > 0
+                  ? [...(existing.kots ?? []), { id: newId("KOT"), items: kotItems, createdAt: nowIso }]
+                  : existing.kots,
             };
             orderId = updated.id;
             const next = [...prev];
@@ -237,6 +254,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             status: "active",
             createdAt: nowIso,
             updatedAt: nowIso,
+            kots:
+              kotItems && kotItems.length > 0
+                ? [{ id: newId("KOT"), items: kotItems, createdAt: nowIso }]
+                : [],
           };
           orderId = created.id;
           return [created, ...prev];
@@ -248,11 +269,61 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             if (t.id !== tableId) return t;
             return {
               ...t,
-              status: "occupied",
+              status: t.status === "billing" ? "billing" : "occupied",
               currentOrderId: orderId ?? t.currentOrderId,
             };
           })
         );
+      },
+
+      ensureTableSession: async (tableId) => {
+        await delay(80);
+        const existing = tableOrders.find((o) => o.tableId === tableId && o.status !== "completed");
+        if (existing) {
+          setTables((prev) =>
+            prev.map((t) =>
+              t.id === tableId
+                ? {
+                    ...t,
+                    status: t.status === "empty" || t.status === "reserved" ? "occupied" : t.status,
+                    currentOrderId: existing.id,
+                  }
+                : t
+            )
+          );
+          return existing;
+        }
+
+        const table = tables.find((t) => t.id === tableId);
+        const nowIso = new Date().toISOString();
+        const created: TableOrder = {
+          id: newId("TO"),
+          tableId,
+          tableNo: table?.tableNo || tableId,
+          items: [],
+          subtotal: 0,
+          vatAmount: 0,
+          serviceCharge: 0,
+          discount: 0,
+          total: 0,
+          status: "active",
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          kots: [],
+        };
+        setTableOrders((prev) => [created, ...prev]);
+        setTables((prev) =>
+          prev.map((t) => (t.id === tableId ? { ...t, status: "occupied", currentOrderId: created.id } : t))
+        );
+        return created;
+      },
+
+      markTableBilling: async (tableId) => {
+        await delay(80);
+        setTableOrders((prev) =>
+          prev.map((o) => (o.tableId === tableId && o.status !== "completed" ? { ...o, status: "billing" } : o))
+        );
+        setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "billing" } : t)));
       },
 
       finalizeTableBill: async (tableId, paymentMethod) => {
@@ -262,6 +333,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           ? tableOrders.find((o) => o.id === table.currentOrderId)
           : tableOrders.find((o) => o.tableId === tableId && o.status !== "completed");
         if (!table || !order) throw new Error("No active order for this table");
+        if (order.status === "completed") throw new Error("Bill already completed");
 
         // Mark order completed + clear table
         setTableOrders((prev) =>
@@ -400,6 +472,39 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       updateItem: async (itemId, updates) => {
         await delay(120);
         setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, ...updates } : it)));
+      },
+
+      completeSale: async (input) => {
+        await delay(200);
+        
+        // Check stock availability
+        for (const item of input.items) {
+          const inventoryItem = items.find(i => i.id === item.itemId);
+          if (!inventoryItem) {
+            throw new Error(`Item ${item.itemName} not found in inventory`);
+          }
+          if (inventoryItem.stockQty < item.quantity) {
+            throw new Error(`Insufficient stock for ${item.itemName}. Available: ${inventoryItem.stockQty}, Required: ${item.quantity}`);
+          }
+        }
+        
+        // Deduct stock
+        setItems(prev =>
+          prev.map(item => {
+            const saleItem = input.items.find(si => si.itemId === item.id);
+            if (!saleItem) return item;
+            return { ...item, stockQty: item.stockQty - saleItem.quantity };
+          })
+        );
+        
+        // Create sale
+        const sale: Sale = {
+          ...input,
+          id: newId("S"),
+        };
+        
+        setSales(prev => [sale, ...prev]);
+        return sale;
       },
     }),
     [

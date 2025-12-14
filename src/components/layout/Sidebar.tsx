@@ -29,6 +29,7 @@ interface SidebarProps {
 const mainNavigation = [
   { path: "/dashboard", label: "Dashboard", labelBn: "ড্যাশবোর্ড", icon: LayoutDashboard },
   { path: "/sales", label: "POS Sales", labelBn: "বিক্রয়", icon: ShoppingCart },
+  { path: "/tables", label: "Tables", labelBn: "টেবিল", icon: Utensils },
   { path: "/items", label: "Items", labelBn: "আইটেম", icon: Package },
 ];
 

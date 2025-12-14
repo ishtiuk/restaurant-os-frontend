@@ -313,3 +313,66 @@
     }
   }
 }
+
+/* Print Styles for KOT and Bills */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+
+  /* Hide everything except print area */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only KOT or Bill print area */
+  #kot-print-area,
+  #kot-print-area *,
+  #bill-print-area,
+  #bill-print-area * {
+    visibility: visible;
+  }
+
+  #kot-print-area,
+  #bill-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+    padding: 20px;
+    font-size: 14px;
+  }
+
+  /* Remove backgrounds and borders for print */
+  .glass-card,
+  .bg-muted\/30,
+  .border-dashed {
+    background: white !important;
+    border-color: #333 !important;
+  }
+
+  /* Make text more visible */
+  .text-muted-foreground {
+    color: #666 !important;
+  }
+
+  .gradient-text {
+    background: none !important;
+    color: black !important;
+    -webkit-text-fill-color: black !important;
+  }
+
+  /* Hide buttons and interactive elements */
+  button,
+  .dialog-close {
+    display: none !important;
+  }
+
+  /* Page break control */
+  @page {
+    margin: 10mm;
+    size: auto;
+  }
+}

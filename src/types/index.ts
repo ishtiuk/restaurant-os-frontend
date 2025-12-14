@@ -142,6 +142,12 @@ export interface CartItem extends SaleItem {
   available: number;
 }
 
+export interface KitchenTicket {
+  id: string;
+  items: CartItem[];
+  createdAt: string;
+}
+
 // Table Management
 export interface RestaurantTable {
   id: string;
@@ -165,6 +171,7 @@ export interface TableOrder {
   status: 'active' | 'billing' | 'completed';
   createdAt: string;
   updatedAt: string;
+  kots?: KitchenTicket[];
 }
 
 // Staff & Attendance

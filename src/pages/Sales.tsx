@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { items, categories } from "@/data/mockData";
+import { categories } from "@/data/mockData";
 import { CartItem, PaymentMethod } from "@/types";
+import { useAppData } from "@/contexts/AppDataContext";
 import {
   Search,
   Plus,
@@ -52,6 +54,8 @@ const paymentMethods: { id: PaymentMethod; label: string; icon: React.ReactNode 
 ];
 
 export default function Sales() {
+  const navigate = useNavigate();
+  const { items, completeSale } = useAppData();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -63,6 +67,12 @@ export default function Sales() {
   const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
+  
+  // Delivery info
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -148,8 +158,19 @@ export default function Sales() {
     () => subtotal + vatAmount + serviceCharge - discount,
     [subtotal, vatAmount, serviceCharge, discount]
   );
+  const isDineIn = orderType === "dine-in";
 
   const handleCheckout = () => {
+    const dineInTableNo = isDineIn ? tableNo : undefined;
+
+    if (isDineIn) {
+      toast({
+        title: "Dine-in handled in Tables",
+        description: "Open the table to send KOTs and close the bill.",
+      });
+      return;
+    }
+
     if (cart.length === 0) {
       toast({
         title: "Cart is empty",
@@ -159,10 +180,44 @@ export default function Sales() {
       return;
     }
 
-    const sale = {
-      id: `S${Date.now()}`,
+    // Validate delivery info
+    if (orderType === "delivery") {
+      if (!customerName.trim()) {
+        toast({
+          title: "Customer name required",
+          description: "Please enter customer name for delivery",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!customerPhone.trim()) {
+        toast({
+          title: "Phone number required",
+          description: "Please enter customer phone for delivery",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!deliveryAddress.trim()) {
+        toast({
+          title: "Delivery address required",
+          description: "Please enter delivery address",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    const saleData = {
       createdAt: new Date().toISOString(),
-      items: cart,
+      items: cart.map(item => ({
+        itemId: item.itemId,
+        itemName: item.itemName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        total: item.total,
+      })),
       subtotal,
       vatAmount,
       serviceCharge,
@@ -170,19 +225,45 @@ export default function Sales() {
       total,
       paymentMethod: selectedPayment,
       orderType,
-      tableNo: orderType === "dine-in" ? tableNo : undefined,
+      status: "completed" as const,
+      tableNo: dineInTableNo,
+      ...(orderType === "delivery" && {
+        customerName,
+        customerPhone,
+        deliveryAddress,
+        deliveryNotes: deliveryNotes.trim() || undefined,
+      }),
     };
 
-    setLastSale(sale);
-    setShowReceipt(true);
-    setCart([]);
-    setDiscount(0);
-    setTableNo("");
+    // Complete sale (deducts stock and saves)
+    completeSale(saleData)
+      .then((sale) => {
+        setLastSale(sale);
+        setShowReceipt(true);
+        setCart([]);
+        setDiscount(0);
+        setTableNo("");
+        
+        // Clear delivery info
+        if (orderType === "delivery") {
+          setCustomerName("");
+          setCustomerPhone("");
+          setDeliveryAddress("");
+          setDeliveryNotes("");
+        }
 
-    toast({
-      title: "Sale completed!",
-      description: `Total: ${formatCurrency(total)}`,
-    });
+        toast({
+          title: "✅ Sale completed!",
+          description: `Total: ${formatCurrency(total)} • Stock updated`,
+        });
+      })
+      .catch((error) => {
+        toast({
+          title: "Sale failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      });
   };
 
   return (
@@ -244,7 +325,12 @@ export default function Sales() {
                 <h4 className="font-medium text-sm truncate">{item.name}</h4>
                 <div className="flex items-center justify-between mt-1">
                   <span className="font-display font-bold text-primary">{formatCurrency(item.price)}</span>
-                  <span className="text-xs text-muted-foreground">{item.stockQty} left</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs text-muted-foreground">{item.stockQty} left</span>
+                    {item.stockQty < 10 && (
+                      <Badge variant="destructive" className="text-xs px-1 py-0">Low Stock</Badge>
+                    )}
+                  </div>
                 </div>
               </GlassCard>
             ))}
@@ -282,7 +368,56 @@ export default function Sales() {
               className="mt-3 bg-muted/50"
             />
           )}
+          
+          {orderType === "delivery" && (
+            <div className="mt-3 space-y-2">
+              <Input
+                placeholder="Customer Name *"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="bg-muted/50"
+                required
+              />
+              <Input
+                placeholder="Phone Number *"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                type="tel"
+                className="bg-muted/50"
+                required
+              />
+              <Input
+                placeholder="Delivery Address *"
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                className="bg-muted/50"
+                required
+              />
+              <Input
+                placeholder="Delivery Notes (Optional)"
+                value={deliveryNotes}
+                onChange={(e) => setDeliveryNotes(e.target.value)}
+                className="bg-muted/50"
+              />
+            </div>
+          )}
         </div>
+
+        {isDineIn && (
+          <div className="px-4 py-3 border-b border-border bg-amber-50 text-amber-900 dark:bg-amber-500/10">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold">Dine-in orders are managed from Tables</p>
+                <p className="text-sm text-muted-foreground">
+                  Open a table to send KOTs and close bills.
+                </p>
+              </div>
+              <Button size="sm" variant="default" onClick={() => navigate("/tables")}>
+                Go to Tables
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Cart Items */}
         <div className="flex-1 overflow-auto p-4 custom-scrollbar">
@@ -366,9 +501,30 @@ export default function Sales() {
             <Input
               type="number"
               value={discount}
-              onChange={(e) => setDiscount(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                const val = Number(e.target.value) || 0;
+                // Validate: must be between 0 and subtotal
+                if (val < 0) {
+                  setDiscount(0);
+                  toast({
+                    title: "Invalid discount",
+                    description: "Discount cannot be negative",
+                    variant: "destructive",
+                  });
+                } else if (val > subtotal) {
+                  setDiscount(subtotal);
+                  toast({
+                    title: "Discount adjusted",
+                    description: "Discount cannot exceed subtotal",
+                    variant: "destructive",
+                  });
+                } else {
+                  setDiscount(val);
+                }
+              }}
               className="w-24 bg-muted/50"
               min={0}
+              max={subtotal}
             />
           </div>
 
@@ -403,17 +559,18 @@ export default function Sales() {
           </div>
 
           {/* Payment Methods */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {paymentMethods.map((pm) => (
               <Button
                 key={pm.id}
                 variant={selectedPayment === pm.id ? "default" : "outline"}
-                size="sm"
+                size="default"
                 onClick={() => setSelectedPayment(pm.id)}
-                className="flex-col h-auto py-2"
+                disabled={isDineIn}
+                className="flex-col h-auto py-3"
               >
                 {pm.icon}
-                <span className="text-xs mt-1">{pm.label}</span>
+                <span className="text-sm mt-1">{pm.label}</span>
               </Button>
             ))}
           </div>
@@ -424,7 +581,7 @@ export default function Sales() {
             size="xl"
             className="w-full animate-glow-pulse"
             onClick={handleCheckout}
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || isDineIn}
           >
             <Check className="w-5 h-5 mr-2" />
             Complete Sale • {formatCurrency(total)}

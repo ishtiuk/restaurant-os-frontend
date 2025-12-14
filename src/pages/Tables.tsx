@@ -21,6 +21,7 @@ import {
   Smartphone,
   X,
   CheckCircle2,
+  Printer,
 } from "lucide-react";
 import {
   Dialog,
@@ -39,6 +40,29 @@ import {
 import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
+
+const getElapsedTime = (createdAt: string): string => {
+  const now = new Date().getTime();
+  const created = new Date(createdAt).getTime();
+  const diffMs = now - created;
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  const hours = Math.floor(diffMins / 60);
+  const mins = diffMins % 60;
+  return `${hours}h ${mins}m ago`;
+};
+
+const getTimeColorClass = (createdAt: string): string => {
+  const now = new Date().getTime();
+  const created = new Date(createdAt).getTime();
+  const diffMins = Math.floor((now - created) / 60000);
+  
+  if (diffMins < 20) return "text-accent";  // Green - fresh
+  if (diffMins < 40) return "text-primary"; // Yellow - attention
+  return "text-destructive";                // Red - urgent
+};
 
 const getStatusColor = (status: RestaurantTable["status"]) => {
   switch (status) {
@@ -71,15 +95,28 @@ const getStatusBadge = (status: RestaurantTable["status"]) => {
 };
 
 export default function Tables() {
-  const { items, tables, tableOrders, saveTableOrder, finalizeTableBill } = useAppData();
+  const {
+    items,
+    tables,
+    tableOrders,
+    saveTableOrder,
+    finalizeTableBill,
+    ensureTableSession,
+    markTableBilling,
+  } = useAppData();
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(null);
   const [showOrderDialog, setShowOrderDialog] = useState(false);
   const [showBillDialog, setShowBillDialog] = useState(false);
+  const [showKotDialog, setShowKotDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [billPayment, setBillPayment] = useState<PaymentMethod>("cash");
   const [billLoading, setBillLoading] = useState(false);
+  const [billServiceCharge, setBillServiceCharge] = useState(false);
+  const [billDiscount, setBillDiscount] = useState(0);
+  const [baselineItems, setBaselineItems] = useState<CartItem[]>([]);
+  const [lastKot, setLastKot] = useState<{ kotNumber: number; items: CartItem[]; time: string } | null>(null);
 
   const currentOrder = useMemo(() => {
     if (!selectedTable) return null;
@@ -89,20 +126,32 @@ export default function Tables() {
     return tableOrders.find((o) => o.tableId === selectedTable.id && o.status !== "completed") || null;
   }, [selectedTable, tableOrders]);
 
-  const handleTableClick = (table: RestaurantTable) => {
+  const primeCartFromOrder = (itemsToUse: CartItem[] | undefined) => {
+    const safeItems = itemsToUse ?? [];
+    setCart(safeItems);
+    setBaselineItems(safeItems);
+  };
+
+  const handleTableClick = async (table: RestaurantTable) => {
     setSelectedTable(table);
     if (table.status === "empty" || table.status === "reserved") {
-      // Start new order
-      setCart([]);
+      const session = await ensureTableSession(table.id);
+      setSelectedTable({ ...table, status: "occupied", currentOrderId: session.id });
+      primeCartFromOrder(session.items);
       setShowOrderDialog(true);
-    } else if (table.status === "occupied") {
-      // Continue order - load existing items
+      return;
+    }
+
+    if (table.status === "occupied") {
       const order = tableOrders.find((o) => o.id === table.currentOrderId);
-      if (order) {
-        setCart(order.items);
-      }
+      primeCartFromOrder(order?.items);
       setShowOrderDialog(true);
-    } else if (table.status === "billing") {
+      return;
+    }
+
+    if (table.status === "billing") {
+      const order = tableOrders.find((o) => o.id === table.currentOrderId);
+      primeCartFromOrder(order?.items);
       setBillPayment("cash");
       setShowBillDialog(true);
     }
@@ -151,6 +200,11 @@ export default function Tables() {
         .map((c) => {
           if (c.itemId === itemId) {
             const newQty = c.quantity + delta;
+            const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
+            if (newQty < baselineQty) {
+              toast({ title: "Cannot reduce sent items", description: "Adjust in billing instead.", variant: "destructive" });
+              return c;
+            }
             if (newQty <= 0) return null;
             return { ...c, quantity: newQty, total: newQty * c.unitPrice };
           }
@@ -161,36 +215,108 @@ export default function Tables() {
   };
 
   const removeFromCart = (itemId: string) => {
+    const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
+    if (baselineQty > 0) {
+      toast({ title: "Cannot remove sent items", description: "Finalize in billing.", variant: "destructive" });
+      return;
+    }
     setCart((prev) => prev.filter((c) => c.itemId !== itemId));
   };
 
   const subtotal = cart.reduce((sum, c) => sum + c.total, 0);
   const vatAmount = subtotal * 0.05;
   const total = subtotal + vatAmount;
+  const hasDeltaItems = useMemo(() => {
+    const baselineMap = new Map(baselineItems.map((b) => [b.itemId, b.quantity]));
+    return cart.some((item) => item.quantity > (baselineMap.get(item.itemId) ?? 0));
+  }, [baselineItems, cart]);
 
-  const handleSaveOrder = () => {
+  const getDeltaItems = () => {
+    const baselineMap = new Map(baselineItems.map((b) => [b.itemId, b.quantity]));
+    return cart
+      .map((item) => {
+        const sentQty = baselineMap.get(item.itemId) ?? 0;
+        const newQty = item.quantity - sentQty;
+        if (newQty <= 0) return null;
+        return { ...item, quantity: newQty, total: newQty * item.unitPrice };
+      })
+      .filter(Boolean) as CartItem[];
+  };
+
+  const handleSendKot = async () => {
     if (cart.length === 0) {
       toast({ title: "Cart is empty", variant: "destructive" });
       return;
     }
     if (!selectedTable) return;
-    saveTableOrder(selectedTable.id, cart).then(() => {
-      toast({ title: `Order saved for ${selectedTable.tableNo}` });
-      setShowOrderDialog(false);
-      setCart([]);
+
+    const deltaItems = getDeltaItems();
+    if (deltaItems.length === 0) {
+      toast({ title: "No new items to send", description: "Add items to send a KOT." });
+      return;
+    }
+
+    const mergedItems = cart.map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
+    await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems });
+    setBaselineItems(mergedItems);
+
+    // Show KOT print dialog
+    const kotCount = (currentOrder?.kots?.length ?? 0) + 1;
+    setLastKot({
+      kotNumber: kotCount,
+      items: deltaItems,
+      time: new Date().toLocaleString(),
     });
+    setShowKotDialog(true);
+
+    toast({
+      title: `✅ KOT #${kotCount} Printed Successfully`,
+      description: `${deltaItems.reduce((sum, i) => sum + i.quantity, 0)} item(s) for ${
+        selectedTable.tableNo
+      }. Please deliver slip to kitchen.`,
+    });
+  };
+
+  const handleGoToBilling = async () => {
+    if (!selectedTable) return;
+    if (cart.length === 0 && baselineItems.length === 0) {
+      toast({ title: "No order yet", variant: "destructive" });
+      return;
+    }
+
+    const deltaItems = getDeltaItems();
+    if (deltaItems.length > 0) {
+      const mergedItems = cart.map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
+      await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems });
+      setBaselineItems(mergedItems);
+    }
+
+    await markTableBilling(selectedTable.id);
+    setSelectedTable((prev) => (prev ? { ...prev, status: "billing" } : prev));
+    setShowOrderDialog(false);
+    setShowBillDialog(true);
   };
 
   const handleFinalizeBill = () => {
     if (!selectedTable || !currentOrder) return;
+    
+    // Confirmation dialog
+    const confirmMsg = `Finalize bill for ${selectedTable.tableNo}?\n\nTotal Amount: ${formatCurrency(currentOrder.total)}\n\nTable will be marked as free after payment.`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+    
     setBillLoading(true);
     finalizeTableBill(selectedTable.id, billPayment)
       .then((sale) => {
         toast({
-          title: `Bill finalized for ${selectedTable.tableNo}`,
+          title: `✅ Bill finalized for ${selectedTable.tableNo}`,
           description: `Total: ${formatCurrency(sale.total)}`,
         });
         setShowBillDialog(false);
+        setCart([]);
+        setBaselineItems([]);
+        setSelectedTable(null);
       })
       .catch(() => toast({ title: "Unable to finalize bill", variant: "destructive" }))
       .finally(() => setBillLoading(false));
@@ -252,9 +378,12 @@ export default function Tables() {
                 </div>
                 {getStatusBadge(table.status)}
                 {order && (
-                  <div className="mt-2 pt-2 border-t border-border w-full">
+                  <div className="mt-2 pt-2 border-t border-border w-full space-y-1">
                     <p className="text-xs text-muted-foreground">{order.items.length} items</p>
                     <p className="text-sm font-semibold text-primary">{formatCurrency(order.total)}</p>
+                    <p className={`text-xs font-medium ${getTimeColorClass(order.createdAt)}`}>
+                      ⏱️ {getElapsedTime(order.createdAt)}
+                    </p>
                   </div>
                 )}
               </div>
@@ -365,26 +494,14 @@ export default function Tables() {
                 </div>
               </div>
 
-              <Button variant="glow" className="mt-3" onClick={handleSaveOrder} disabled={cart.length === 0}>
+              <Button variant="glow" className="mt-3" onClick={handleSendKot} disabled={!hasDeltaItems}>
                 <Check className="w-4 h-4 mr-2" />
-                Save Order
+                Send to Kitchen (KOT)
               </Button>
               <Button
                 variant="outline"
                 className="mt-2"
-                onClick={async () => {
-                  if (!selectedTable) return;
-                  if (cart.length > 0) {
-                    await saveTableOrder(selectedTable.id, cart);
-                    setCart([]);
-                  }
-                  if (currentOrder || cart.length > 0) {
-                    setShowOrderDialog(false);
-                    setShowBillDialog(true);
-                  } else {
-                    toast({ title: "No order yet", variant: "destructive" });
-                  }
-                }}
+                onClick={handleGoToBilling}
               >
                 Go to Billing
               </Button>
@@ -403,27 +520,39 @@ export default function Tables() {
 
           {currentOrder && (
             <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-muted/30 space-y-2">
-                {currentOrder.items.map((item) => (
-                  <div key={item.itemId} className="flex justify-between text-sm">
-                    <span>
-                      {item.itemName} x{item.quantity}
-                    </span>
-                    <span>{formatCurrency(item.total)}</span>
-                  </div>
-                ))}
-                <div className="border-t border-border pt-2 mt-2 space-y-1">
+              <div className="p-4 rounded-lg bg-muted/30 space-y-2 font-mono" id="bill-print-area">
+                <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
+                  <h3 className="font-display font-bold text-xl">RestaurantOS</h3>
+                  <p className="text-sm text-muted-foreground mt-1">রেস্টুরেন্ট ওএস</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date().toLocaleString()}
+                  </p>
+                  <p className="font-bold mt-2">Table: {selectedTable.tableNo}</p>
+                </div>
+
+                <div className="space-y-1">
+                  {currentOrder.items.map((item) => (
+                    <div key={item.itemId} className="flex justify-between text-sm">
+                      <span>
+                        {item.itemName} x{item.quantity}
+                      </span>
+                      <span>{formatCurrency(item.total)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t-2 border-dashed border-border pt-2 mt-2 space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>{formatCurrency(currentOrder.subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">VAT</span>
+                    <span className="text-muted-foreground">VAT (5%)</span>
                     <span>{formatCurrency(currentOrder.vatAmount)}</span>
                   </div>
                   {currentOrder.serviceCharge > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Service</span>
+                      <span className="text-muted-foreground">Service Charge</span>
                       <span>{formatCurrency(currentOrder.serviceCharge)}</span>
                     </div>
                   )}
@@ -433,11 +562,83 @@ export default function Tables() {
                       <span>-{formatCurrency(currentOrder.discount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
+                  <div className="flex justify-between font-bold text-lg pt-2 border-t-2 border-border">
                     <span>Total</span>
                     <span className="gradient-text">{formatCurrency(currentOrder.total)}</span>
                   </div>
                 </div>
+
+                <div className="text-center text-xs text-muted-foreground mt-4 pt-3 border-t-2 border-dashed border-border">
+                  <p>Thank you for dining with us!</p>
+                  <p>আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!</p>
+                </div>
+              </div>
+
+              {/* Service Charge & Discount */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Service Charge (5%)</span>
+                  <Button
+                    variant={billServiceCharge ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setBillServiceCharge(!billServiceCharge)}
+                  >
+                    {billServiceCharge ? "Applied" : "Add"}
+                  </Button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Discount:</span>
+                  <Input
+                    type="number"
+                    value={billDiscount}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0;
+                      if (val < 0) {
+                        setBillDiscount(0);
+                      } else if (val > currentOrder.subtotal) {
+                        setBillDiscount(currentOrder.subtotal);
+                      } else {
+                        setBillDiscount(val);
+                      }
+                    }}
+                    className="w-28 bg-muted/50"
+                    min={0}
+                    max={currentOrder.subtotal}
+                    placeholder="৳0"
+                  />
+                </div>
+
+                {(billServiceCharge || billDiscount > 0) && (
+                  <div className="p-3 rounded-lg bg-primary/10 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Original Total:</span>
+                      <span>{formatCurrency(currentOrder.total)}</span>
+                    </div>
+                    {billServiceCharge && (
+                      <div className="flex justify-between text-primary">
+                        <span>+ Service Charge:</span>
+                        <span>+{formatCurrency(currentOrder.subtotal * 0.05)}</span>
+                      </div>
+                    )}
+                    {billDiscount > 0 && (
+                      <div className="flex justify-between text-accent">
+                        <span>- Discount:</span>
+                        <span>-{formatCurrency(billDiscount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
+                      <span>New Total:</span>
+                      <span className="text-primary">
+                        {formatCurrency(
+                          currentOrder.total + 
+                          (billServiceCharge ? currentOrder.subtotal * 0.05 : 0) - 
+                          billDiscount
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Payment Methods */}
@@ -475,6 +676,82 @@ export default function Tables() {
                 <CheckCircle2 className="w-3 h-3" />
                 Table will be marked empty after completion.
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* KOT Print Dialog */}
+      <Dialog open={showKotDialog} onOpenChange={setShowKotDialog}>
+        <DialogContent className="max-w-md glass-card">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text">Kitchen Order Ticket (KOT)</DialogTitle>
+            <DialogDescription>রান্নাঘর অর্ডার টিকিট • Print and send to kitchen</DialogDescription>
+          </DialogHeader>
+
+          {lastKot && selectedTable && (
+            <div className="space-y-4">
+              {/* KOT Slip */}
+              <div className="p-6 rounded-lg bg-muted/30 font-mono text-sm border-2 border-dashed border-border" id="kot-print-area">
+                <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
+                  <h3 className="font-display font-bold text-2xl">KITCHEN ORDER</h3>
+                  <p className="text-lg font-bold mt-1">KOT #{lastKot.kotNumber}</p>
+                </div>
+                
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-base">
+                    <span className="font-bold">Table:</span>
+                    <span className="text-xl font-bold">{selectedTable.tableNo}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Time:</span>
+                    <span>{lastKot.time}</span>
+                  </div>
+                </div>
+
+                <div className="border-t-2 border-dashed border-border pt-3 mb-3">
+                  <p className="font-bold mb-2">ITEMS:</p>
+                  {lastKot.items.map((item, idx) => (
+                    <div key={item.itemId} className="mb-2 text-base">
+                      <div className="flex justify-between items-start">
+                        <span className="font-bold text-lg">{item.quantity}x</span>
+                        <span className="flex-1 ml-2 text-base">{item.itemName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t-2 border-dashed border-border pt-3 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    Total Items: {lastKot.items.reduce((sum, i) => sum + i.quantity, 0)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1" 
+                  onClick={() => {
+                    window.print();
+                  }}
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print KOT
+                </Button>
+                <Button 
+                  variant="default" 
+                  className="flex-1" 
+                  onClick={() => setShowKotDialog(false)}
+                >
+                  Done
+                </Button>
+              </div>
+
+              <p className="text-xs text-center text-muted-foreground">
+                💡 Print this slip and provide to kitchen staff
+              </p>
             </div>
           )}
         </DialogContent>
