@@ -1,12 +1,16 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
+import { authApi } from "@/lib/api/auth";
+import { apiClient } from "@/lib/api";
 
-export type UserRole = "superadmin" | "admin" | "manager";
+export type UserRole = "superadmin" | "owner" | "manager" | "waiter" | "cashier" | "chef";
 
 export type AuthUser = {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  tenantId?: string;
+  token?: string;
 };
 
 type LoginInput = {
@@ -29,10 +33,11 @@ const STORAGE_KEY = "restaurant-os.auth.user";
 function roleFromEmail(email: string): UserRole {
   const e = email.toLowerCase().trim();
   if (e.includes("super")) return "superadmin";
-  if (e.includes("admin")) return "admin";
+  if (e.includes("owner")) return "owner";
   if (e.includes("manager")) return "manager";
-  // Default restaurant role is manager for daily operators
-  return "manager";
+  if (e.includes("cash")) return "cashier";
+  if (e.includes("chef")) return "chef";
+  return "waiter";
 }
 
 function displayNameFromEmail(email: string): string {
@@ -48,7 +53,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as AuthUser) : null;
+      const parsed = raw ? (JSON.parse(raw) as AuthUser) : null;
+      if (parsed?.token) {
+        apiClient.token = parsed.token;
+        if (parsed.tenantId) apiClient.tenantId = parsed.tenantId;
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -59,13 +69,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       isAuthenticated: Boolean(user),
       login: async ({ email, password, rememberMe }) => {
-        // Frontend-only mock login. Keep password for later backend integration.
-        void password;
+        const res = await authApi.login(email, password);
+        const u = res.user;
         const next: AuthUser = {
-          id: `U-${Math.random().toString(36).slice(2, 10)}`,
-          email,
-          name: displayNameFromEmail(email),
-          role: roleFromEmail(email),
+          id: u.id,
+          email: u.email,
+          name: u.name || displayNameFromEmail(u.email),
+          role: (u.is_superuser ? "superadmin" : u.role) as UserRole,
+          tenantId: u.tenant_id ?? undefined,
+          token: res.token,
         };
         setUser(next);
         if (rememberMe) {
@@ -77,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout: () => {
         setUser(null);
         localStorage.removeItem(STORAGE_KEY);
+        authApi.logout();
       },
     }),
     [user]

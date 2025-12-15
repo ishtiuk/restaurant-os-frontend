@@ -77,7 +77,7 @@ export default function Items() {
 
       return matchesSearch && matchesCategory && matchesStock;
     });
-  }, [searchQuery, selectedCategory, stockFilter]);
+  }, [items, searchQuery, selectedCategory, stockFilter]);
 
   const getCategoryName = (categoryId: string) => {
     return categories.find((c) => c.id === categoryId)?.name || "Unknown";
@@ -215,9 +215,11 @@ export default function Items() {
 
   const handleEdit = (item: Item) => {
     setSelectedItem(item);
+    setStockInput(item.stockQty);
     setIsEditMode(true);
     setIsAddModalOpen(true);
     setImagePreview(item.imageUrl || "");
+    setSelectedFile(null);
   };
 
   const handleToggleActive = async (item: Item) => {
@@ -536,7 +538,7 @@ export default function Items() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddItem} className="space-y-4">
+          <form onSubmit={handleAddItem} className="space-y-4" key={selectedItem?.id || "new-item"}>
             {/* Image Upload Section */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Item Image</Label>
@@ -593,6 +595,7 @@ export default function Items() {
                   name="name"
                   placeholder="e.g. Kacchi Biriyani"
                   required
+                  defaultValue={selectedItem?.name}
                   className="bg-muted/50"
                 />
               </div>
@@ -604,6 +607,7 @@ export default function Items() {
                   id="nameBn"
                   name="nameBn"
                   placeholder="e.g. কাচ্চি বিরিয়ানি"
+                  defaultValue={selectedItem?.nameBn}
                   className="bg-muted/50 font-bengali"
                 />
               </div>
@@ -611,7 +615,7 @@ export default function Items() {
               {/* Category */}
               <div className="space-y-2">
                 <Label htmlFor="categoryId">Category *</Label>
-                <Select name="categoryId" required>
+                <Select name="categoryId" required defaultValue={selectedItem?.categoryId}>
                   <SelectTrigger className="bg-muted/50">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -628,7 +632,7 @@ export default function Items() {
               {/* Unit */}
               <div className="space-y-2">
                 <Label htmlFor="unit">Unit *</Label>
-                <Select name="unit" required>
+                <Select name="unit" required defaultValue={selectedItem?.unit}>
                   <SelectTrigger className="bg-muted/50">
                     <SelectValue placeholder="Select unit" />
                   </SelectTrigger>
@@ -654,6 +658,7 @@ export default function Items() {
                   min="0"
                   placeholder="350"
                   required
+                  defaultValue={selectedItem?.price}
                   className="bg-muted/50"
                 />
               </div>
@@ -669,6 +674,7 @@ export default function Items() {
                   min="0"
                   placeholder="180"
                   required
+                  defaultValue={selectedItem?.cost}
                   className="bg-muted/50"
                 />
               </div>
@@ -684,6 +690,7 @@ export default function Items() {
                   min="0"
                   max="100"
                   placeholder="5"
+                  defaultValue={selectedItem?.vatRate ?? ""}
                   className="bg-muted/50"
                 />
               </div>
@@ -697,7 +704,7 @@ export default function Items() {
                   type="number"
                   min="0"
                   placeholder="0"
-                  defaultValue="0"
+                  defaultValue={selectedItem?.stockQty ?? 0}
                   className="bg-muted/50"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -723,11 +730,11 @@ export default function Items() {
                   type="hidden"
                   name="isPackaged"
                   id="isPackaged-hidden"
-                  value="false"
+                  value={selectedItem?.isPackaged ? "true" : "false"}
                 />
                 <Switch
                   id="isPackaged"
-                  defaultChecked={false}
+                  defaultChecked={selectedItem?.isPackaged ?? false}
                   onCheckedChange={(checked) => {
                     const hiddenInput = document.getElementById("isPackaged-hidden") as HTMLInputElement;
                     if (hiddenInput) {

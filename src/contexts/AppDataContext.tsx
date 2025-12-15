@@ -33,7 +33,10 @@ import {
   tableOrders as seedTableOrders,
 } from "@/data/mockData";
 import { delay, newId } from "@/services/placeholderApi";
-import { apiClient } from "@/services/apiClient";
+import { apiClient, API_ORIGIN } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { categoriesApi } from "@/lib/api/categories";
+import { productsApi } from "@/lib/api/products";
 
 export type TableOrder = (typeof seedTableOrders)[number];
 
@@ -101,7 +104,8 @@ function todayISO() {
 }
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<Item[]>(apiClient.isEnabled ? [] : seedItems);
+  const { user } = useAuth();
+  const [items, setItems] = useState<Item[]>(apiClient.token ? [] : seedItems);
   const [suppliers, setSuppliers] = useState<Supplier[]>(seedSuppliers);
   const [supplierTransactions, setSupplierTransactions] = useState<SupplierTransaction[]>(seedSupplierTransactions);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(seedPurchaseOrders);
@@ -113,20 +117,50 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [vatEntries, setVatEntries] = useState<VatEntry[]>(seedVatEntries);
   const [expenses, setExpenses] = useState<Expense[]>(seedExpenses);
   const [expenseCategories] = useState<ExpenseCategory[]>(seedExpenseCategories);
-  const [categories, setCategories] = useState<Category[]>(apiClient.isEnabled ? [] : seedCategories);
+  const [categories, setCategories] = useState<Category[]>(apiClient.token ? [] : seedCategories);
   const [tables, setTables] = useState<RestaurantTable[]>(seedTables);
   const [tableOrders, setTableOrders] = useState<TableOrder[]>(seedTableOrders as TableOrder[]);
 
   useEffect(() => {
-    if (!apiClient.isEnabled) return;
+    if (!user?.token) return;
     const load = async () => {
       try {
         const [cats, prods] = await Promise.all([
-          apiClient.fetchCategories(),
-          apiClient.fetchProducts(),
+          categoriesApi.list(),
+          productsApi.list(),
         ]);
-        setCategories(cats);
-        setItems(prods);
+        setCategories(
+          cats.map((c) => ({
+            id: c.id,
+            name: c.name,
+            nameBn: c.name_bn ?? undefined,
+            icon: c.icon ?? "🍽️",
+            itemCount: c.item_count ?? 0,
+          }))
+        );
+        setItems(
+          prods.map((p) => ({
+            id: String(p.id),
+            name: p.name,
+            nameBn: p.name_bn ?? undefined,
+            sku: p.sku,
+            categoryId: p.category_id,
+            price: Number(p.price),
+            cost: Number(p.cost),
+            stockQty: Number(p.stock_qty ?? 0),
+            unit: (p.unit as Item["unit"]) || "pcs",
+            imageUrl: p.image_url
+              ? p.image_url.startsWith("http")
+                ? p.image_url
+                : `${API_ORIGIN}${p.image_url}`
+              : undefined,
+            isActive: Boolean(p.is_active),
+            isPackaged: Boolean(p.is_packaged),
+            vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }))
+        );
       } catch (err) {
         console.error("API load failed, falling back to seeds", err);
         setCategories(seedCategories);
@@ -134,7 +168,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       }
     };
     load();
-  }, []);
+  }, [user?.token]);
 
   const value = useMemo<AppData>(
     () => ({
@@ -485,7 +519,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       },
 
       upsertItem: async (input, file = null) => {
-        if (apiClient.isEnabled) {
+        if (user?.token) {
           const payload = {
             name: input.name,
             name_bn: input.nameBn,
@@ -502,18 +536,64 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           };
           const exists = items.find((x) => x.id === input.id);
           const saved = exists
-            ? await apiClient.updateProduct(input.id, payload, file)
-            : await apiClient.createProduct(payload, file);
+            ? await productsApi.update(input.id, payload, file)
+            : await productsApi.create(payload, file);
+          // Ensure freshness by refetching list (handles server defaults, ids, and media paths)
+          const refreshed = await productsApi.list();
+          setItems(
+            refreshed.map((p) => ({
+              id: String(p.id),
+              name: p.name,
+              nameBn: p.name_bn ?? undefined,
+              sku: p.sku,
+              categoryId: p.category_id,
+              price: Number(p.price),
+              cost: Number(p.cost),
+              stockQty: Number(p.stock_qty ?? 0),
+              unit: (p.unit as Item["unit"]) || "pcs",
+              imageUrl: p.image_url
+                ? p.image_url.startsWith("http")
+                  ? p.image_url
+                  : `${API_ORIGIN}${p.image_url}`
+                : undefined,
+              isActive: Boolean(p.is_active),
+              isPackaged: Boolean(p.is_packaged),
+              vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }))
+          );
+          const mapped: Item = {
+            id: String(saved.id),
+            name: saved.name,
+            nameBn: saved.name_bn ?? undefined,
+            sku: saved.sku,
+            categoryId: saved.category_id,
+            price: Number(saved.price),
+            cost: Number(saved.cost),
+            stockQty: Number(saved.stock_qty ?? 0),
+            unit: (saved.unit as Item["unit"]) || "pcs",
+            imageUrl: saved.image_url
+              ? saved.image_url.startsWith("http")
+                ? saved.image_url
+                : `${API_ORIGIN}${saved.image_url}`
+              : undefined,
+            isActive: Boolean(saved.is_active),
+            isPackaged: Boolean(saved.is_packaged),
+            vatRate: saved.vat_rate != null ? Number(saved.vat_rate) : undefined,
+            createdAt: input.createdAt,
+            updatedAt: new Date().toISOString(),
+          };
           setItems((prev) => {
-            const idx = prev.findIndex((x) => x.id === saved.id);
+            const idx = prev.findIndex((x) => x.id === mapped.id);
             if (idx >= 0) {
               const next = [...prev];
-              next[idx] = saved;
+              next[idx] = mapped;
               return next;
             }
-            return [saved, ...prev];
+            return [mapped, ...prev];
           });
-          return saved;
+          return mapped;
         }
         await delay(120);
         setItems((prev) => {
@@ -529,8 +609,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       },
 
       updateItem: async (itemId, updates) => {
-        if (apiClient.isEnabled) {
-          await apiClient.updateProduct(itemId, {
+        if (user?.token) {
+          await productsApi.update(itemId, {
             name: updates.name,
             name_bn: updates.nameBn,
             category_id: updates.categoryId,
@@ -548,14 +628,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, ...updates } : it)));
       },
       addCategory: async (input) => {
-        if (apiClient.isEnabled) {
-          const created = await apiClient.createCategory({
+        if (user?.token) {
+          const created = await categoriesApi.create({
             name: input.name,
-            nameBn: input.nameBn,
+            name_bn: input.nameBn,
             icon: input.icon,
           });
-          setCategories((prev) => [created, ...prev]);
-          return created;
+          const mapped: Category = {
+            id: created.id,
+            name: created.name,
+            nameBn: created.name_bn ?? undefined,
+            icon: created.icon ?? "🍽️",
+            itemCount: created.item_count ?? input.itemCount ?? 0,
+          };
+          setCategories((prev) => [mapped, ...prev]);
+          return mapped;
         }
         await delay(100);
         const category: Category = {
@@ -567,9 +654,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         return category;
       },
       removeCategory: async (categoryId) => {
-        if (apiClient.isEnabled) {
+        if (user?.token) {
           try {
-            await apiClient.deleteCategory(categoryId);
+            await categoriesApi.delete(categoryId);
           } catch (err) {
             console.error(err);
             throw err;

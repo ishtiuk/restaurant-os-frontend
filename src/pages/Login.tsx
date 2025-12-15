@@ -29,6 +29,12 @@ export default function Login() {
         description: "স্বাগতম! Login successful.",
       });
       navigate("/dashboard");
+    } catch (err: any) {
+      toast({
+        title: "Login failed",
+        description: err?.message || "Please check your credentials",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
