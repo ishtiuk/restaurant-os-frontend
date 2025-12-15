@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { categories } from "@/data/mockData";
 import { CartItem, PaymentMethod } from "@/types";
 import { useAppData } from "@/contexts/AppDataContext";
+import { SalesReceipt } from "@/components/print/SalesReceipt";
+import { printContent } from "@/utils/printUtils";
 import {
   Search,
   Plus,
@@ -594,23 +596,51 @@ export default function Sales() {
         <DialogContent className="max-w-md glass-card">
           <DialogHeader>
             <DialogTitle className="font-display gradient-text">Sale Complete!</DialogTitle>
-            <DialogDescription>বিক্রয় সম্পন্ন</DialogDescription>
+            <DialogDescription>বিক্রয় সম্পন্ন • Print receipt for customer</DialogDescription>
           </DialogHeader>
           {lastSale && (
             <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-muted/30 font-mono text-sm">
-                <div className="text-center mb-4">
+              {/* Hidden printable receipt */}
+              <div className="hidden">
+                <SalesReceipt
+                  sale={lastSale}
+                  orderType={lastSale.orderType as 'takeaway' | 'delivery'}
+                  customerName={lastSale.customerName}
+                  customerPhone={lastSale.customerPhone}
+                  deliveryAddress={lastSale.deliveryAddress}
+                  deliveryNotes={lastSale.deliveryNotes}
+                />
+              </div>
+              
+              {/* Preview receipt */}
+              <div className="p-4 rounded-lg bg-muted/30 font-mono text-sm max-h-[50vh] overflow-auto custom-scrollbar">
+                <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
                   <h3 className="font-display font-bold text-lg">RestaurantOS</h3>
-                  <p className="text-muted-foreground">রেস্টুরেন্ট ওএস</p>
+                  <p className="text-muted-foreground text-xs">রেস্টুরেন্ট ওএস</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(lastSale.createdAt).toLocaleString()}
                   </p>
+                  <Badge variant="outline" className="mt-2">
+                    {lastSale.orderType === 'takeaway' ? '🛍️ Takeaway' : '🚚 Delivery'}
+                  </Badge>
                 </div>
+                
+                {/* Delivery Info */}
+                {lastSale.orderType === 'delivery' && lastSale.customerName && (
+                  <div className="mb-3 p-2 rounded bg-muted/50 text-xs">
+                    <p className="font-semibold">🚚 Delivery Details:</p>
+                    <p>Name: {lastSale.customerName}</p>
+                    <p>Phone: {lastSale.customerPhone}</p>
+                    <p>Address: {lastSale.deliveryAddress}</p>
+                    {lastSale.deliveryNotes && <p>Notes: {lastSale.deliveryNotes}</p>}
+                  </div>
+                )}
+                
                 <div className="border-t border-dashed border-border pt-3 space-y-1">
                   {lastSale.items.map((item: any) => (
                     <div key={item.itemId} className="flex justify-between">
-                      <span>
-                        {item.itemName} x{item.quantity}
+                      <span className="flex-1">
+                        <span className="font-bold">{item.quantity}x</span> {item.itemName}
                       </span>
                       <span>{formatCurrency(item.total)}</span>
                     </div>
@@ -623,8 +653,14 @@ export default function Sales() {
                   </div>
                   {lastSale.vatAmount > 0 && (
                     <div className="flex justify-between">
-                      <span>VAT</span>
+                      <span>VAT (5%)</span>
                       <span>{formatCurrency(lastSale.vatAmount)}</span>
+                    </div>
+                  )}
+                  {lastSale.serviceCharge > 0 && (
+                    <div className="flex justify-between">
+                      <span>Service Charge</span>
+                      <span>{formatCurrency(lastSale.serviceCharge)}</span>
                     </div>
                   )}
                   {lastSale.discount > 0 && (
@@ -637,16 +673,24 @@ export default function Sales() {
                     <span>Total</span>
                     <span className="text-primary">{formatCurrency(lastSale.total)}</span>
                   </div>
+                  <div className="flex justify-between text-xs text-muted-foreground pt-1">
+                    <span>Payment</span>
+                    <span className="uppercase">{lastSale.paymentMethod}</span>
+                  </div>
                 </div>
-                <p className="text-center text-xs text-muted-foreground mt-4">
-                  Thank you for dining with us!<br />
-                  আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!
+                <p className="text-center text-xs text-muted-foreground mt-4 pt-3 border-t border-dashed border-border">
+                  Thank you for your order!<br />
+                  আপনার অর্ডারের জন্য ধন্যবাদ!
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => window.print()}>
+                <Button 
+                  variant="outline" 
+                  className="flex-1" 
+                  onClick={() => printContent('sales-receipt-print', { title: 'Receipt', paperSize: 'thermal' })}
+                >
                   <Printer className="w-4 h-4 mr-2" />
-                  Print
+                  Print Receipt
                 </Button>
                 <Button variant="glow" className="flex-1" onClick={() => setShowReceipt(false)}>
                   New Sale
