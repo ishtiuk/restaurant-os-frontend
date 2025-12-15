@@ -478,22 +478,24 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       completeSale: async (input) => {
         await delay(200);
         
-        // Check stock availability
+        // Check stock availability ONLY for packaged items
         for (const item of input.items) {
           const inventoryItem = items.find(i => i.id === item.itemId);
           if (!inventoryItem) {
             throw new Error(`Item ${item.itemName} not found in inventory`);
           }
-          if (inventoryItem.stockQty < item.quantity) {
+          // Only check stock for packaged items (ice cream, coke, etc.)
+          // Cooked items (biryani, curry) don't need stock tracking
+          if (inventoryItem.isPackaged && inventoryItem.stockQty < item.quantity) {
             throw new Error(`Insufficient stock for ${item.itemName}. Available: ${inventoryItem.stockQty}, Required: ${item.quantity}`);
           }
         }
         
-        // Deduct stock
+        // Deduct stock ONLY for packaged items
         setItems(prev =>
           prev.map(item => {
             const saleItem = input.items.find(si => si.itemId === item.id);
-            if (!saleItem) return item;
+            if (!saleItem || !item.isPackaged) return item;
             return { ...item, stockQty: item.stockQty - saleItem.quantity };
           })
         );

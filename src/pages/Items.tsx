@@ -2,8 +2,19 @@ import React, { useState, useMemo } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { items, categories } from "@/data/mockData";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { useAppData } from "@/contexts/AppDataContext";
+import { categories } from "@/data/mockData";
+import { Item } from "@/types";
 import {
   Search,
   Plus,
@@ -13,6 +24,9 @@ import {
   Package,
   Edit,
   MoreVertical,
+  Upload,
+  X,
+  ImageIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,14 +41,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
 export default function Items() {
+  const { items, upsertItem } = useAppData();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [stockFilter, setStockFilter] = useState<string>("all");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -60,6 +79,127 @@ export default function Items() {
     return categories.find((c) => c.id === categoryId)?.name || "Unknown";
   };
 
+  const generateSKU = (name: string, categoryId: string) => {
+    const category = categories.find((c) => c.id === categoryId);
+    const categoryPrefix = category?.name
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 3) || "ITM";
+    const namePrefix = name
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0");
+    return `${categoryPrefix}${namePrefix}${random}`;
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please select an image file (PNG, JPG, JPEG, WEBP)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'File too large',
+        description: 'Please select an image smaller than 5MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Store locally for preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setImagePreview(result);
+      setSelectedFile(file);
+    };
+    reader.readAsDataURL(file);
+
+    toast({
+      title: 'Image selected',
+      description: 'Image will be saved with the item.',
+    });
+
+    // Reset file input
+    e.target.value = '';
+  };
+
+  const removeImage = () => {
+    setImagePreview("");
+    setSelectedFile(null);
+  };
+
+  const handleAddItem = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    const name = formData.get("name") as string;
+    const categoryId = formData.get("categoryId") as string;
+    const isPackaged = formData.get("isPackaged") === "true";
+    
+    // Use image preview (base64) or empty string
+    let imageUrl = imagePreview || undefined;
+    
+    // TODO: When backend media API is ready, upload file here:
+    // if (selectedFile) {
+    //   const response = await mediaApi.upload(selectedFile, "item");
+    //   imageUrl = response.file_url;
+    // }
+    
+    const newItem: Item = {
+      id: `ITEM-${Date.now()}`,
+      name,
+      nameBn: (formData.get("nameBn") as string) || undefined,
+      sku: generateSKU(name, categoryId),
+      categoryId,
+      price: parseFloat(formData.get("price") as string),
+      cost: parseFloat(formData.get("cost") as string),
+      stockQty: isPackaged ? parseFloat(formData.get("stockQty") as string) : 9999,
+      unit: formData.get("unit") as Item["unit"],
+      imageUrl,
+      isActive: true,
+      isPackaged,
+      vatRate: formData.get("vatRate") ? parseFloat(formData.get("vatRate") as string) : undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await upsertItem(newItem);
+      setIsAddModalOpen(false);
+      setImagePreview("");
+      setSelectedFile(null);
+      (e.target as HTMLFormElement).reset();
+      toast({
+        title: "Item created!",
+        description: `${newItem.name} has been added successfully.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create item. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getStockBadge = (qty: number) => {
     if (qty === 0) return <Badge variant="danger">Out of Stock</Badge>;
     if (qty <= 10) return <Badge variant="warning">Low Stock</Badge>;
@@ -74,7 +214,15 @@ export default function Items() {
           <h1 className="text-3xl font-display font-bold gradient-text">Items</h1>
           <p className="text-muted-foreground">আইটেম ও মেনু ম্যানেজমেন্ট • Menu Management</p>
         </div>
-        <Button variant="glow" className="w-full sm:w-auto">
+        <Button 
+          variant="glow" 
+          className="w-full sm:w-auto"
+          onClick={() => {
+            setIsAddModalOpen(true);
+            setImagePreview("");
+            setSelectedFile(null);
+          }}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add Item
         </Button>
@@ -302,12 +450,259 @@ export default function Items() {
           <p className="text-muted-foreground mb-4">
             কোনো আইটেম পাওয়া যায়নি • Try adjusting your filters
           </p>
-          <Button variant="glow">
+          <Button 
+            variant="glow"
+            onClick={() => setIsAddModalOpen(true)}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add New Item
           </Button>
         </GlassCard>
       )}
+
+      {/* Add Item Modal */}
+      <Dialog 
+        open={isAddModalOpen} 
+        onOpenChange={(open) => {
+          setIsAddModalOpen(open);
+          if (!open) {
+            setImagePreview("");
+            setSelectedFile(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text">Add New Item</DialogTitle>
+            <DialogDescription>নতুন আইটেম যোগ করুন • Create a new menu item</DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleAddItem} className="space-y-4">
+            {/* Image Upload Section */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Item Image</Label>
+              <div className="flex items-center gap-4">
+                <div className="relative w-32 h-32 rounded-2xl border-2 border-dashed border-border bg-muted/50 flex items-center justify-center overflow-hidden group">
+                  {imagePreview ? (
+                    <>
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </>
+                  ) : (
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                  )}
+                  <label
+                    htmlFor="image-upload"
+                    className="absolute inset-0 cursor-pointer"
+                  >
+                    <input
+                      id="image-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground">
+                    PNG, JPG, WEBP up to 5MB
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Click to upload or drag and drop
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Name */}
+              <div className="space-y-2">
+                <Label htmlFor="name">Item Name *</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  placeholder="e.g. Kacchi Biriyani"
+                  required
+                  className="bg-muted/50"
+                />
+              </div>
+
+              {/* Bengali Name */}
+              <div className="space-y-2">
+                <Label htmlFor="nameBn">Bengali Name (Optional)</Label>
+                <Input
+                  id="nameBn"
+                  name="nameBn"
+                  placeholder="e.g. কাচ্চি বিরিয়ানি"
+                  className="bg-muted/50 font-bengali"
+                />
+              </div>
+
+              {/* Category */}
+              <div className="space-y-2">
+                <Label htmlFor="categoryId">Category *</Label>
+                <Select name="categoryId" required>
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.icon} {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Unit */}
+              <div className="space-y-2">
+                <Label htmlFor="unit">Unit *</Label>
+                <Select name="unit" required>
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue placeholder="Select unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="plate">Plate</SelectItem>
+                    <SelectItem value="bowl">Bowl</SelectItem>
+                    <SelectItem value="pcs">Pieces</SelectItem>
+                    <SelectItem value="bottle">Bottle</SelectItem>
+                    <SelectItem value="kg">Kilogram</SelectItem>
+                    <SelectItem value="litre">Litre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Price */}
+              <div className="space-y-2">
+                <Label htmlFor="price">Selling Price (৳) *</Label>
+                <Input
+                  id="price"
+                  name="price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="350"
+                  required
+                  className="bg-muted/50"
+                />
+              </div>
+
+              {/* Cost */}
+              <div className="space-y-2">
+                <Label htmlFor="cost">Cost Price (৳) *</Label>
+                <Input
+                  id="cost"
+                  name="cost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="180"
+                  required
+                  className="bg-muted/50"
+                />
+              </div>
+
+              {/* VAT Rate */}
+              <div className="space-y-2">
+                <Label htmlFor="vatRate">VAT Rate (%)</Label>
+                <Input
+                  id="vatRate"
+                  name="vatRate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="5"
+                  className="bg-muted/50"
+                />
+              </div>
+
+              {/* Stock Quantity (only for packaged items) */}
+              <div className="space-y-2">
+                <Label htmlFor="stockQty">Initial Stock</Label>
+                <Input
+                  id="stockQty"
+                  name="stockQty"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  defaultValue="0"
+                  className="bg-muted/50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Only required for packaged items
+                </p>
+              </div>
+            </div>
+
+            {/* Is Packaged Switch */}
+            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border">
+              <div className="space-y-0.5">
+                <Label htmlFor="isPackaged" className="text-base font-medium">
+                  Packaged Item
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Enable stock tracking for packaged items (ice cream, coke, etc.)
+                  <br />
+                  Disable for cooked items (biryani, curry, etc.) - made instantly
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="hidden"
+                  name="isPackaged"
+                  id="isPackaged-hidden"
+                  value="false"
+                />
+                <Switch
+                  id="isPackaged"
+                  defaultChecked={false}
+                  onCheckedChange={(checked) => {
+                    const hiddenInput = document.getElementById("isPackaged-hidden") as HTMLInputElement;
+                    if (hiddenInput) {
+                      hiddenInput.value = checked ? "true" : "false";
+                    }
+                    const input = document.getElementById("stockQty") as HTMLInputElement;
+                    if (input) {
+                      input.required = checked;
+                      if (!checked) {
+                        input.value = "0";
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsAddModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="glow" className="flex-1">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Item
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

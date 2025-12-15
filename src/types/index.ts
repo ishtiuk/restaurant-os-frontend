@@ -12,6 +12,7 @@ export interface Item {
   unit: 'pcs' | 'plate' | 'bowl' | 'bottle' | 'kg' | 'litre';
   imageUrl?: string;
   isActive: boolean;
+  isPackaged: boolean; // true = packaged item (ice cream, coke) needs stock tracking, false = cooked item (biryani, curry) no stock needed
   vatRate?: number;
   createdAt: string;
   updatedAt: string;

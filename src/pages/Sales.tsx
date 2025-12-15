@@ -93,8 +93,10 @@ export default function Sales() {
   const addToCart = useCallback((item: typeof items[0]) => {
     setCart((prev) => {
       const existing = prev.find((c) => c.itemId === item.id);
+      // Only check stock for packaged items (ice cream, coke, etc.)
+      // Cooked items (biryani, curry) don't need stock tracking
       if (existing) {
-        if (existing.quantity >= item.stockQty) {
+        if (item.isPackaged && existing.quantity >= item.stockQty) {
           toast({
             title: "Stock limit reached",
             description: `Only ${item.stockQty} available`,
@@ -117,7 +119,7 @@ export default function Sales() {
           unitPrice: item.price,
           discount: 0,
           total: item.price,
-          available: item.stockQty,
+          available: item.isPackaged ? item.stockQty : 9999, // Unlimited for cooked items
         },
       ];
     });

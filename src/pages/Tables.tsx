@@ -171,8 +171,10 @@ export default function Tables() {
   const addToCart = (item: typeof items[0]) => {
     setCart((prev) => {
       const existing = prev.find((c) => c.itemId === item.id);
+      // Only check stock for packaged items (ice cream, coke, etc.)
+      // Cooked items (biryani, curry) don't need stock tracking
       if (existing) {
-        if (existing.quantity >= item.stockQty) {
+        if (item.isPackaged && existing.quantity >= item.stockQty) {
           toast({ title: "Stock limit reached", variant: "destructive" });
           return prev;
         }
@@ -191,7 +193,7 @@ export default function Tables() {
           unitPrice: item.price,
           discount: 0,
           total: item.price,
-          available: item.stockQty,
+          available: item.isPackaged ? item.stockQty : 9999, // Unlimited for cooked items
         },
       ];
     });

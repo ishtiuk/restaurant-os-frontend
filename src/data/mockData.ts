@@ -26,6 +26,7 @@ export const items: Item[] = [
     unit: "plate",
     imageUrl: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300",
     isActive: true,
+    isPackaged: false,
     vatRate: 5,
     createdAt: "2024-01-15",
     updatedAt: "2024-01-20",
