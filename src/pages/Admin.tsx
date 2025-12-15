@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -18,15 +19,47 @@ import {
   Search,
   RefreshCw,
   UserPlus,
+  Settings2,
+  RotateCcw,
 } from "lucide-react";
+
+// All available features in the system
+const ALL_FEATURES = [
+  { id: "pos_basic", name: "Basic POS", category: "POS" },
+  { id: "pos_advanced", name: "Advanced POS", category: "POS" },
+  { id: "inventory", name: "Inventory Management", category: "Operations" },
+  { id: "tables", name: "Table Management", category: "Operations" },
+  { id: "kitchen_display", name: "Kitchen Display System", category: "Operations" },
+  { id: "customers", name: "Customer Management", category: "CRM" },
+  { id: "loyalty", name: "Loyalty & Rewards", category: "CRM" },
+  { id: "analytics_basic", name: "Basic Analytics", category: "Reports" },
+  { id: "analytics_full", name: "Full Analytics", category: "Reports" },
+  { id: "vat_reports", name: "VAT Reports", category: "Reports" },
+  { id: "multi_branch", name: "Multi-Branch Support", category: "Enterprise" },
+  { id: "api_access", name: "API Access", category: "Enterprise" },
+  { id: "white_label", name: "White-label Option", category: "Enterprise" },
+  { id: "custom_integrations", name: "Custom Integrations", category: "Enterprise" },
+] as const;
+
+// Default features by plan
+const PLAN_FEATURES: Record<string, string[]> = {
+  starter: ["pos_basic", "inventory", "analytics_basic"],
+  professional: ["pos_basic", "pos_advanced", "inventory", "tables", "customers", "analytics_basic", "analytics_full", "vat_reports"],
+  enterprise: ALL_FEATURES.map(f => f.id),
+};
+
+const FEATURE_CATEGORIES = [...new Set(ALL_FEATURES.map(f => f.category))];
+
+type TenantPlan = "starter" | "professional" | "enterprise";
 
 type Tenant = {
   id: string;
   name: string;
-  plan: "basic" | "standard" | "pro";
+  plan: TenantPlan;
   isActive: boolean;
   note?: string;
   createdAt: string;
+  enabledFeatures: string[];
 };
 
 type AdminUser = {
@@ -38,10 +71,10 @@ type AdminUser = {
   isActive: boolean;
 };
 
-const planOptions: Tenant["plan"][] = ["basic", "standard", "pro"];
+const planOptions: TenantPlan[] = ["starter", "professional", "enterprise"];
 
 const seedTenants: Tenant[] = [
-  { id: "t-1", name: "Demo Restaurant", plan: "standard", isActive: true, createdAt: "2024-12-01", note: "Demo data" },
+  { id: "t-1", name: "Demo Restaurant", plan: "professional", isActive: true, createdAt: "2024-12-01", note: "Demo data", enabledFeatures: PLAN_FEATURES.professional },
 ];
 
 const seedUsers: AdminUser[] = [
@@ -62,7 +95,7 @@ export default function Admin() {
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [tenantForm, setTenantForm] = useState({
     name: "",
-    plan: "basic" as Tenant["plan"],
+    plan: "starter" as TenantPlan,
     isActive: true,
     note: "",
   });
@@ -76,6 +109,11 @@ export default function Admin() {
     tenantId: "",
     isActive: true,
   });
+
+  // Feature management state
+  const [featureModalOpen, setFeatureModalOpen] = useState(false);
+  const [featureEditTenant, setFeatureEditTenant] = useState<Tenant | null>(null);
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
 
   const filteredTenants = useMemo(
     () =>
@@ -106,9 +144,40 @@ export default function Admin() {
       });
     } else {
       setEditingTenant(null);
-      setTenantForm({ name: "", plan: "basic", isActive: true, note: "" });
+      setTenantForm({ name: "", plan: "starter", isActive: true, note: "" });
     }
     setTenantModalOpen(true);
+  };
+
+  const openFeatureModal = (tenant: Tenant) => {
+    setFeatureEditTenant(tenant);
+    setSelectedFeatures([...tenant.enabledFeatures]);
+    setFeatureModalOpen(true);
+  };
+
+  const toggleFeature = (featureId: string) => {
+    setSelectedFeatures((prev) =>
+      prev.includes(featureId)
+        ? prev.filter((f) => f !== featureId)
+        : [...prev, featureId]
+    );
+  };
+
+  const applyPlanDefaults = () => {
+    if (featureEditTenant) {
+      setSelectedFeatures([...PLAN_FEATURES[featureEditTenant.plan]]);
+    }
+  };
+
+  const saveFeatures = () => {
+    if (!featureEditTenant) return;
+    setTenants((prev) =>
+      prev.map((t) =>
+        t.id === featureEditTenant.id ? { ...t, enabledFeatures: selectedFeatures } : t
+      )
+    );
+    toast({ title: "Features updated" });
+    setFeatureModalOpen(false);
   };
 
   const openUserModal = (u?: AdminUser) => {
@@ -141,14 +210,16 @@ export default function Admin() {
       );
       toast({ title: "Tenant updated" });
     } else {
+      const newPlan = tenantForm.plan;
       setTenants((prev) => [
         {
           id: `t-${Date.now()}`,
           name: tenantForm.name,
-          plan: tenantForm.plan,
+          plan: newPlan,
           isActive: tenantForm.isActive,
           note: tenantForm.note,
           createdAt: new Date().toISOString().slice(0, 10),
+          enabledFeatures: [...PLAN_FEATURES[newPlan]],
         },
         ...prev,
       ]);
@@ -186,6 +257,14 @@ export default function Admin() {
       toast({ title: "User created" });
     }
     setUserModalOpen(false);
+  };
+
+  const getPlanBadgeVariant = (plan: TenantPlan) => {
+    switch (plan) {
+      case "starter": return "outline";
+      case "professional": return "secondary";
+      case "enterprise": return "default";
+    }
   };
 
   return (
@@ -242,7 +321,7 @@ export default function Admin() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredTenants.map((t) => (
-              <GlassCard key={t.id} className="p-4 space-y-2">
+              <GlassCard key={t.id} className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold">{t.name}</h3>
@@ -252,14 +331,22 @@ export default function Admin() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   Plan:
-                  <Badge variant="outline" className="ml-1">
+                  <Badge variant={getPlanBadgeVariant(t.plan)} className="ml-1 capitalize">
                     {t.plan}
                   </Badge>
                 </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  Features:
+                  <span className="font-medium text-foreground">{t.enabledFeatures.length} / {ALL_FEATURES.length}</span>
+                </div>
                 {t.note && <p className="text-sm text-muted-foreground">{t.note}</p>}
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-2 pt-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={() => openTenantModal(t)}>
                     Edit
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => openFeatureModal(t)}>
+                    <Settings2 className="w-3 h-3 mr-1" />
+                    Features
                   </Button>
                   <Button
                     variant="ghost"
@@ -361,13 +448,13 @@ export default function Admin() {
             </div>
             <div className="space-y-1">
               <Label>Plan</Label>
-              <Select value={tenantForm.plan} onValueChange={(v) => setTenantForm({ ...tenantForm, plan: v as Tenant["plan"] })}>
+              <Select value={tenantForm.plan} onValueChange={(v) => setTenantForm({ ...tenantForm, plan: v as TenantPlan })}>
                 <SelectTrigger className="bg-muted/50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {planOptions.map((p) => (
-                    <SelectItem key={p} value={p}>
+                    <SelectItem key={p} value={p} className="capitalize">
                       {p}
                     </SelectItem>
                   ))}
@@ -390,6 +477,86 @@ export default function Admin() {
             </Button>
             <Button variant="glow" onClick={saveTenant} disabled={user?.role !== "superadmin"}>
               {editingTenant ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Feature Management Modal */}
+      <Dialog open={featureModalOpen} onOpenChange={setFeatureModalOpen}>
+        <DialogContent className="glass-card max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text">
+              Manage Features: {featureEditTenant?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Enable or disable features for this tenant. Current plan: <Badge variant={featureEditTenant ? getPlanBadgeVariant(featureEditTenant.plan) : "outline"} className="capitalize ml-1">{featureEditTenant?.plan}</Badge>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex gap-2 mb-4">
+            <Button variant="outline" size="sm" onClick={applyPlanDefaults}>
+              <RotateCcw className="w-3 h-3 mr-1" />
+              Reset to Plan Defaults
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setSelectedFeatures(ALL_FEATURES.map(f => f.id))}
+            >
+              Enable All
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setSelectedFeatures([])}
+            >
+              Disable All
+            </Button>
+          </div>
+
+          <div className="space-y-6">
+            {FEATURE_CATEGORIES.map((category) => (
+              <div key={category} className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{category}</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {ALL_FEATURES.filter(f => f.category === category).map((feature) => {
+                    const isEnabled = selectedFeatures.includes(feature.id);
+                    const isPlanDefault = PLAN_FEATURES[featureEditTenant?.plan || "starter"].includes(feature.id);
+                    return (
+                      <div
+                        key={feature.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
+                          isEnabled 
+                            ? "bg-primary/10 border-primary/30" 
+                            : "bg-muted/30 border-border/50 opacity-60"
+                        }`}
+                        onClick={() => toggleFeature(feature.id)}
+                      >
+                        <Checkbox
+                          checked={isEnabled}
+                          onCheckedChange={() => toggleFeature(feature.id)}
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium">{feature.name}</span>
+                          {isPlanDefault && (
+                            <Badge variant="outline" className="ml-2 text-xs">Plan Default</Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setFeatureModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="glow" onClick={saveFeatures} disabled={user?.role !== "superadmin"}>
+              Save Features
             </Button>
           </DialogFooter>
         </DialogContent>
