@@ -4,7 +4,6 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Utensils, Eye, EyeOff, LogIn } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,7 +14,6 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -23,7 +21,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await login({ email, password, rememberMe });
+      await login({ email, password });
       toast({
         title: "Welcome back!",
         description: "স্বাগতম! Login successful.",
@@ -100,22 +98,6 @@ export default function Login() {
                 )}
               </Button>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="remember"
-                checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-              />
-              <Label htmlFor="remember" className="text-sm cursor-pointer">
-                Remember me
-              </Label>
-            </div>
-            <Button variant="link" className="text-sm px-0 text-primary">
-              Forgot password?
-            </Button>
           </div>
 
           <Button

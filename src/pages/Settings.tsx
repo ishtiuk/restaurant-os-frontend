@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,46 +30,101 @@ import {
   Plus,
   Trash2,
   Tag,
+  Lock,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
-
-interface POSUser {
-  id: string;
-  name: string;
-  nameBn?: string;
-  email: string;
-  phone: string;
-  role: 'owner' | 'manager' | 'waiter' | 'cashier' | 'chef';
-  pin: string;
-  isActive: boolean;
-  createdAt: string;
-}
+import { useLicense, LICENSE_STORAGE_KEY, parseLicenseToken } from "@/contexts/LicenseContext";
+import { usersApi, type StaffUser, type StaffRole } from "@/lib/api/users";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Settings() {
   const { staff, categories, addCategory, removeCategory } = useAppData();
+  const { license, refreshFromStorage } = useLicense();
+  const { user } = useAuth();
   const [language, setLanguage] = useState("en");
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
-  const [users, setUsers] = useState<POSUser[]>([
-    {
-      id: "1",
-      name: "Restaurant Owner",
-      nameBn: "মালিক",
-      email: "owner@restaurant.com",
-      phone: "01711111111",
-      role: "owner",
-      pin: "1234",
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+  const [users, setUsers] = useState<StaffUser[]>([]);
   const [newCategory, setNewCategory] = useState({ name: "", nameBn: "", icon: "🍽️" });
+  const [licenseInput, setLicenseInput] = useState("");
+  const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<StaffUser | null>(null);
+  const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    // Load staff users from backend when authenticated
+    const loadUsers = async () => {
+      try {
+        const data = await usersApi.list();
+        setUsers(data);
+      } catch (err) {
+        console.error("Failed to load users", err);
+      }
+    };
+    if (user?.token) {
+      loadUsers();
+    }
+  }, [user?.token]);
 
   const handleSave = () => {
     toast({
       title: "Settings saved!",
       description: "Your changes have been applied.",
     });
+  };
+
+  const handleActivateLicense = () => {
+    const token = licenseInput.trim();
+    if (!token) {
+      toast({
+        title: "Activation code required",
+        description: "Paste the activation code you received.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const parsed = parseLicenseToken(token);
+
+    if (parsed.status === "invalid") {
+      toast({
+        title: "Invalid activation code",
+        description: parsed.error || "Please check the code and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (parsed.status === "expired") {
+      toast({
+        title: "Activation code expired",
+        description: "Please contact your provider for a new code.",
+        variant: "destructive",
+      });
+      // Still store it so we can show expiry info
+      try {
+        localStorage.setItem(LICENSE_STORAGE_KEY, token);
+      } catch {
+        // ignore
+      }
+      refreshFromStorage();
+      return;
+    }
+
+    try {
+      localStorage.setItem(LICENSE_STORAGE_KEY, token);
+    } catch {
+      // ignore storage failure
+    }
+
+    toast({
+      title: "Subscription activated",
+      description: parsed.validUntil
+        ? `Valid until ${new Date(parsed.validUntil).toLocaleString()}`
+        : "Activation successful.",
+    });
+    setLicenseInput("");
+    refreshFromStorage();
   };
 
   const handleAddCategory = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -93,57 +148,76 @@ export default function Settings() {
     toast({ title: "Category deleted", description: name });
   };
 
-  const handleAddUser = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const newUser: POSUser = {
-      id: String(Date.now()),
+    try {
+      const created = await usersApi.create({
       name: formData.get("name") as string,
-      nameBn: formData.get("nameBn") as string,
+        name_bn: (formData.get("nameBn") as string) || undefined,
       email: formData.get("email") as string,
       phone: formData.get("phone") as string,
-      role: formData.get("role") as POSUser["role"],
-      pin: formData.get("pin") as string,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-    setUsers(prev => [...prev, newUser]);
+        role: formData.get("role") as StaffRole,
+        password: formData.get("password") as string,
+      });
+      setUsers((prev) => [created, ...prev]);
     setIsAddUserModalOpen(false);
     toast({
       title: "User created!",
-      description: `${newUser.name} has been added as ${newUser.role}.`,
+        description: `${created.name} has been added as ${created.role}.`,
     });
+    } catch (err: any) {
+      toast({
+        title: "Failed to create user",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleToggleUser = (userId: string) => {
-    setUsers(prev => 
-      prev.map(u => u.id === userId ? { ...u, isActive: !u.isActive } : u)
-    );
+    const target = users.find((u) => u.id === userId);
+    if (!target) return;
+    usersApi
+      .update(userId, { is_active: !target.is_active })
+      .then((updated) => {
+        setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
     toast({
       title: "User status updated",
       description: "User access has been modified.",
+        });
+      })
+      .catch((err: any) => {
+        toast({
+          title: "Failed to update user",
+          description: err?.message || "Please try again.",
+          variant: "destructive",
+        });
     });
   };
 
   const handleRemoveUser = (userId: string) => {
-    if (users.find(u => u.id === userId)?.role === "owner") {
-      toast({
-        title: "Cannot remove owner",
-        description: "Owner account cannot be deleted.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (confirm("Are you sure you want to remove this user?")) {
+    // Staff users don't have "owner" role - only manager, waiter, cashier, chef
+    // Owner role is handled separately in the backend and won't appear in this list
+    if (!confirm("Are you sure you want to remove this user?")) return;
+    usersApi.remove(userId)
+      .then(() => {
       setUsers(prev => prev.filter(u => u.id !== userId));
       toast({
         title: "User removed",
         description: "User has been deleted from the system.",
       });
-    }
+      })
+      .catch((err: any) => {
+        toast({
+          title: "Failed to remove user",
+          description: err?.message || "Please try again.",
+          variant: "destructive",
+        });
+      });
   };
 
-  const getRoleBadge = (role: POSUser["role"]) => {
+  const getRoleBadge = (role: StaffRole | "owner") => {
     const roleColors = {
       owner: "bg-primary/20 text-primary border-primary/30",
       manager: "bg-secondary/20 text-secondary border-secondary/30",
@@ -159,6 +233,65 @@ export default function Settings() {
       chef: "Chef",
     };
     return <Badge className={roleColors[role]}>{roleName[role]}</Badge>;
+  };
+
+  // All available routes for permissions
+  const allRoutes = [
+    { path: "/dashboard", label: "Dashboard", labelBn: "ড্যাশবোর্ড" },
+    { path: "/sales", label: "POS Sales", labelBn: "বিক্রয়" },
+    { path: "/tables", label: "Tables", labelBn: "টেবিল" },
+    { path: "/items", label: "Items", labelBn: "আইটেম" },
+    { path: "/purchases", label: "Purchases", labelBn: "ক্রয়" },
+    { path: "/suppliers", label: "Suppliers", labelBn: "সরবরাহকারী" },
+    { path: "/customers", label: "Customers", labelBn: "গ্রাহক" },
+    { path: "/staff", label: "Staff", labelBn: "কর্মী" },
+    { path: "/attendance", label: "Attendance", labelBn: "হাজিরা" },
+    { path: "/reports", label: "Reports", labelBn: "রিপোর্ট" },
+    { path: "/finance", label: "Finance", labelBn: "আর্থিক" },
+    { path: "/expenses", label: "Expenses", labelBn: "খরচ" },
+    { path: "/vat", label: "VAT", labelBn: "ভ্যাট" },
+    { path: "/sales-history", label: "Sales History", labelBn: "বিক্রয় ইতিহাস" },
+  ];
+
+  const openPermissionsModal = async (user: StaffUser) => {
+    setSelectedUser(user);
+    try {
+      const perms = await usersApi.getPermissions(user.id);
+      setUserPermissions(perms);
+    } catch (err: any) {
+      toast({
+        title: "Failed to load permissions",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+      setUserPermissions({});
+    }
+    setPermissionsModalOpen(true);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!selectedUser) return;
+    try {
+      await usersApi.updatePermissions(selectedUser.id, userPermissions);
+      toast({
+        title: "Permissions updated",
+        description: `Access permissions for ${selectedUser.name} have been saved.`,
+      });
+      setPermissionsModalOpen(false);
+    } catch (err: any) {
+      toast({
+        title: "Failed to update permissions",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const togglePermission = (path: string) => {
+    setUserPermissions((prev) => ({
+      ...prev,
+      [path]: !prev[path],
+    }));
   };
 
   return (
@@ -178,6 +311,10 @@ export default function Settings() {
           <TabsTrigger value="users" className="gap-2">
             <Users className="h-4 w-4" />
             Users
+          </TabsTrigger>
+          <TabsTrigger value="subscription" className="gap-2">
+            <Shield className="h-4 w-4" />
+            Subscription
           </TabsTrigger>
         </TabsList>
 
@@ -430,7 +567,7 @@ export default function Settings() {
                 <div
                   key={user.id}
                   className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                    user.isActive
+                    user.is_active
                       ? "bg-muted/30 border-border"
                       : "bg-muted/10 border-border/50 opacity-60"
                   }`}
@@ -442,32 +579,39 @@ export default function Settings() {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-semibold">{user.name}</p>
-                        {user.nameBn && (
-                          <span className="text-sm text-muted-foreground">({user.nameBn})</span>
+                        {user.name_bn && (
+                          <span className="text-sm text-muted-foreground">({user.name_bn})</span>
                         )}
                         {getRoleBadge(user.role)}
                       </div>
                       <p className="text-sm text-muted-foreground">{user.email}</p>
-                      <p className="text-xs text-muted-foreground">{user.phone} • PIN: {user.pin}</p>
+                      <p className="text-xs text-muted-foreground">{user.phone}</p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">
-                        {user.isActive ? "Active" : "Inactive"}
+                        {user.is_active ? "Active" : "Inactive"}
                       </span>
                       <Switch
-                        checked={user.isActive}
+                        checked={user.is_active}
                         onCheckedChange={() => handleToggleUser(user.id)}
-                        disabled={user.role === "owner"}
                       />
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openPermissionsModal(user)}
+                      title="Manage permissions"
+                    >
+                      <Lock className="w-4 h-4 mr-1" />
+                      Permissions
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleRemoveUser(user.id)}
-                      disabled={user.role === "owner"}
                       className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -497,6 +641,90 @@ export default function Settings() {
                   <li><strong>Waiter:</strong> Tables management, take orders, send KOTs</li>
                   <li><strong>Chef:</strong> View KOTs and order status (future feature)</li>
                 </ul>
+              </div>
+            </div>
+          </GlassCard>
+        </TabsContent>
+
+        {/* Subscription / Activation Tab */}
+        <TabsContent value="subscription" className="space-y-6">
+          <GlassCard className="p-6 animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  Subscription & Activation
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  সাবস্ক্রিপশন ও অ্যাক্টিভেশন • Manage your offline license
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Current status:</span>
+                {license.status === "active" && (
+                  <Badge variant="success">
+                    Active{license.validUntil && (
+                      <> • until {new Date(license.validUntil).toLocaleDateString()}</>
+                    )}
+                  </Badge>
+                )}
+                {license.status === "expired" && (
+                  <Badge variant="destructive">
+                    Expired{license.validUntil && (
+                      <> • {new Date(license.validUntil).toLocaleDateString()}</>
+                    )}
+                  </Badge>
+                )}
+                {license.status === "invalid" && (
+                  <Badge variant="destructive">Invalid code</Badge>
+                )}
+                {license.status === "none" && (
+                  <Badge variant="outline">Not activated</Badge>
+                )}
+              </div>
+              {license.plan && (
+                <p className="text-sm text-muted-foreground">
+                  Plan: <span className="font-medium text-foreground">{license.plan}</span>
+                </p>
+              )}
+              {license.customerName && (
+                <p className="text-sm text-muted-foreground">
+                  Licensed to:{" "}
+                  <span className="font-medium text-foreground">{license.customerName}</span>
+                </p>
+              )}
+
+              <div className="space-y-2 pt-4">
+                <Label htmlFor="activation-code">Activation Code</Label>
+                <textarea
+                  id="activation-code"
+                  className="w-full min-h-[120px] rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                  placeholder="Paste the activation code (license token) provided by your vendor..."
+                  value={licenseInput}
+                  onChange={(e) => setLicenseInput(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your provider will send you a time-limited activation code (for example monthly).
+                  Paste it here to activate or renew your subscription. Works fully offline.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setLicenseInput("");
+                  }}
+                >
+                  Clear
+                </Button>
+                <Button type="button" variant="glow" onClick={handleActivateLicense}>
+                  Activate / Renew
+                </Button>
               </div>
             </div>
           </GlassCard>
@@ -548,18 +776,18 @@ export default function Settings() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="pin">4-Digit PIN *</Label>
+              <Label htmlFor="password">Password *</Label>
               <Input
-                id="pin"
-                name="pin"
-                type="text"
-                placeholder="1234"
-                maxLength={4}
-                pattern="[0-9]{4}"
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Set a strong password"
                 required
                 className="bg-muted/50"
               />
-              <p className="text-xs text-muted-foreground">Used for quick login at POS</p>
+              <p className="text-xs text-muted-foreground">
+                This password will be used when logging in to the system.
+              </p>
             </div>
 
             <div className="flex gap-2 justify-end pt-4">
@@ -572,6 +800,54 @@ export default function Settings() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permissions Management Dialog */}
+      <Dialog open={permissionsModalOpen} onOpenChange={setPermissionsModalOpen}>
+        <DialogContent className="sm:max-w-2xl glass-card max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text">
+              Manage Permissions: {selectedUser?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Control which pages {selectedUser?.name} can access. Toggle routes on/off.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {allRoutes.map((route) => (
+                <div
+                  key={route.path}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30"
+                >
+                  <div>
+                    <p className="font-medium text-sm">{route.label}</p>
+                    <p className="text-xs text-muted-foreground font-bengali">{route.labelBn}</p>
+                  </div>
+                  <Switch
+                    checked={userPermissions[route.path] ?? false}
+                    onCheckedChange={() => togglePermission(route.path)}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="pt-4 border-t border-border">
+              <p className="text-xs text-muted-foreground">
+                <strong>Note:</strong> Users will only see pages they have access to in the sidebar. 
+                If a user tries to access a restricted page directly, they will be redirected to the dashboard.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-4">
+            <Button variant="outline" onClick={() => setPermissionsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="glow" onClick={handleSavePermissions}>
+              <Save className="w-4 h-4 mr-2" />
+              Save Permissions
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

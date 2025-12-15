@@ -3,7 +3,6 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { categories } from "@/data/mockData";
 import { RestaurantTable, CartItem, PaymentMethod } from "@/types";
 import { useAppData } from "@/contexts/AppDataContext";
 import { KotSlip } from "@/components/print/KotSlip";
@@ -100,6 +99,7 @@ const getStatusBadge = (status: RestaurantTable["status"]) => {
 export default function Tables() {
   const {
     items,
+    categories,
     tables,
     tableOrders,
     saveTableOrder,

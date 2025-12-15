@@ -37,6 +37,8 @@ import { apiClient, API_ORIGIN } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { categoriesApi } from "@/lib/api/categories";
 import { productsApi } from "@/lib/api/products";
+import { salesApi, type SaleDto } from "@/lib/api/sales";
+import { tablesApi, type TableDto, type TableOrderDto } from "@/lib/api/tables";
 
 export type TableOrder = (typeof seedTableOrders)[number];
 
@@ -105,11 +107,14 @@ function todayISO() {
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [items, setItems] = useState<Item[]>(apiClient.token ? [] : seedItems);
+  // Initialize with empty arrays if token exists (will be loaded by useEffect)
+  // Otherwise use seed data for demo/offline mode
+  const hasToken = apiClient.token || (typeof window !== "undefined" && localStorage.getItem("restaurant-os.auth.user"));
+  const [items, setItems] = useState<Item[]>(hasToken ? [] : seedItems);
   const [suppliers, setSuppliers] = useState<Supplier[]>(seedSuppliers);
   const [supplierTransactions, setSupplierTransactions] = useState<SupplierTransaction[]>(seedSupplierTransactions);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(seedPurchaseOrders);
-  const [sales, setSales] = useState<Sale[]>(seedSales);
+  const [sales, setSales] = useState<Sale[]>(hasToken ? [] : seedSales);
   const [customers] = useState<Customer[]>(seedCustomers);
   const [staff, setStaff] = useState<Staff[]>(seedStaff);
   const [staffPayments, setStaffPayments] = useState<StaffPayment[]>(seedStaffPayments);
@@ -117,17 +122,37 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [vatEntries, setVatEntries] = useState<VatEntry[]>(seedVatEntries);
   const [expenses, setExpenses] = useState<Expense[]>(seedExpenses);
   const [expenseCategories] = useState<ExpenseCategory[]>(seedExpenseCategories);
-  const [categories, setCategories] = useState<Category[]>(apiClient.token ? [] : seedCategories);
-  const [tables, setTables] = useState<RestaurantTable[]>(seedTables);
-  const [tableOrders, setTableOrders] = useState<TableOrder[]>(seedTableOrders as TableOrder[]);
+  const [categories, setCategories] = useState<Category[]>(hasToken ? [] : seedCategories);
+  const [tables, setTables] = useState<RestaurantTable[]>(hasToken ? [] : seedTables);
+  const [tableOrders, setTableOrders] = useState<TableOrder[]>(hasToken ? [] : (seedTableOrders as TableOrder[]));
 
+  // Load items and categories when user/tenant changes
   useEffect(() => {
-    if (!user?.token) return;
+    // Check both user token and apiClient token (for reload scenarios)
+    const token = user?.token || apiClient.token;
+    if (!token) {
+      // No token: use seed data
+      setCategories(seedCategories);
+      setItems(seedItems);
+      return;
+    }
+
+    // Ensure apiClient has the token and tenantId (for reload scenarios)
+    if (user?.token && !apiClient.token) {
+      apiClient.token = user.token;
+    }
+    if (user?.tenantId && !apiClient.tenantId) {
+      apiClient.tenantId = user.tenantId;
+    }
+
     const load = async () => {
       try {
-        const [cats, prods] = await Promise.all([
+        const [cats, prods, salesData, tablesData, activeOrdersData] = await Promise.all([
           categoriesApi.list(),
           productsApi.list(),
+          salesApi.list(100, 0).catch(() => []), // Load sales, but don't fail if endpoint doesn't exist yet
+          tablesApi.list().catch(() => []), // Load tables, but don't fail if endpoint doesn't exist yet
+          tablesApi.listActiveOrders().catch(() => []), // Load active table orders
         ]);
         setCategories(
           cats.map((c) => ({
@@ -161,14 +186,99 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             updatedAt: new Date().toISOString(),
           }))
         );
+        // Map sales from API to frontend format
+        setSales(
+          salesData.map((s) => ({
+            id: s.id,
+            createdAt: s.created_at,
+            items: s.items.map((i) => ({
+              itemId: i.item_id,
+              itemName: i.item_name,
+              quantity: i.quantity,
+              unitPrice: i.unit_price,
+              discount: i.discount,
+              total: i.total,
+              notes: i.notes ?? undefined,
+            })),
+            subtotal: s.subtotal,
+            vatAmount: s.vat_amount,
+            serviceCharge: s.service_charge,
+            discount: s.discount,
+            total: s.total,
+            paymentMethod: s.payment_method,
+            customerId: undefined,
+            customerName: s.customer_name ?? undefined,
+            customerPhone: s.customer_phone ?? undefined,
+            deliveryAddress: s.delivery_address ?? undefined,
+            deliveryNotes: s.delivery_notes ?? undefined,
+            tableNo: s.table_no ?? undefined,
+            orderType: s.order_type,
+            status: s.status,
+          }))
+        );
+        // Map tables from API to frontend format
+        setTables(
+          tablesData.map((t) => ({
+            id: t.id,
+            tableNo: t.table_no,
+            capacity: t.capacity,
+            status: t.status as RestaurantTable["status"],
+            location: t.location ?? undefined,
+            isActive: t.is_active,
+            currentOrderId: undefined, // Will be set when we load orders
+          }))
+        );
+        // Map active table orders from API to frontend format
+        setTableOrders(
+          activeOrdersData.map((o) => {
+            const table = tablesData.find((t) => t.id === o.table_id);
+            return {
+              id: o.id,
+              tableId: o.table_id,
+              tableNo: table?.table_no || o.table_id,
+              items: o.items.map((i) => ({
+                itemId: String(i.product_id),
+                itemName: i.item_name,
+                quantity: i.quantity,
+                unitPrice: i.unit_price,
+                discount: i.discount,
+                total: i.total,
+                notes: i.notes ?? undefined,
+                available: 9999,
+              })),
+              subtotal: o.subtotal,
+              vatAmount: o.vat_amount,
+              serviceCharge: o.service_charge,
+              discount: o.discount,
+              total: o.total,
+              status: o.status as TableOrder["status"],
+              createdAt: o.created_at,
+              updatedAt: o.updated_at,
+              kots: [],
+            };
+          })
+        );
+        // Update tables with currentOrderId from orders
+        setTables((prev) =>
+          prev.map((t) => {
+            const order = activeOrdersData.find((o) => o.table_id === t.id && o.status !== "completed");
+            return order ? { ...t, currentOrderId: order.id } : t;
+          })
+        );
       } catch (err) {
         console.error("API load failed, falling back to seeds", err);
         setCategories(seedCategories);
         setItems(seedItems);
+        setSales(seedSales);
+        setTables(seedTables);
+        setTableOrders(seedTableOrders as TableOrder[]);
       }
     };
     load();
-  }, [user?.token]);
+  }, [user, user?.token, user?.tenantId, user?.id]); // Reload when user object or user/tenant changes
+
+  // Refresh items when sales complete (to update stock)
+  // This is handled in completeSale function
 
   const value = useMemo<AppData>(
     () => ({
@@ -271,160 +381,481 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       },
 
       saveTableOrder: async (tableId, orderItems, opts) => {
-        await delay(150);
-        const { kotItems } = opts ?? {};
-        let orderId: string | undefined;
-        setTableOrders((prev) => {
-          const existingOrderIdx = prev.findIndex((o) => o.tableId === tableId && o.status !== "completed");
-          const subtotal = orderItems.reduce((s, i) => s + i.total, 0);
-          const vatAmount = subtotal * 0.05;
-          const total = subtotal + vatAmount;
-          const nowIso = new Date().toISOString();
+        if (user?.token) {
+          try {
+            const { kotItems } = opts ?? {};
+            const subtotal = orderItems.reduce((s, i) => s + i.total, 0);
+            const vatAmount = subtotal * 0.05;
+            const total = subtotal + vatAmount;
 
-          if (existingOrderIdx >= 0) {
-            const existing = prev[existingOrderIdx];
-            const updated: TableOrder = {
-              ...existing,
+            // Create/update order via API
+            const orderInput = {
+              table_id: tableId,
+              items: orderItems.map((i) => ({
+                item_id: i.itemId,
+                item_name: i.itemName,
+                quantity: i.quantity,
+                unit_price: i.unitPrice,
+                discount: i.discount ?? 0,
+                total: i.total,
+                notes: i.notes,
+              })),
+              subtotal,
+              vat_amount: vatAmount,
+              service_charge: 0,
+              discount: 0,
+              total,
+            };
+
+            const created = await tablesApi.createOrder(orderInput);
+
+            // Create KOT if items provided
+            if (kotItems && kotItems.length > 0) {
+              try {
+                await tablesApi.createKOT(tableId, {
+                  order_id: created.id,
+                  items: kotItems.map((i) => ({
+                    item_id: i.itemId,
+                    item_name: i.itemName,
+                    quantity: i.quantity,
+                    notes: i.notes,
+                  })),
+                });
+              } catch (err) {
+                console.error("Failed to create KOT", err);
+              }
+            }
+
+            // Refresh tables
+            const refreshedTables = await tablesApi.list().catch(() => tables);
+            if (refreshedTables !== tables) {
+              setTables(
+                refreshedTables.map((t) => ({
+                  id: t.id,
+                  tableNo: t.table_no,
+                  capacity: t.capacity,
+                  status: t.status as RestaurantTable["status"],
+                  location: t.location ?? undefined,
+                  isActive: t.is_active,
+                  currentOrderId: undefined,
+                }))
+              );
+            }
+
+            // Map and update order in local state
+            const mappedOrder: TableOrder = {
+              id: created.id,
+              tableId: created.table_id,
+              tableNo: tables.find((t) => t.id === tableId)?.tableNo || tableId,
+              items: created.items.map((i) => ({
+                itemId: String(i.product_id), // Use product_id from backend
+                itemName: i.item_name,
+                quantity: i.quantity,
+                unitPrice: i.unit_price,
+                discount: i.discount,
+                total: i.total,
+                notes: i.notes ?? undefined,
+                available: 9999,
+              })),
+              subtotal: created.subtotal,
+              vatAmount: created.vat_amount,
+              serviceCharge: created.service_charge,
+              discount: created.discount,
+              total: created.total,
+              status: created.status as TableOrder["status"],
+              createdAt: created.created_at,
+              updatedAt: created.updated_at,
+              kots: [],
+            };
+            setTableOrders((prev) => {
+              const idx = prev.findIndex((o) => o.id === mappedOrder.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = mappedOrder;
+                return next;
+              }
+              return [mappedOrder, ...prev];
+            });
+          } catch (err: any) {
+            console.error("Failed to save table order", err);
+            throw new Error(err?.message || "Failed to save table order");
+          }
+        } else {
+          // Fallback for offline mode
+          await delay(150);
+          const { kotItems } = opts ?? {};
+          let orderId: string | undefined;
+          setTableOrders((prev) => {
+            const existingOrderIdx = prev.findIndex((o) => o.tableId === tableId && o.status !== "completed");
+            const subtotal = orderItems.reduce((s, i) => s + i.total, 0);
+            const vatAmount = subtotal * 0.05;
+            const total = subtotal + vatAmount;
+            const nowIso = new Date().toISOString();
+
+            if (existingOrderIdx >= 0) {
+              const existing = prev[existingOrderIdx];
+              const updated: TableOrder = {
+                ...existing,
+                items: orderItems,
+                subtotal,
+                vatAmount,
+                total,
+                updatedAt: nowIso,
+                kots:
+                  kotItems && kotItems.length > 0
+                    ? [...(existing.kots ?? []), { id: newId("KOT"), items: kotItems, createdAt: nowIso }]
+                    : existing.kots,
+              };
+              orderId = updated.id;
+              const next = [...prev];
+              next[existingOrderIdx] = updated;
+              return next;
+            }
+
+            const table = tables.find((t) => t.id === tableId);
+            const created: TableOrder = {
+              id: newId("TO"),
+              tableId,
+              tableNo: table?.tableNo || tableId,
               items: orderItems,
               subtotal,
               vatAmount,
+              serviceCharge: 0,
+              discount: 0,
               total,
+              status: "active",
+              createdAt: nowIso,
               updatedAt: nowIso,
               kots:
                 kotItems && kotItems.length > 0
-                  ? [...(existing.kots ?? []), { id: newId("KOT"), items: kotItems, createdAt: nowIso }]
-                  : existing.kots,
+                  ? [{ id: newId("KOT"), items: kotItems, createdAt: nowIso }]
+                  : [],
             };
-            orderId = updated.id;
-            const next = [...prev];
-            next[existingOrderIdx] = updated;
-            return next;
+            orderId = created.id;
+            return [created, ...prev];
+          });
+
+          // Update table status + currentOrderId
+          setTables((prev) =>
+            prev.map((t) => {
+              if (t.id !== tableId) return t;
+              return {
+                ...t,
+                status: t.status === "billing" ? "billing" : "occupied",
+                currentOrderId: orderId ?? t.currentOrderId,
+              };
+            })
+          );
+        }
+      },
+
+      ensureTableSession: async (tableId) => {
+        if (user?.token) {
+          try {
+            // Check for existing order in local state first
+            const existing = tableOrders.find((o) => o.tableId === tableId && o.status !== "completed");
+            if (existing) {
+              // Update table status
+              await tablesApi.update(tableId, { status: "occupied" });
+              const refreshedTables = await tablesApi.list();
+              setTables(
+                refreshedTables.map((t) => ({
+                  id: t.id,
+                  tableNo: t.table_no,
+                  capacity: t.capacity,
+                  status: t.status as RestaurantTable["status"],
+                  location: t.location ?? undefined,
+                  isActive: t.is_active,
+                  currentOrderId: t.id === tableId ? existing.id : undefined,
+                }))
+              );
+              return existing;
+            }
+
+            // No existing order - create empty order via API
+            const table = tables.find((t) => t.id === tableId);
+            const orderInput = {
+              table_id: tableId,
+              items: [],
+              subtotal: 0,
+              vat_amount: 0,
+              service_charge: 0,
+              discount: 0,
+              total: 0,
+            };
+            const created = await tablesApi.createOrder(orderInput);
+            
+            // Update table status
+            await tablesApi.update(tableId, { status: "occupied" });
+            
+            // Refresh tables
+            const refreshedTables = await tablesApi.list();
+            setTables(
+              refreshedTables.map((t) => ({
+                id: t.id,
+                tableNo: t.table_no,
+                capacity: t.capacity,
+                status: t.status as RestaurantTable["status"],
+                location: t.location ?? undefined,
+                isActive: t.is_active,
+                currentOrderId: t.id === tableId ? created.id : undefined,
+              }))
+            );
+
+            // Map and add order to local state
+            const mappedOrder: TableOrder = {
+              id: created.id,
+              tableId: created.table_id,
+              tableNo: table?.tableNo || tableId,
+              items: created.items.map((i) => ({
+                itemId: String(i.product_id),
+                itemName: i.item_name,
+                quantity: i.quantity,
+                unitPrice: i.unit_price,
+                discount: i.discount,
+                total: i.total,
+                notes: i.notes ?? undefined,
+                available: 9999,
+              })),
+              subtotal: created.subtotal,
+              vatAmount: created.vat_amount,
+              serviceCharge: created.service_charge,
+              discount: created.discount,
+              total: created.total,
+              status: created.status as TableOrder["status"],
+              createdAt: created.created_at,
+              updatedAt: created.updated_at,
+              kots: [],
+            };
+            setTableOrders((prev) => [mappedOrder, ...prev]);
+            return mappedOrder;
+          } catch (err: any) {
+            console.error("Failed to ensure table session", err);
+            throw new Error(err?.message || "Failed to ensure table session");
+          }
+        } else {
+          // Fallback for offline mode
+          await delay(80);
+          const existing = tableOrders.find((o) => o.tableId === tableId && o.status !== "completed");
+          if (existing) {
+            setTables((prev) =>
+              prev.map((t) =>
+                t.id === tableId
+                  ? {
+                      ...t,
+                      status: t.status === "empty" || t.status === "reserved" ? "occupied" : t.status,
+                      currentOrderId: existing.id,
+                    }
+                  : t
+              )
+            );
+            return existing;
           }
 
           const table = tables.find((t) => t.id === tableId);
+          const nowIso = new Date().toISOString();
           const created: TableOrder = {
             id: newId("TO"),
             tableId,
             tableNo: table?.tableNo || tableId,
-            items: orderItems,
-            subtotal,
-            vatAmount,
+            items: [],
+            subtotal: 0,
+            vatAmount: 0,
             serviceCharge: 0,
             discount: 0,
-            total,
+            total: 0,
             status: "active",
             createdAt: nowIso,
             updatedAt: nowIso,
-            kots:
-              kotItems && kotItems.length > 0
-                ? [{ id: newId("KOT"), items: kotItems, createdAt: nowIso }]
-                : [],
+            kots: [],
           };
-          orderId = created.id;
-          return [created, ...prev];
-        });
-
-        // Update table status + currentOrderId
-        setTables((prev) =>
-          prev.map((t) => {
-            if (t.id !== tableId) return t;
-            return {
-              ...t,
-              status: t.status === "billing" ? "billing" : "occupied",
-              currentOrderId: orderId ?? t.currentOrderId,
-            };
-          })
-        );
-      },
-
-      ensureTableSession: async (tableId) => {
-        await delay(80);
-        const existing = tableOrders.find((o) => o.tableId === tableId && o.status !== "completed");
-        if (existing) {
+          setTableOrders((prev) => [created, ...prev]);
           setTables((prev) =>
-            prev.map((t) =>
-              t.id === tableId
-                ? {
-                    ...t,
-                    status: t.status === "empty" || t.status === "reserved" ? "occupied" : t.status,
-                    currentOrderId: existing.id,
-                  }
-                : t
-            )
+            prev.map((t) => (t.id === tableId ? { ...t, status: "occupied", currentOrderId: created.id } : t))
           );
-          return existing;
+          return created;
         }
-
-        const table = tables.find((t) => t.id === tableId);
-        const nowIso = new Date().toISOString();
-        const created: TableOrder = {
-          id: newId("TO"),
-          tableId,
-          tableNo: table?.tableNo || tableId,
-          items: [],
-          subtotal: 0,
-          vatAmount: 0,
-          serviceCharge: 0,
-          discount: 0,
-          total: 0,
-          status: "active",
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          kots: [],
-        };
-        setTableOrders((prev) => [created, ...prev]);
-        setTables((prev) =>
-          prev.map((t) => (t.id === tableId ? { ...t, status: "occupied", currentOrderId: created.id } : t))
-        );
-        return created;
       },
 
       markTableBilling: async (tableId) => {
-        await delay(80);
-        setTableOrders((prev) =>
-          prev.map((o) => (o.tableId === tableId && o.status !== "completed" ? { ...o, status: "billing" } : o))
-        );
-        setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "billing" } : t)));
+        if (user?.token) {
+          try {
+            // Update table status via API
+            await tablesApi.update(tableId, { status: "billing" });
+            
+            // Update local state
+            setTableOrders((prev) =>
+              prev.map((o) => (o.tableId === tableId && o.status !== "completed" ? { ...o, status: "billing" } : o))
+            );
+            
+            // Refresh tables from backend
+            const refreshedTables = await tablesApi.list();
+            setTables(
+              refreshedTables.map((t) => ({
+                id: t.id,
+                tableNo: t.table_no,
+                capacity: t.capacity,
+                status: t.status as RestaurantTable["status"],
+                location: t.location ?? undefined,
+                isActive: t.is_active,
+                currentOrderId: undefined,
+              }))
+            );
+          } catch (err: any) {
+            console.error("Failed to mark table billing", err);
+            throw new Error(err?.message || "Failed to mark table billing");
+          }
+        } else {
+          // Fallback for offline mode
+          await delay(80);
+          setTableOrders((prev) =>
+            prev.map((o) => (o.tableId === tableId && o.status !== "completed" ? { ...o, status: "billing" } : o))
+          );
+          setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "billing" } : t)));
+        }
       },
 
       finalizeTableBill: async (tableId, paymentMethod) => {
-        await delay(250);
-        const table = tables.find((t) => t.id === tableId);
-        const order = table?.currentOrderId
-          ? tableOrders.find((o) => o.id === table.currentOrderId)
-          : tableOrders.find((o) => o.tableId === tableId && o.status !== "completed");
-        if (!table || !order) throw new Error("No active order for this table");
-        if (order.status === "completed") throw new Error("Bill already completed");
+        if (user?.token) {
+          try {
+            const table = tables.find((t) => t.id === tableId);
+            const order = table?.currentOrderId
+              ? tableOrders.find((o) => o.id === table.currentOrderId)
+              : tableOrders.find((o) => o.tableId === tableId && o.status !== "completed");
+            if (!table || !order) throw new Error("No active order for this table");
+            if (order.status === "completed") throw new Error("Bill already completed");
 
-        // Mark order completed + clear table
-        setTableOrders((prev) =>
-          prev.map((o) => (o.id === order.id ? { ...o, status: "completed", updatedAt: new Date().toISOString() } : o))
-        );
-        setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "empty", currentOrderId: undefined } : t)));
+            // Finalize via API
+            const result = await tablesApi.finalizeBill(tableId, order.id, {
+              payment_method: paymentMethod,
+              service_charge: order.serviceCharge,
+              discount: order.discount,
+            });
 
-        const sale: Sale = {
-          id: newId("S"),
-          createdAt: new Date().toISOString(),
-          items: order.items.map((i) => ({
-            itemId: i.itemId,
-            itemName: i.itemName,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-            discount: i.discount,
-            total: i.total,
-          })),
-          subtotal: order.subtotal,
-          vatAmount: order.vatAmount,
-          serviceCharge: order.serviceCharge,
-          discount: order.discount,
-          total: order.total,
-          paymentMethod,
-          orderType: "dine-in",
-          tableNo: table.tableNo,
-          status: "completed",
-        };
-        setSales((prev) => [sale, ...prev]);
-        return sale;
+            // Update local state
+            const sale: Sale = {
+              id: result.sale.id,
+              createdAt: result.sale.created_at,
+              items: result.sale.items.map((i) => ({
+                itemId: i.item_id,
+                itemName: i.item_name,
+                quantity: i.quantity,
+                unitPrice: i.unit_price,
+                discount: i.discount,
+                total: i.total,
+                notes: i.notes ?? undefined,
+              })),
+              subtotal: result.sale.subtotal,
+              vatAmount: result.sale.vat_amount,
+              serviceCharge: result.sale.service_charge,
+              discount: result.sale.discount,
+              total: result.sale.total,
+              paymentMethod: result.sale.payment_method,
+              orderType: result.sale.order_type,
+              tableNo: result.sale.table_no ?? undefined,
+              status: result.sale.status,
+            };
+            setSales((prev) => [sale, ...prev]);
+
+            // Update tables and orders
+            setTables((prev) =>
+              prev.map((t) =>
+                t.id === tableId
+                  ? {
+                      ...t,
+                      status: "empty",
+                      currentOrderId: undefined,
+                    }
+                  : t
+              )
+            );
+            setTableOrders((prev) =>
+              prev.map((o) =>
+                o.id === order.id
+                  ? {
+                      ...o,
+                      status: "completed",
+                      updatedAt: result.order.updated_at,
+                    }
+                  : o
+              )
+            );
+
+            // Refresh items to reflect stock changes
+            try {
+              const refreshed = await productsApi.list();
+              setItems(
+                refreshed.map((p) => ({
+                  id: String(p.id),
+                  name: p.name,
+                  nameBn: p.name_bn ?? undefined,
+                  sku: p.sku,
+                  categoryId: p.category_id,
+                  price: Number(p.price),
+                  cost: Number(p.cost),
+                  stockQty: Number(p.stock_qty ?? 0),
+                  unit: (p.unit as Item["unit"]) || "pcs",
+                  imageUrl: p.image_url
+                    ? p.image_url.startsWith("http")
+                      ? p.image_url
+                      : `${API_ORIGIN}${p.image_url}`
+                    : undefined,
+                  isActive: Boolean(p.is_active),
+                  isPackaged: Boolean(p.is_packaged),
+                  vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }))
+              );
+            } catch (err) {
+              console.error("Failed to refresh items after sale", err);
+            }
+
+            return sale;
+          } catch (err: any) {
+            console.error("Failed to finalize table bill", err);
+            throw new Error(err?.message || "Failed to finalize table bill");
+          }
+        } else {
+          // Fallback for offline mode
+          await delay(250);
+          const table = tables.find((t) => t.id === tableId);
+          const order = table?.currentOrderId
+            ? tableOrders.find((o) => o.id === table.currentOrderId)
+            : tableOrders.find((o) => o.tableId === tableId && o.status !== "completed");
+          if (!table || !order) throw new Error("No active order for this table");
+          if (order.status === "completed") throw new Error("Bill already completed");
+
+          // Mark order completed + clear table
+          setTableOrders((prev) =>
+            prev.map((o) => (o.id === order.id ? { ...o, status: "completed", updatedAt: new Date().toISOString() } : o))
+          );
+          setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status: "empty", currentOrderId: undefined } : t)));
+
+          const sale: Sale = {
+            id: newId("S"),
+            createdAt: new Date().toISOString(),
+            items: order.items.map((i) => ({
+              itemId: i.itemId,
+              itemName: i.itemName,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              discount: i.discount,
+              total: i.total,
+            })),
+            subtotal: order.subtotal,
+            vatAmount: order.vatAmount,
+            serviceCharge: order.serviceCharge,
+            discount: order.discount,
+            total: order.total,
+            paymentMethod,
+            orderType: "dine-in",
+            tableNo: table.tableNo,
+            status: "completed",
+          };
+          setSales((prev) => [sale, ...prev]);
+          return sale;
+        }
       },
 
       upsertAttendance: async ({ staffId, date, status, checkIn, checkOut, notes }) => {
@@ -634,6 +1065,31 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             name_bn: input.nameBn,
             icon: input.icon,
           });
+          // Refetch categories to ensure we have the latest data (including item_count)
+          try {
+            const refreshed = await categoriesApi.list();
+            setCategories(
+              refreshed.map((c) => ({
+                id: c.id,
+                name: c.name,
+                nameBn: c.name_bn ?? undefined,
+                icon: c.icon ?? "🍽️",
+                itemCount: c.item_count ?? 0,
+              }))
+            );
+          } catch (err) {
+            console.error("Failed to refresh categories, using created category", err);
+            // Fallback: add the created category to local state
+            const mapped: Category = {
+              id: created.id,
+              name: created.name,
+              nameBn: created.name_bn ?? undefined,
+              icon: created.icon ?? "🍽️",
+              itemCount: created.item_count ?? input.itemCount ?? 0,
+            };
+            setCategories((prev) => [mapped, ...prev]);
+          }
+          // Return the created category
           const mapped: Category = {
             id: created.id,
             name: created.name,
@@ -641,7 +1097,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             icon: created.icon ?? "🍽️",
             itemCount: created.item_count ?? input.itemCount ?? 0,
           };
-          setCategories((prev) => [mapped, ...prev]);
           return mapped;
         }
         await delay(100);
@@ -657,17 +1112,132 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         if (user?.token) {
           try {
             await categoriesApi.delete(categoryId);
+            // Refetch categories to ensure we have the latest data
+            try {
+              const refreshed = await categoriesApi.list();
+              setCategories(
+                refreshed.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  nameBn: c.name_bn ?? undefined,
+                  icon: c.icon ?? "🍽️",
+                  itemCount: c.item_count ?? 0,
+                }))
+              );
+            } catch (err) {
+              console.error("Failed to refresh categories, removing from local state", err);
+              // Fallback: remove from local state
+              setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+            }
           } catch (err) {
             console.error(err);
             throw err;
           }
         } else {
           await delay(80);
+          setCategories((prev) => prev.filter((c) => c.id !== categoryId));
         }
-        setCategories((prev) => prev.filter((c) => c.id !== categoryId));
       },
 
       completeSale: async (input) => {
+        if (user?.token) {
+          try {
+            // Convert frontend Sale format to API format
+            const saleInput = {
+              order_type: input.orderType,
+              items: input.items.map((i) => ({
+                item_id: i.itemId,
+                item_name: i.itemName,
+                quantity: i.quantity,
+                unit_price: i.unitPrice,
+                discount: i.discount,
+                total: i.total,
+                notes: i.notes,
+              })),
+              subtotal: input.subtotal,
+              vat_amount: input.vatAmount,
+              service_charge: input.serviceCharge,
+              discount: input.discount,
+              total: input.total,
+              payment_method: input.paymentMethod,
+              customer_name: input.customerName,
+              customer_phone: input.customerPhone,
+              delivery_address: input.deliveryAddress,
+              delivery_notes: input.deliveryNotes,
+              table_no: input.tableNo,
+              table_id: undefined, // Will be set if needed
+            };
+
+            const created = await salesApi.create(saleInput);
+            
+            // Refresh items to get updated stock (backend deducts stock)
+            try {
+              const refreshedItems = await productsApi.list();
+              setItems(
+                refreshedItems.map((p) => ({
+                  id: String(p.id),
+                  name: p.name,
+                  nameBn: p.name_bn ?? undefined,
+                  sku: p.sku,
+                  categoryId: p.category_id,
+                  price: Number(p.price),
+                  cost: Number(p.cost),
+                  stockQty: Number(p.stock_qty ?? 0),
+                  unit: (p.unit as Item["unit"]) || "pcs",
+                  imageUrl: p.image_url
+                    ? p.image_url.startsWith("http")
+                      ? p.image_url
+                      : `${API_ORIGIN}${p.image_url}`
+                    : undefined,
+                  isActive: Boolean(p.is_active),
+                  isPackaged: Boolean(p.is_packaged),
+                  vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }))
+              );
+            } catch (err) {
+              console.error("Failed to refresh items after sale", err);
+            }
+
+            // Map API response to frontend format
+            const sale: Sale = {
+              id: created.id,
+              createdAt: created.created_at,
+              items: created.items.map((i) => ({
+                itemId: i.item_id,
+                itemName: i.item_name,
+                quantity: i.quantity,
+                unitPrice: i.unit_price,
+                discount: i.discount,
+                total: i.total,
+                notes: i.notes ?? undefined,
+              })),
+              subtotal: created.subtotal,
+              vatAmount: created.vat_amount,
+              serviceCharge: created.service_charge,
+              discount: created.discount,
+              total: created.total,
+              paymentMethod: created.payment_method,
+              customerName: created.customer_name ?? undefined,
+              customerPhone: created.customer_phone ?? undefined,
+              deliveryAddress: created.delivery_address ?? undefined,
+              deliveryNotes: created.delivery_notes ?? undefined,
+              tableNo: created.table_no ?? undefined,
+              orderType: created.order_type,
+              status: created.status,
+            };
+
+            // Add to local state
+            setSales((prev) => [sale, ...prev]);
+            return sale;
+          } catch (err: any) {
+            console.error("Failed to create sale", err);
+            throw new Error(err?.message || "Failed to complete sale");
+          }
+        }
+        
+        // Fallback for offline/demo mode
         await delay(200);
         
         // Check stock availability ONLY for packaged items

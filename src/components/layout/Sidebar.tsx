@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 interface SidebarProps {
   className?: string;
@@ -47,10 +48,9 @@ const analyticsNavigation = [
   { path: "/settings", label: "Settings", labelBn: "সেটিংস", icon: Settings },
 ];
 
-const adminNavigation = [{ path: "/admin", label: "Admin", labelBn: "অ্যাডমিন", icon: Shield }];
-
 export function Sidebar({ className, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
+  const { canAccess } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -89,86 +89,9 @@ export function Sidebar({ className, onClose }: SidebarProps) {
         <div>
           <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Main</p>
           <ul className="space-y-1">
-            {mainNavigation.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    onClick={onClose}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
-                    <span>{item.label}</span>
-                  </NavLink>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        <div>
-          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Operations</p>
-          <ul className="space-y-1">
-            {operationsNavigation.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    onClick={onClose}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
-                    <span>{item.label}</span>
-                  </NavLink>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        <div>
-          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Analytics & Settings</p>
-          <ul className="space-y-1">
-            {analyticsNavigation.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    onClick={onClose}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
-                    <span>{item.label}</span>
-                  </NavLink>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        {user?.role === "superadmin" && (
-          <div>
-            <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Administration</p>
-            <ul className="space-y-1">
-              {adminNavigation.map((item) => {
+            {mainNavigation
+              .filter((item) => canAccess(item.path))
+              .map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
                   <li key={item.path}>
@@ -188,9 +111,88 @@ export function Sidebar({ className, onClose }: SidebarProps) {
                   </li>
                 );
               })}
+          </ul>
+        </div>
+
+        <div>
+          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Operations</p>
+          <ul className="space-y-1">
+            {operationsNavigation
+              .filter((item) => canAccess(item.path))
+              .map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <li key={item.path}>
+                    <NavLink
+                      to={item.path}
+                      onClick={onClose}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+
+        <div>
+          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Analytics & Settings</p>
+          <ul className="space-y-1">
+            {analyticsNavigation
+              .filter((item) => canAccess(item.path))
+              .map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <li key={item.path}>
+                    <NavLink
+                      to={item.path}
+                      onClick={onClose}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+
+        {user?.role === "superadmin" && (
+          <div>
+            <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">System Admin</p>
+            <ul className="space-y-1">
+              <li>
+                <NavLink
+                  to="/admin"
+                  onClick={onClose}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                    location.pathname === "/admin"
+                      ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  )}
+                >
+                  <Shield className={cn("w-5 h-5", location.pathname === "/admin" && "text-sidebar-primary")} />
+                  <span>Admin Panel</span>
+                </NavLink>
+              </li>
             </ul>
           </div>
         )}
+
       </nav>
 
       {/* Footer pinned */}

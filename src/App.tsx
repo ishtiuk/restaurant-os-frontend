@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { LicenseProvider } from "@/contexts/LicenseContext";
+import { PermissionsProvider } from "@/contexts/PermissionsContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { RequireAuth, RequireRole } from "@/components/auth/RequireAuth";
@@ -35,42 +37,50 @@ const App = () => (
     <AuthProvider>
       <TenantProvider>
         <AppDataProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
+          <LicenseProvider>
+            <PermissionsProvider>
+              <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/login" element={<Login />} />
 
-              <Route element={<RequireAuth />}>
-                <Route element={<AppLayout />}>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/items" element={<Items />} />
-                  <Route path="/sales" element={<Sales />} />
-                  <Route path="/tables" element={<Tables />} />
-                  <Route path="/purchases" element={<Purchases />} />
-                  <Route path="/suppliers" element={<Suppliers />} />
-                  <Route path="/customers" element={<Customers />} />
-                  <Route path="/staff" element={<Staff />} />
-                  <Route path="/attendance" element={<Attendance />} />
-                  <Route path="/finance" element={<Finance />} />
-                  <Route path="/expenses" element={<Expenses />} />
-                  <Route path="/vat" element={<Vat />} />
-                  <Route path="/reports" element={<Reports />} />
-                  <Route path="/sales-history" element={<SalesHistory />} />
-                  <Route path="/settings" element={<Settings />} />
+                  <Route element={<RequireAuth />}>
+                    <Route element={<AppLayout />}>
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/items" element={<Items />} />
+                      <Route path="/sales" element={<Sales />} />
+                      <Route path="/tables" element={<Tables />} />
+                      <Route path="/purchases" element={<Purchases />} />
+                      <Route path="/suppliers" element={<Suppliers />} />
+                      <Route path="/customers" element={<Customers />} />
+                      <Route path="/staff" element={<Staff />} />
+                      <Route path="/attendance" element={<Attendance />} />
+                      <Route path="/finance" element={<Finance />} />
+                      <Route path="/expenses" element={<Expenses />} />
+                      <Route path="/vat" element={<Vat />} />
+                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/sales-history" element={<SalesHistory />} />
 
-                  <Route element={<RequireRole role="superadmin" />}>
-                    <Route path="/admin" element={<Admin />} />
+                      {/* Settings is available to restaurant owner and superadmin */}
+                      <Route element={<RequireRole role={["owner", "superadmin"]} />}>
+                        <Route path="/settings" element={<Settings />} />
+                      </Route>
+
+                      <Route element={<RequireRole role="superadmin" />}>
+                        <Route path="/admin" element={<Admin />} />
+                      </Route>
+                    </Route>
                   </Route>
-                </Route>
-              </Route>
 
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+              </TooltipProvider>
+            </PermissionsProvider>
+          </LicenseProvider>
         </AppDataProvider>
       </TenantProvider>
     </AuthProvider>

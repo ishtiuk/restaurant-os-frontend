@@ -4,7 +4,6 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { categories } from "@/data/mockData";
 import { CartItem, PaymentMethod } from "@/types";
 import { useAppData } from "@/contexts/AppDataContext";
 import { SalesReceipt } from "@/components/print/SalesReceipt";
@@ -57,7 +56,7 @@ const paymentMethods: { id: PaymentMethod; label: string; icon: React.ReactNode 
 
 export default function Sales() {
   const navigate = useNavigate();
-  const { items, completeSale } = useAppData();
+  const { items, categories, completeSale } = useAppData();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -88,7 +87,7 @@ export default function Sales() {
 
       return matchesSearch && matchesCategory && item.isActive;
     });
-  }, [searchQuery, selectedCategory]);
+  }, [items, searchQuery, selectedCategory]);
 
   const addToCart = useCallback((item: typeof items[0]) => {
     setCart((prev) => {
@@ -327,14 +326,10 @@ export default function Sales() {
                   )}
                 </div>
                 <h4 className="font-medium text-sm truncate">{item.name}</h4>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="font-display font-bold text-primary">{formatCurrency(item.price)}</span>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-xs text-muted-foreground">{item.stockQty} left</span>
-                    {item.stockQty < 10 && (
-                      <Badge variant="destructive" className="text-xs px-1 py-0">Low Stock</Badge>
-                    )}
-                  </div>
+                <div className="mt-1">
+                  <span className="font-display font-bold text-primary">
+                    {formatCurrency(item.price)}
+                  </span>
                 </div>
               </GlassCard>
             ))}

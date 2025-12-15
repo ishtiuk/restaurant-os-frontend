@@ -11,12 +11,12 @@ export type AuthUser = {
   role: UserRole;
   tenantId?: string;
   token?: string;
+  permissions?: Record<string, boolean>; // Route permissions: {"/dashboard": true, "/sales": false, ...}
 };
 
 type LoginInput = {
   email: string;
   password: string;
-  rememberMe?: boolean;
 };
 
 type AuthContextValue = {
@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       isAuthenticated: Boolean(user),
-      login: async ({ email, password, rememberMe }) => {
+      login: async ({ email, password }) => {
         const res = await authApi.login(email, password);
         const u = res.user;
         const next: AuthUser = {
@@ -78,13 +78,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: (u.is_superuser ? "superadmin" : u.role) as UserRole,
           tenantId: u.tenant_id ?? undefined,
           token: res.token,
+          permissions: u.permissions ?? undefined,
         };
         setUser(next);
-        if (rememberMe) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        } else {
-          localStorage.removeItem(STORAGE_KEY);
-        }
+        // Always save to localStorage - user stays logged in until explicit logout
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       },
       logout: () => {
         setUser(null);

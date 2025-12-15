@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { adminApi, type AdminTenant, type AdminUser, type TenantCreateInput } from "@/lib/api/admin";
 import {
   Users,
   Building2,
@@ -52,47 +53,30 @@ const FEATURE_CATEGORIES = [...new Set(ALL_FEATURES.map(f => f.category))];
 
 type TenantPlan = "starter" | "professional" | "enterprise";
 
-type Tenant = {
-  id: string;
-  name: string;
+type UITenant = AdminTenant & {
   plan: TenantPlan;
-  isActive: boolean;
   note?: string;
-  createdAt: string;
   enabledFeatures: string[];
 };
 
-type AdminUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: "admin" | "manager";
-  tenantId: string;
-  isActive: boolean;
+type UIAdminUser = AdminUser & {
+  // frontend view role: "admin" (owner) or "manager"
+  uiRole: "admin" | "manager";
 };
 
 const planOptions: TenantPlan[] = ["starter", "professional", "enterprise"];
 
-const seedTenants: Tenant[] = [
-  { id: "t-1", name: "Demo Restaurant", plan: "professional", isActive: true, createdAt: "2024-12-01", note: "Demo data", enabledFeatures: PLAN_FEATURES.professional },
-];
-
-const seedUsers: AdminUser[] = [
-  { id: "u-1", name: "Owner Admin", email: "owner@demo.com", role: "admin", tenantId: "t-1", isActive: true },
-  { id: "u-2", name: "Floor Manager", email: "manager@demo.com", role: "manager", tenantId: "t-1", isActive: true },
-];
-
 export default function Admin() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"tenants" | "users">("tenants");
-  const [tenants, setTenants] = useState<Tenant[]>(seedTenants);
-  const [users, setUsers] = useState<AdminUser[]>(seedUsers);
+  const [tenants, setTenants] = useState<UITenant[]>([]);
+  const [users, setUsers] = useState<UIAdminUser[]>([]);
   const [tenantSearch, setTenantSearch] = useState("");
   const [userSearch, setUserSearch] = useState("");
   const [selectedTenantFilter, setSelectedTenantFilter] = useState<string>("all");
 
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
-  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [editingTenant, setEditingTenant] = useState<UITenant | null>(null);
   const [tenantForm, setTenantForm] = useState({
     name: "",
     plan: "starter" as TenantPlan,
@@ -101,19 +85,50 @@ export default function Admin() {
   });
 
   const [userModalOpen, setUserModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editingUser, setEditingUser] = useState<UIAdminUser | null>(null);
   const [userForm, setUserForm] = useState({
     name: "",
     email: "",
-    role: "admin" as AdminUser["role"],
+    password: "",
+    phone: "",
+    role: "admin" as UIAdminUser["uiRole"],
     tenantId: "",
     isActive: true,
   });
 
   // Feature management state
   const [featureModalOpen, setFeatureModalOpen] = useState(false);
-  const [featureEditTenant, setFeatureEditTenant] = useState<Tenant | null>(null);
+  const [featureEditTenant, setFeatureEditTenant] = useState<UITenant | null>(null);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+
+  const loadTenantsAndUsers = async () => {
+    if (user?.role !== "superadmin") return;
+    try {
+      const [tenantRes, userRes] = await Promise.all([
+        adminApi.listTenants(),
+        adminApi.listUsers(),
+      ]);
+      const mappedTenants: UITenant[] = tenantRes.map((t) => ({
+        ...t,
+        plan: "starter", // default; can be extended later
+        enabledFeatures: [...PLAN_FEATURES["starter"]],
+      }));
+      const mappedUsers: UIAdminUser[] = userRes.map((u) => ({
+        ...u,
+        uiRole: u.role === "owner" ? "admin" : "manager",
+      }));
+      setTenants(mappedTenants);
+      setUsers(mappedUsers);
+    } catch (err) {
+      console.error("Failed to load tenants/users", err);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role === "superadmin") {
+      loadTenantsAndUsers();
+    }
+  }, [user?.role]);
 
   const filteredTenants = useMemo(
     () =>
@@ -127,19 +142,19 @@ export default function Admin() {
         const matchText =
           u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
           u.email.toLowerCase().includes(userSearch.toLowerCase());
-        const matchTenant = selectedTenantFilter === "all" || u.tenantId === selectedTenantFilter;
+        const matchTenant = selectedTenantFilter === "all" || u.tenant_id === selectedTenantFilter;
         return matchText && matchTenant;
       }),
     [users, userSearch, selectedTenantFilter]
   );
 
-  const openTenantModal = (tenant?: Tenant) => {
+  const openTenantModal = (tenant?: UITenant) => {
     if (tenant) {
       setEditingTenant(tenant);
       setTenantForm({
         name: tenant.name,
         plan: tenant.plan,
-        isActive: tenant.isActive,
+        isActive: tenant.is_active,
         note: tenant.note || "",
       });
     } else {
@@ -149,7 +164,7 @@ export default function Admin() {
     setTenantModalOpen(true);
   };
 
-  const openFeatureModal = (tenant: Tenant) => {
+  const openFeatureModal = (tenant: UITenant) => {
     setFeatureEditTenant(tenant);
     setSelectedFeatures([...tenant.enabledFeatures]);
     setFeatureModalOpen(true);
@@ -180,83 +195,145 @@ export default function Admin() {
     setFeatureModalOpen(false);
   };
 
-  const openUserModal = (u?: AdminUser) => {
+  const openUserModal = (u?: UIAdminUser) => {
     if (u) {
       setEditingUser(u);
       setUserForm({
         name: u.name,
         email: u.email,
-        role: u.role,
-        tenantId: u.tenantId,
-        isActive: u.isActive,
+        password: "", // Never show password for security
+        phone: u.phone || "",
+        role: u.uiRole,
+        tenantId: u.tenant_id,
+        isActive: u.is_active,
       });
     } else {
       setEditingUser(null);
-      setUserForm({ name: "", email: "", role: "admin", tenantId: "", isActive: true });
+      setUserForm({
+        name: "",
+        email: "",
+        password: "",
+        phone: "",
+        role: "admin",
+        tenantId: "",
+        isActive: true,
+      });
     }
     setUserModalOpen(true);
   };
 
-  const saveTenant = () => {
+  const saveTenant = async () => {
     if (!tenantForm.name.trim()) {
       toast({ title: "Tenant name required", variant: "destructive" });
       return;
     }
     if (editingTenant) {
-      setTenants((prev) =>
-        prev.map((t) =>
-          t.id === editingTenant.id ? { ...t, ...tenantForm } : t
-        )
-      );
-      toast({ title: "Tenant updated" });
-    } else {
-      const newPlan = tenantForm.plan;
-      setTenants((prev) => [
-        {
-          id: `t-${Date.now()}`,
+      try {
+        const updated = await adminApi.updateTenant(editingTenant.id, {
           name: tenantForm.name,
+          // Backend has no plan/notes yet; only map basic fields
+          is_active: tenantForm.isActive,
+        });
+        setTenants((prev) =>
+          prev.map((t) =>
+            t.id === updated.id
+              ? {
+                  ...t,
+                  ...updated,
+                  plan: tenantForm.plan,
+                  note: tenantForm.note,
+                }
+              : t
+          )
+        );
+        toast({ title: "Tenant updated" });
+      } catch (err: any) {
+        toast({
+          title: "Failed to update tenant",
+          description: err?.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      try {
+        const payload: TenantCreateInput = {
+          name: tenantForm.name,
+          // email/phone/address can be filled later via edit
+        };
+        const created = await adminApi.createTenant(payload);
+        const newPlan = tenantForm.plan;
+        const mapped: UITenant = {
+          ...created,
           plan: newPlan,
-          isActive: tenantForm.isActive,
           note: tenantForm.note,
-          createdAt: new Date().toISOString().slice(0, 10),
           enabledFeatures: [...PLAN_FEATURES[newPlan]],
-        },
-        ...prev,
-      ]);
-      toast({ title: "Tenant created" });
+        };
+        setTenants((prev) => [mapped, ...prev]);
+        toast({ title: "Tenant created" });
+      } catch (err: any) {
+        toast({
+          title: "Failed to create tenant",
+          description: err?.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
     }
     setTenantModalOpen(false);
   };
 
-  const saveUser = () => {
-    if (!userForm.name.trim() || !userForm.email.trim()) {
-      toast({ title: "Name and email required", variant: "destructive" });
+  const saveUser = async () => {
+    if (!userForm.name.trim() || !userForm.email.trim() || !userForm.password.trim()) {
+      toast({ title: "Name, email and password required", variant: "destructive" });
       return;
     }
     if (!userForm.tenantId) {
       toast({ title: "Select a tenant", variant: "destructive" });
       return;
     }
-    if (user?.role === "admin" && userForm.role !== "manager") {
-      toast({ title: "Admins can only create managers", variant: "destructive" });
+    // Tenant owners (role = "owner") can only create manager-level admin users
+    if (user?.role === "owner" && userForm.role !== "manager") {
+      toast({ title: "Owners can only create managers", variant: "destructive" });
       return;
     }
-    if (editingUser) {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === editingUser.id ? { ...u, ...userForm } : u))
-      );
-      toast({ title: "User updated" });
-    } else {
-      setUsers((prev) => [
-        {
-          id: `u-${Date.now()}`,
-          ...userForm,
-        },
-        ...prev,
-      ]);
-      toast({ title: "User created" });
+    const backendRole = userForm.role === "admin" ? "admin" : "manager";
+    try {
+      if (editingUser) {
+        const updated = await adminApi.updateUser(editingUser.id, {
+          name: userForm.name,
+          email: userForm.email,
+          role: backendRole,
+          is_active: userForm.isActive,
+        });
+        const mapped: UIAdminUser = {
+          ...updated,
+          uiRole: updated.role === "owner" ? "admin" : "manager",
+        };
+        setUsers((prev) => prev.map((u) => (u.id === mapped.id ? mapped : u)));
+        toast({ title: "User updated" });
+      } else {
+        const created = await adminApi.createUser({
+          tenant_id: userForm.tenantId,
+          email: userForm.email,
+          password: userForm.password,
+          name: userForm.name,
+          ...(userForm.phone?.trim() && { phone: userForm.phone.trim() }), // Only include if provided
+          role: backendRole,
+        });
+        const mapped: UIAdminUser = {
+          ...created,
+          uiRole: created.role === "owner" ? "admin" : "manager",
+        };
+        setUsers((prev) => [mapped, ...prev]);
+        toast({ title: "User created" });
+      }
+      setUserModalOpen(false);
+    } catch (err: any) {
+      toast({
+        title: "Failed to save user",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
     }
-    setUserModalOpen(false);
   };
 
   const getPlanBadgeVariant = (plan: TenantPlan) => {
@@ -311,7 +388,7 @@ export default function Admin() {
                   <Plus className="w-4 h-4 mr-2" />
                   Add Tenant
                 </Button>
-                <Button variant="ghost" onClick={() => setTenants(seedTenants)}>
+                <Button variant="ghost" onClick={loadTenantsAndUsers}>
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Reset
                 </Button>
@@ -325,19 +402,15 @@ export default function Admin() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold">{t.name}</h3>
-                    <p className="text-xs text-muted-foreground">Created {t.createdAt}</p>
+                    <p className="text-xs text-muted-foreground">Created {t.created_at}</p>
                   </div>
-                  <Badge variant={t.isActive ? "success" : "outline"}>{t.isActive ? "Active" : "Inactive"}</Badge>
+                  <Badge variant={t.is_active ? "success" : "outline"}>{t.is_active ? "Active" : "Inactive"}</Badge>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   Plan:
                   <Badge variant={getPlanBadgeVariant(t.plan)} className="ml-1 capitalize">
                     {t.plan}
                   </Badge>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  Features:
-                  <span className="font-medium text-foreground">{t.enabledFeatures.length} / {ALL_FEATURES.length}</span>
                 </div>
                 {t.note && <p className="text-sm text-muted-foreground">{t.note}</p>}
                 <div className="flex gap-2 pt-2 flex-wrap">
@@ -398,7 +471,7 @@ export default function Admin() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredUsers.map((u) => {
-              const tenant = tenants.find((t) => t.id === u.tenantId);
+              const tenant = tenants.find((t) => t.id === u.tenant_id);
               return (
                 <GlassCard key={u.id} className="p-4 space-y-2">
                   <div className="flex items-center justify-between">
@@ -406,10 +479,10 @@ export default function Admin() {
                       <h3 className="font-semibold">{u.name}</h3>
                       <p className="text-xs text-muted-foreground">{u.email}</p>
                     </div>
-                    <Badge variant={u.isActive ? "success" : "outline"}>{u.isActive ? "Active" : "Inactive"}</Badge>
+                    <Badge variant={u.is_active ? "success" : "outline"}>{u.is_active ? "Active" : "Inactive"}</Badge>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    Role: {u.role}
+                    Role: {u.uiRole}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     Tenant: {tenant?.name || "Unknown"}
@@ -418,7 +491,22 @@ export default function Admin() {
                     <Button variant="outline" size="sm" onClick={() => openUserModal(u)}>
                       Edit
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setUsers((prev) => prev.filter((x) => x.id !== u.id))}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await adminApi.deleteUser(u.id);
+                          setUsers((prev) => prev.filter((x) => x.id !== u.id));
+                        } catch (err: any) {
+                          toast({
+                            title: "Failed to remove user",
+                            description: err?.message || "Please try again.",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    >
                       Remove
                     </Button>
                   </div>
@@ -578,13 +666,25 @@ export default function Admin() {
             </div>
             <div className="space-y-1">
               <Label>Email</Label>
-              <Input value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
+              <Input
+                value={userForm.email}
+                onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                type="email"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Password</Label>
+              <Input
+                value={userForm.password}
+                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                type="password"
+              />
             </div>
             <div className="space-y-1">
               <Label>Role</Label>
               <Select
                 value={userForm.role}
-                onValueChange={(v) => setUserForm({ ...userForm, role: v as AdminUser["role"] })}
+                onValueChange={(v) => setUserForm({ ...userForm, role: v as UIAdminUser["uiRole"] })}
               >
                 <SelectTrigger className="bg-muted/50">
                   <SelectValue />
