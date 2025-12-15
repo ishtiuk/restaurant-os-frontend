@@ -29,6 +29,7 @@ import {
   Users,
   Plus,
   Trash2,
+  Tag,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
@@ -46,7 +47,7 @@ interface POSUser {
 }
 
 export default function Settings() {
-  const { staff } = useAppData();
+  const { staff, categories, addCategory, removeCategory } = useAppData();
   const [language, setLanguage] = useState("en");
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [users, setUsers] = useState<POSUser[]>([
@@ -62,12 +63,34 @@ export default function Settings() {
       createdAt: new Date().toISOString(),
     },
   ]);
+  const [newCategory, setNewCategory] = useState({ name: "", nameBn: "", icon: "🍽️" });
 
   const handleSave = () => {
     toast({
       title: "Settings saved!",
       description: "Your changes have been applied.",
     });
+  };
+
+  const handleAddCategory = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!newCategory.name.trim()) {
+      toast({ title: "Category name required", variant: "destructive" });
+      return;
+    }
+    await addCategory({
+      name: newCategory.name.trim(),
+      nameBn: newCategory.nameBn.trim() || undefined,
+      icon: newCategory.icon || "🍽️",
+    });
+    setNewCategory({ name: "", nameBn: "", icon: "🍽️" });
+    toast({ title: "Category added", description: newCategory.name });
+  };
+
+  const handleDeleteCategory = async (categoryId: string, name: string) => {
+    if (!confirm(`Delete category "${name}"?`)) return;
+    await removeCategory(categoryId);
+    toast({ title: "Category deleted", description: name });
   };
 
   const handleAddUser = (e: React.FormEvent<HTMLFormElement>) => {
@@ -196,6 +219,81 @@ export default function Settings() {
           </div>
         </div>
       </GlassCard>
+
+        {/* Categories Management */}
+        <GlassCard className="p-6 animate-fade-in stagger-2">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+              <Tag className="w-5 h-5 text-accent" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Menu Categories</h3>
+              <p className="text-sm text-muted-foreground">Create and manage item categories</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Add category form */}
+            <div className="space-y-3">
+              <Label>Category Name *</Label>
+              <Input
+                value={newCategory.name}
+                onChange={(e) => setNewCategory((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g. Beverages"
+                className="bg-muted/50"
+              />
+              <Label>Category Name (Bengali)</Label>
+              <Input
+                value={newCategory.nameBn}
+                onChange={(e) => setNewCategory((prev) => ({ ...prev, nameBn: e.target.value }))}
+                placeholder="e.g. পানীয়"
+                className="bg-muted/50 font-bengali"
+              />
+              <Label>Icon</Label>
+              <Input
+                value={newCategory.icon}
+                onChange={(e) => setNewCategory((prev) => ({ ...prev, icon: e.target.value }))}
+                placeholder="🍽️"
+                className="bg-muted/50"
+              />
+              <Button variant="glow" onClick={(e) => handleAddCategory(e as any)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Category
+              </Button>
+            </div>
+
+            {/* Categories list */}
+            <div className="lg:col-span-2 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {categories.map((cat) => (
+                  <div key={cat.id} className="p-3 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-lg">
+                        {cat.icon || "🍽️"}
+                      </div>
+                      <div>
+                        <p className="font-semibold">{cat.name}</p>
+                        {cat.nameBn && <p className="text-xs text-muted-foreground font-bengali">{cat.nameBn}</p>}
+                        <p className="text-xs text-muted-foreground">{cat.itemCount ?? 0} items</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                        title="Delete category"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </GlassCard>
 
       {/* Invoice Settings */}
       <GlassCard className="p-6 animate-fade-in stagger-2">

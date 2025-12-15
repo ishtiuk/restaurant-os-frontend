@@ -13,7 +13,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useAppData } from "@/contexts/AppDataContext";
-import { categories } from "@/data/mockData";
 import { Item } from "@/types";
 import {
   Search,
@@ -27,6 +26,7 @@ import {
   Upload,
   X,
   ImageIcon,
+  Power,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -46,14 +46,18 @@ import { toast } from "@/hooks/use-toast";
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
 export default function Items() {
-  const { items, upsertItem } = useAppData();
+  const { items, upsertItem, categories } = useAppData();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [stockFilter, setStockFilter] = useState<string>("all");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [stockInput, setStockInput] = useState<number>(0);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -93,10 +97,10 @@ export default function Items() {
       .join("")
       .toUpperCase()
       .slice(0, 2);
-    const random = Math.floor(Math.random() * 1000)
-      .toString()
-      .padStart(3, "0");
-    return `${categoryPrefix}${namePrefix}${random}`;
+  const random = Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, "0");
+  return `${categoryPrefix}${namePrefix}${random}`;
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,33 +167,35 @@ export default function Items() {
     //   imageUrl = response.file_url;
     // }
     
-    const newItem: Item = {
-      id: `ITEM-${Date.now()}`,
+    const baseItem: Item = {
+      id: isEditMode && selectedItem ? selectedItem.id : `ITEM-${Date.now()}`,
       name,
       nameBn: (formData.get("nameBn") as string) || undefined,
-      sku: generateSKU(name, categoryId),
+      sku: isEditMode && selectedItem?.sku ? selectedItem.sku : generateSKU(name, categoryId),
       categoryId,
       price: parseFloat(formData.get("price") as string),
       cost: parseFloat(formData.get("cost") as string),
       stockQty: isPackaged ? parseFloat(formData.get("stockQty") as string) : 9999,
       unit: formData.get("unit") as Item["unit"],
-      imageUrl,
-      isActive: true,
+      imageUrl: imageUrl || selectedItem?.imageUrl,
+      isActive: isEditMode ? selectedItem?.isActive ?? true : true,
       isPackaged,
       vatRate: formData.get("vatRate") ? parseFloat(formData.get("vatRate") as string) : undefined,
-      createdAt: new Date().toISOString(),
+      createdAt: isEditMode && selectedItem ? selectedItem.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     try {
-      await upsertItem(newItem);
+      await upsertItem(baseItem);
       setIsAddModalOpen(false);
+      setIsEditMode(false);
+      setSelectedItem(null);
       setImagePreview("");
       setSelectedFile(null);
       (e.target as HTMLFormElement).reset();
       toast({
-        title: "Item created!",
-        description: `${newItem.name} has been added successfully.`,
+        title: isEditMode ? "Item updated!" : "Item created!",
+        description: `${baseItem.name} has been ${isEditMode ? "updated" : "added"} successfully.`,
       });
     } catch (error) {
       toast({
@@ -200,10 +206,43 @@ export default function Items() {
     }
   };
 
-  const getStockBadge = (qty: number) => {
-    if (qty === 0) return <Badge variant="danger">Out of Stock</Badge>;
-    if (qty <= 10) return <Badge variant="warning">Low Stock</Badge>;
+  const getStockBadge = (item: Item) => {
+    if (!item.isPackaged) return <Badge variant="outline">Cooked • No stock limit</Badge>;
+    if (item.stockQty === 0) return <Badge variant="danger">Out of Stock</Badge>;
+    if (item.stockQty <= 10) return <Badge variant="warning">Low Stock</Badge>;
     return <Badge variant="success">In Stock</Badge>;
+  };
+
+  const handleEdit = (item: Item) => {
+    setSelectedItem(item);
+    setIsEditMode(true);
+    setIsAddModalOpen(true);
+    setImagePreview(item.imageUrl || "");
+  };
+
+  const handleToggleActive = async (item: Item) => {
+    const updated = { ...item, isActive: !item.isActive };
+    await upsertItem(updated);
+    toast({
+      title: updated.isActive ? "Item reactivated" : "Item deactivated",
+      description: `${item.name} is now ${updated.isActive ? "active" : "inactive"}.`,
+    });
+  };
+
+  const handleOpenStock = (item: Item) => {
+    if (!item.isPackaged) return; // cooked items do not track stock
+    setSelectedItem(item);
+    setStockInput(item.stockQty);
+    setIsStockModalOpen(true);
+  };
+
+  const handleSaveStock = async () => {
+    if (!selectedItem) return;
+    const updated = { ...selectedItem, stockQty: stockInput };
+    await upsertItem(updated);
+    setIsStockModalOpen(false);
+    setSelectedItem(null);
+    toast({ title: "Stock updated", description: `${updated.name}: ${updated.stockQty} ${updated.unit}` });
   };
 
   return (
@@ -320,7 +359,7 @@ export default function Items() {
                   </div>
                 )}
                 <div className="absolute top-2 right-2">
-                  {getStockBadge(item.stockQty)}
+                  {getStockBadge(item)}
                 </div>
               </div>
 
@@ -343,12 +382,12 @@ export default function Items() {
                     {formatCurrency(item.price)}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Stock: {item.stockQty} {item.unit}
+                    {item.isPackaged ? `Stock: ${item.stockQty} ${item.unit}` : "Cooked • No stock limit"}
                   </p>
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => handleEdit(item)}>
                     <Edit className="w-3 h-3 mr-1" />
                     Edit
                   </Button>
@@ -359,9 +398,16 @@ export default function Items() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>Update Stock</DropdownMenuItem>
-                      <DropdownMenuItem>View History</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                      {item.isPackaged && (
+                        <DropdownMenuItem onClick={() => handleOpenStock(item)}>Update Stock</DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => handleToggleActive(item)}
+                      >
+                        <Power className="w-4 h-4 mr-2" />
+                        {item.isActive ? "Deactivate" : "Activate"}
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -412,12 +458,12 @@ export default function Items() {
                     <td className="p-4 text-right font-medium text-primary">{formatCurrency(item.price)}</td>
                     <td className="p-4 text-right text-muted-foreground">{formatCurrency(item.cost)}</td>
                     <td className="p-4 text-right">
-                      {item.stockQty} {item.unit}
+                      {item.isPackaged ? `${item.stockQty} ${item.unit}` : "Cooked • No stock limit"}
                     </td>
-                    <td className="p-4 text-center">{getStockBadge(item.stockQty)}</td>
+                    <td className="p-4 text-center">{getStockBadge(item)}</td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(item)}>
                           <Edit className="w-4 h-4" />
                         </Button>
                         <DropdownMenu>
@@ -427,9 +473,16 @@ export default function Items() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Update Stock</DropdownMenuItem>
-                            <DropdownMenuItem>View History</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">Deactivate</DropdownMenuItem>
+                            {item.isPackaged && (
+                              <DropdownMenuItem onClick={() => handleOpenStock(item)}>Update Stock</DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => handleToggleActive(item)}
+                            >
+                              <Power className="w-4 h-4 mr-2" />
+                              {item.isActive ? "Deactivate" : "Activate"}
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -466,6 +519,8 @@ export default function Items() {
         onOpenChange={(open) => {
           setIsAddModalOpen(open);
           if (!open) {
+            setIsEditMode(false);
+            setSelectedItem(null);
             setImagePreview("");
             setSelectedFile(null);
           }
@@ -473,8 +528,12 @@ export default function Items() {
       >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display gradient-text">Add New Item</DialogTitle>
-            <DialogDescription>নতুন আইটেম যোগ করুন • Create a new menu item</DialogDescription>
+            <DialogTitle className="font-display gradient-text">
+              {isEditMode ? "Edit Item" : "Add New Item"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditMode ? "Update existing menu item" : "নতুন আইটেম যোগ করুন • Create a new menu item"}
+            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleAddItem} className="space-y-4">
@@ -691,16 +750,60 @@ export default function Items() {
                 type="button"
                 variant="outline"
                 className="flex-1"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setIsEditMode(false);
+                  setSelectedItem(null);
+                  setImagePreview("");
+                  setSelectedFile(null);
+                }}
               >
                 Cancel
               </Button>
               <Button type="submit" variant="glow" className="flex-1">
                 <Plus className="w-4 h-4 mr-2" />
-                Create Item
+                {isEditMode ? "Save Changes" : "Create Item"}
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Update Modal */}
+      <Dialog open={isStockModalOpen} onOpenChange={setIsStockModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text">Update Stock</DialogTitle>
+            <DialogDescription>
+              {selectedItem ? selectedItem.name : "Select item"} • Packaged item stock update
+            </DialogDescription>
+          </DialogHeader>
+          {selectedItem && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="stockUpdate">Stock Quantity</Label>
+                <Input
+                  id="stockUpdate"
+                  type="number"
+                  min={0}
+                  value={stockInput}
+                  onChange={(e) => setStockInput(parseInt(e.target.value || "0"))}
+                  className="bg-muted/50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Units: {selectedItem.unit}. Packaged items enforce stock.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setIsStockModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="glow" onClick={handleSaveStock}>
+                  Save Stock
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

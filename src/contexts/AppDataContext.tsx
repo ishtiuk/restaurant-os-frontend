@@ -4,6 +4,7 @@ import type {
   Customer,
   Expense,
   ExpenseCategory,
+  Category,
   Item,
   PurchaseOrder,
   RestaurantTable,
@@ -16,6 +17,7 @@ import type {
 } from "@/types";
 import {
   attendanceRecords as seedAttendance,
+  categories as seedCategories,
   customers as seedCustomers,
   expenseCategories as seedExpenseCategories,
   expenses as seedExpenses,
@@ -48,6 +50,7 @@ type AppData = {
   vatEntries: VatEntry[];
   expenses: Expense[];
   expenseCategories: ExpenseCategory[];
+  categories: Category[];
   tables: RestaurantTable[];
   tableOrders: TableOrder[];
 
@@ -84,6 +87,8 @@ type AppData = {
 
   upsertItem: (input: Item) => Promise<void>;
   updateItem: (itemId: string, updates: Partial<Omit<Item, "id">>) => Promise<void>;
+  addCategory: (input: Omit<Category, "id" | "itemCount"> & Partial<Pick<Category, "itemCount">>) => Promise<Category>;
+  removeCategory: (categoryId: string) => Promise<void>;
   
   completeSale: (input: Omit<Sale, "id">) => Promise<Sale>;
 };
@@ -107,6 +112,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [vatEntries, setVatEntries] = useState<VatEntry[]>(seedVatEntries);
   const [expenses, setExpenses] = useState<Expense[]>(seedExpenses);
   const [expenseCategories] = useState<ExpenseCategory[]>(seedExpenseCategories);
+  const [categories, setCategories] = useState<Category[]>(seedCategories);
   const [tables, setTables] = useState<RestaurantTable[]>(seedTables);
   const [tableOrders, setTableOrders] = useState<TableOrder[]>(seedTableOrders as TableOrder[]);
 
@@ -124,6 +130,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       vatEntries,
       expenses,
       expenseCategories,
+      categories,
       tables,
       tableOrders,
 
@@ -473,6 +480,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       updateItem: async (itemId, updates) => {
         await delay(120);
         setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, ...updates } : it)));
+      },
+      addCategory: async (input) => {
+        await delay(100);
+        const category: Category = {
+          id: newId("CAT"),
+          itemCount: input.itemCount ?? 0,
+          ...input,
+        };
+        setCategories((prev) => [category, ...prev]);
+        return category;
+      },
+      removeCategory: async (categoryId) => {
+        await delay(80);
+        setCategories((prev) => prev.filter((c) => c.id !== categoryId));
       },
 
       completeSale: async (input) => {
