@@ -72,11 +72,15 @@ export interface Sale {
   items: SaleItem[];
   subtotal: number;
   vatAmount: number;
+  serviceCharge: number;
   discount: number;
   total: number;
   paymentMethod: PaymentMethod;
   customerId?: string;
   customerName?: string;
+  customerPhone?: string;
+  deliveryAddress?: string;
+  deliveryNotes?: string;
   tableNo?: string;
   orderType: 'dine-in' | 'takeaway' | 'delivery';
   status: 'completed' | 'refunded' | 'pending';

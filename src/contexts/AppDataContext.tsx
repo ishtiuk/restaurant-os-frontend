@@ -354,6 +354,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           })),
           subtotal: order.subtotal,
           vatAmount: order.vatAmount,
+          serviceCharge: order.serviceCharge,
           discount: order.discount,
           total: order.total,
           paymentMethod,

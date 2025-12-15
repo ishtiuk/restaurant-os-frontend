@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { categories } from "@/data/mockData";
 import { RestaurantTable, CartItem, PaymentMethod } from "@/types";
 import { useAppData } from "@/contexts/AppDataContext";
+import { KotSlip } from "@/components/print/KotSlip";
+import { TableBillReceipt } from "@/components/print/TableBillReceipt";
+import { printContent } from "@/utils/printUtils";
 import {
   Users,
   Plus,
@@ -515,12 +518,23 @@ export default function Tables() {
         <DialogContent className="max-w-md glass-card">
           <DialogHeader>
             <DialogTitle className="font-display gradient-text">Bill - {selectedTable?.tableNo}</DialogTitle>
-            <DialogDescription>বিল চূড়ান্তকরণ</DialogDescription>
+            <DialogDescription>বিল চূড়ান্তকরণ • Finalize table bill</DialogDescription>
           </DialogHeader>
 
-          {currentOrder && (
+          {currentOrder && selectedTable && (
             <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-muted/30 space-y-2 font-mono" id="bill-print-area">
+              {/* Hidden printable bill */}
+              <div className="hidden">
+                <TableBillReceipt
+                  order={currentOrder}
+                  tableNo={selectedTable.tableNo}
+                  serviceCharge={billServiceCharge ? currentOrder.subtotal * 0.05 : 0}
+                  extraDiscount={billDiscount}
+                />
+              </div>
+              
+              {/* Preview bill */}
+              <div className="p-4 rounded-lg bg-muted/30 space-y-2 font-mono max-h-[40vh] overflow-auto custom-scrollbar">
                 <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
                   <h3 className="font-display font-bold text-xl">RestaurantOS</h3>
                   <p className="text-sm text-muted-foreground mt-1">রেস্টুরেন্ট ওএস</p>
@@ -534,7 +548,7 @@ export default function Tables() {
                   {currentOrder.items.map((item) => (
                     <div key={item.itemId} className="flex justify-between text-sm">
                       <span>
-                        {item.itemName} x{item.quantity}
+                        <span className="font-bold">{item.quantity}x</span> {item.itemName}
                       </span>
                       <span>{formatCurrency(item.total)}</span>
                     </div>
@@ -662,7 +676,11 @@ export default function Tables() {
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => window.print()}>
+                <Button 
+                  variant="outline" 
+                  className="flex-1" 
+                  onClick={() => printContent('table-bill-print', { title: 'Bill', paperSize: 'thermal' })}
+                >
                   <Receipt className="w-4 h-4 mr-2" />
                   Print Bill
                 </Button>
@@ -691,10 +709,20 @@ export default function Tables() {
 
           {lastKot && selectedTable && (
             <div className="space-y-4">
-              {/* KOT Slip */}
-              <div className="p-6 rounded-lg bg-muted/30 font-mono text-sm border-2 border-dashed border-border" id="kot-print-area">
+              {/* Hidden printable KOT slip */}
+              <div className="hidden">
+                <KotSlip
+                  kotNumber={lastKot.kotNumber}
+                  tableNo={selectedTable.tableNo}
+                  items={lastKot.items}
+                  time={lastKot.time}
+                />
+              </div>
+              
+              {/* Preview KOT Slip */}
+              <div className="p-6 rounded-lg bg-muted/30 font-mono text-sm border-2 border-dashed border-border">
                 <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
-                  <h3 className="font-display font-bold text-2xl">KITCHEN ORDER</h3>
+                  <h3 className="font-display font-bold text-2xl">🍳 KITCHEN ORDER</h3>
                   <p className="text-lg font-bold mt-1">KOT #{lastKot.kotNumber}</p>
                 </div>
                 
@@ -703,27 +731,28 @@ export default function Tables() {
                     <span className="font-bold">Table:</span>
                     <span className="text-xl font-bold">{selectedTable.tableNo}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-sm">
                     <span>Time:</span>
-                    <span>{lastKot.time}</span>
+                    <span>{new Date(lastKot.time).toLocaleString()}</span>
                   </div>
                 </div>
 
                 <div className="border-t-2 border-dashed border-border pt-3 mb-3">
-                  <p className="font-bold mb-2">ITEMS:</p>
+                  <p className="font-bold mb-2 text-xs uppercase tracking-wider">Items:</p>
                   {lastKot.items.map((item, idx) => (
-                    <div key={item.itemId} className="mb-2 text-base">
-                      <div className="flex justify-between items-start">
-                        <span className="font-bold text-lg">{item.quantity}x</span>
-                        <span className="flex-1 ml-2 text-base">{item.itemName}</span>
-                      </div>
+                    <div key={idx} className="mb-2 flex items-start gap-2">
+                      <span className="font-bold text-lg min-w-[40px]">{item.quantity}x</span>
+                      <span className="flex-1">{item.itemName}</span>
                     </div>
                   ))}
                 </div>
 
                 <div className="border-t-2 border-dashed border-border pt-3 text-center">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm font-bold">
                     Total Items: {lastKot.items.reduce((sum, i) => sum + i.quantity, 0)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    --- Please prepare immediately ---
                   </p>
                 </div>
               </div>
@@ -733,9 +762,7 @@ export default function Tables() {
                 <Button 
                   variant="outline" 
                   className="flex-1" 
-                  onClick={() => {
-                    window.print();
-                  }}
+                  onClick={() => printContent('kot-slip-print', { title: 'KOT', paperSize: 'thermal' })}
                 >
                   <Printer className="w-4 h-4 mr-2" />
                   Print KOT
