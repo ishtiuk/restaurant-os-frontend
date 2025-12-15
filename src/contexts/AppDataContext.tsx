@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type {
   Attendance,
   Customer,
@@ -33,6 +33,7 @@ import {
   tableOrders as seedTableOrders,
 } from "@/data/mockData";
 import { delay, newId } from "@/services/placeholderApi";
+import { apiClient } from "@/services/apiClient";
 
 export type TableOrder = (typeof seedTableOrders)[number];
 
@@ -85,7 +86,7 @@ type AppData = {
     input: Omit<VatEntry, "id" | "createdAt" | "vatAmount"> & Partial<Pick<VatEntry, "createdAt">>
   ) => Promise<VatEntry>;
 
-  upsertItem: (input: Item) => Promise<void>;
+  upsertItem: (input: Item, file?: File | null) => Promise<Item>;
   updateItem: (itemId: string, updates: Partial<Omit<Item, "id">>) => Promise<void>;
   addCategory: (input: Omit<Category, "id" | "itemCount"> & Partial<Pick<Category, "itemCount">>) => Promise<Category>;
   removeCategory: (categoryId: string) => Promise<void>;
@@ -100,7 +101,7 @@ function todayISO() {
 }
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<Item[]>(seedItems);
+  const [items, setItems] = useState<Item[]>(apiClient.isEnabled ? [] : seedItems);
   const [suppliers, setSuppliers] = useState<Supplier[]>(seedSuppliers);
   const [supplierTransactions, setSupplierTransactions] = useState<SupplierTransaction[]>(seedSupplierTransactions);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(seedPurchaseOrders);
@@ -112,9 +113,28 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [vatEntries, setVatEntries] = useState<VatEntry[]>(seedVatEntries);
   const [expenses, setExpenses] = useState<Expense[]>(seedExpenses);
   const [expenseCategories] = useState<ExpenseCategory[]>(seedExpenseCategories);
-  const [categories, setCategories] = useState<Category[]>(seedCategories);
+  const [categories, setCategories] = useState<Category[]>(apiClient.isEnabled ? [] : seedCategories);
   const [tables, setTables] = useState<RestaurantTable[]>(seedTables);
   const [tableOrders, setTableOrders] = useState<TableOrder[]>(seedTableOrders as TableOrder[]);
+
+  useEffect(() => {
+    if (!apiClient.isEnabled) return;
+    const load = async () => {
+      try {
+        const [cats, prods] = await Promise.all([
+          apiClient.fetchCategories(),
+          apiClient.fetchProducts(),
+        ]);
+        setCategories(cats);
+        setItems(prods);
+      } catch (err) {
+        console.error("API load failed, falling back to seeds", err);
+        setCategories(seedCategories);
+        setItems(seedItems);
+      }
+    };
+    load();
+  }, []);
 
   const value = useMemo<AppData>(
     () => ({
@@ -464,7 +484,37 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         return created;
       },
 
-      upsertItem: async (input) => {
+      upsertItem: async (input, file = null) => {
+        if (apiClient.isEnabled) {
+          const payload = {
+            name: input.name,
+            name_bn: input.nameBn,
+            category_id: input.categoryId,
+            price: input.price,
+            cost: input.cost,
+            unit: input.unit,
+            is_packaged: input.isPackaged,
+            stock_qty: input.isPackaged ? input.stockQty ?? 0 : 0,
+            is_active: input.isActive,
+            sku: input.sku,
+            vat_rate: input.vatRate,
+            description: undefined as string | undefined,
+          };
+          const exists = items.find((x) => x.id === input.id);
+          const saved = exists
+            ? await apiClient.updateProduct(input.id, payload, file)
+            : await apiClient.createProduct(payload, file);
+          setItems((prev) => {
+            const idx = prev.findIndex((x) => x.id === saved.id);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = saved;
+              return next;
+            }
+            return [saved, ...prev];
+          });
+          return saved;
+        }
         await delay(120);
         setItems((prev) => {
           const idx = prev.findIndex((x) => x.id === input.id);
@@ -475,13 +525,38 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           }
           return [input, ...prev];
         });
+        return input;
       },
 
       updateItem: async (itemId, updates) => {
-        await delay(120);
+        if (apiClient.isEnabled) {
+          await apiClient.updateProduct(itemId, {
+            name: updates.name,
+            name_bn: updates.nameBn,
+            category_id: updates.categoryId,
+            price: updates.price,
+            cost: updates.cost,
+            unit: updates.unit,
+            is_packaged: updates.isPackaged,
+            stock_qty: updates.stockQty,
+            is_active: updates.isActive,
+            vat_rate: updates.vatRate,
+          });
+        } else {
+          await delay(120);
+        }
         setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, ...updates } : it)));
       },
       addCategory: async (input) => {
+        if (apiClient.isEnabled) {
+          const created = await apiClient.createCategory({
+            name: input.name,
+            nameBn: input.nameBn,
+            icon: input.icon,
+          });
+          setCategories((prev) => [created, ...prev]);
+          return created;
+        }
         await delay(100);
         const category: Category = {
           id: newId("CAT"),
@@ -492,7 +567,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         return category;
       },
       removeCategory: async (categoryId) => {
-        await delay(80);
+        if (apiClient.isEnabled) {
+          try {
+            await apiClient.deleteCategory(categoryId);
+          } catch (err) {
+            console.error(err);
+            throw err;
+          }
+        } else {
+          await delay(80);
+        }
         setCategories((prev) => prev.filter((c) => c.id !== categoryId));
       },
 

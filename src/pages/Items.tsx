@@ -186,7 +186,7 @@ export default function Items() {
     };
 
     try {
-      await upsertItem(baseItem);
+      await upsertItem(baseItem, selectedFile);
       setIsAddModalOpen(false);
       setIsEditMode(false);
       setSelectedItem(null);
@@ -222,7 +222,7 @@ export default function Items() {
 
   const handleToggleActive = async (item: Item) => {
     const updated = { ...item, isActive: !item.isActive };
-    await upsertItem(updated);
+    await upsertItem(updated, null);
     toast({
       title: updated.isActive ? "Item reactivated" : "Item deactivated",
       description: `${item.name} is now ${updated.isActive ? "active" : "inactive"}.`,
