@@ -405,16 +405,8 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
   const settings = getPrintSettings();
   const { title = 'Print', paperSize = settings.paperSize } = options;
   
-  // Create print window
-  const printWindow = window.open('', '_blank', 'width=400,height=600');
-  if (!printWindow) {
-    console.error('Could not open print window');
-    return;
-  }
-
   const styles = generateThermalStyles(paperSize);
-
-  printWindow.document.write(`
+  const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -426,16 +418,44 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
       ${element.innerHTML}
     </body>
     </html>
-  `);
+  `;
 
-  printWindow.document.close();
+  // Use iframe approach for more reliable printing
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = 'none';
+  iframe.style.visibility = 'hidden';
   
-  // Wait for content to load then print
-  printWindow.onload = () => {
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
-  };
+  document.body.appendChild(iframe);
+  
+  const iframeDoc = iframe.contentWindow?.document;
+  if (!iframeDoc) {
+    console.error('Could not access iframe document');
+    document.body.removeChild(iframe);
+    return;
+  }
+  
+  iframeDoc.open();
+  iframeDoc.write(htmlContent);
+  iframeDoc.close();
+  
+  // Wait for content to render then print
+  setTimeout(() => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch (e) {
+      console.error('Print error:', e);
+    }
+    // Remove iframe after printing
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 1000);
+  }, 250);
 };
 
 export const formatCurrencyForPrint = (amount: number): string => {
