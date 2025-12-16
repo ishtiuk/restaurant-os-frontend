@@ -25,7 +25,7 @@ export interface SaleDto {
   service_charge: number;
   discount: number;
   total: number;
-  payment_method: "cash" | "card" | "bkash" | "nagad" | "rocket" | "split";
+  payment_method: "cash" | "card" | "online" | "rocket" | "split";
   created_at: string;
   items: SaleItemDto[];
 }
@@ -46,7 +46,7 @@ export interface SaleCreateInput {
   service_charge: number;
   discount: number;
   total: number;
-  payment_method: "cash" | "card" | "bkash" | "nagad" | "rocket" | "split";
+  payment_method: "cash" | "card" | "online" | "rocket" | "split";
   customer_name?: string;
   customer_phone?: string;
   delivery_address?: string;

@@ -363,8 +363,7 @@ export default function ExpensesPage() {
                   <SelectContent>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="card">Card</SelectItem>
-                    <SelectItem value="bkash">bKash</SelectItem>
-                    <SelectItem value="nagad">Nagad</SelectItem>
+                    <SelectItem value="online">Online Payment</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

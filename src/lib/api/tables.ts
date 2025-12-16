@@ -105,7 +105,7 @@ export interface KOTCreateInput {
 }
 
 export interface FinalizeBillInput {
-  payment_method: "cash" | "card" | "bkash" | "nagad" | "rocket" | "split";
+  payment_method: "cash" | "card" | "online" | "rocket" | "split";
   service_charge?: number;
   discount?: number;
 }

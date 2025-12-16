@@ -746,12 +746,11 @@ export default function Tables() {
               </div>
 
               {/* Payment Methods */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {[
                   { id: "cash", label: "Cash", icon: <Wallet className="w-5 h-5 mb-1" /> },
                   { id: "card", label: "Card", icon: <CreditCard className="w-5 h-5 mb-1" /> },
-                  { id: "bkash", label: "bKash", icon: <Smartphone className="w-5 h-5 mb-1" /> },
-                  { id: "nagad", label: "Nagad", icon: <Smartphone className="w-5 h-5 mb-1" /> },
+                  { id: "online", label: "Online Pay", icon: <Smartphone className="w-5 h-5 mb-1" /> },
                 ].map((pm) => (
                   <Button
                     key={pm.id}

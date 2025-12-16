@@ -194,7 +194,7 @@ export const suppliers: Supplier[] = [
 
 export const supplierTransactions: SupplierTransaction[] = [
   { id: "ST001", supplierId: "1", type: "purchase", amount: 26000, description: "Beef & Mutton purchase", invoiceNo: "INV-2024-001", date: "2024-01-18", createdAt: "2024-01-18" },
-  { id: "ST002", supplierId: "1", type: "payment", amount: 11000, description: "Partial payment via bKash", date: "2024-01-19", createdAt: "2024-01-19" },
+  { id: "ST002", supplierId: "1", type: "payment", amount: 11000, description: "Partial payment via Online Payment", date: "2024-01-19", createdAt: "2024-01-19" },
   { id: "ST003", supplierId: "2", type: "purchase", amount: 14000, description: "Rice bags purchase", invoiceNo: "INV-2024-002", date: "2024-01-19", createdAt: "2024-01-19" },
   { id: "ST004", supplierId: "2", type: "payment", amount: 9000, description: "Cash payment", date: "2024-01-20", createdAt: "2024-01-20" },
   { id: "ST005", supplierId: "3", type: "purchase", amount: 8500, description: "Spices and masala", invoiceNo: "INV-2024-003", date: "2024-01-15", createdAt: "2024-01-15" },
@@ -237,7 +237,7 @@ export const recentSales: Sale[] = [
     serviceCharge: 0,
     discount: 50,
     total: 475,
-    paymentMethod: "bkash",
+    paymentMethod: "online",
     customerId: "1",
     customerName: "Ahmed Rahman",
     orderType: "takeaway",
@@ -290,8 +290,7 @@ export const dashboardStats: DashboardStats = {
   salesByPayment: [
     { method: "Cash", amount: 25400 },
     { method: "Card", amount: 12280 },
-    { method: "bKash", amount: 5200 },
-    { method: "Nagad", amount: 2800 },
+    { method: "Online Payment", amount: 8000 },
   ],
 };
 
@@ -468,10 +467,10 @@ export const expenseCategories: ExpenseCategory[] = [
 export const expenses: Expense[] = [
   { id: "EXP001", categoryId: "EC001", categoryName: "Utilities", amount: 8500, description: "Electricity bill - January", paymentMethod: "cash", date: "2024-01-15", createdAt: "2024-01-15" },
   { id: "EXP002", categoryId: "EC001", categoryName: "Utilities", amount: 2500, description: "Water bill - January", paymentMethod: "cash", date: "2024-01-15", createdAt: "2024-01-15" },
-  { id: "EXP003", categoryId: "EC001", categoryName: "Utilities", amount: 1500, description: "Gas bill - January", paymentMethod: "bkash", date: "2024-01-16", createdAt: "2024-01-16" },
+  { id: "EXP003", categoryId: "EC001", categoryName: "Utilities", amount: 1500, description: "Gas bill - January", paymentMethod: "online", date: "2024-01-16", createdAt: "2024-01-16" },
   { id: "EXP004", categoryId: "EC002", categoryName: "Rent", amount: 35000, description: "Shop rent - January", paymentMethod: "cash", date: "2024-01-01", createdAt: "2024-01-01" },
   { id: "EXP005", categoryId: "EC004", categoryName: "Supplies", amount: 5000, description: "Kitchen supplies", paymentMethod: "cash", date: "2024-01-18", createdAt: "2024-01-18" },
-  { id: "EXP006", categoryId: "EC005", categoryName: "Maintenance", amount: 3500, description: "AC repair", paymentMethod: "bkash", date: "2024-01-12", createdAt: "2024-01-12" },
+  { id: "EXP006", categoryId: "EC005", categoryName: "Maintenance", amount: 3500, description: "AC repair", paymentMethod: "online", date: "2024-01-12", createdAt: "2024-01-12" },
   { id: "EXP007", categoryId: "EC007", categoryName: "Transport", amount: 2000, description: "Delivery bike fuel", paymentMethod: "cash", date: "2024-01-20", createdAt: "2024-01-20" },
   { id: "EXP008", categoryId: "EC006", categoryName: "Marketing", amount: 5000, description: "Facebook ads", paymentMethod: "card", date: "2024-01-10", createdAt: "2024-01-10" },
 ];

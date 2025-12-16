@@ -49,8 +49,7 @@ type OrderType = "dine-in" | "takeaway" | "delivery";
 const paymentMethods: { id: PaymentMethod; label: string; icon: React.ReactNode }[] = [
   { id: "cash", label: "Cash", icon: <Wallet className="w-5 h-5" /> },
   { id: "card", label: "Card", icon: <CreditCard className="w-5 h-5" /> },
-  { id: "bkash", label: "bKash", icon: <Smartphone className="w-5 h-5" /> },
-  { id: "nagad", label: "Nagad", icon: <Smartphone className="w-5 h-5" /> },
+  { id: "online", label: "Online Pay", icon: <Smartphone className="w-5 h-5" /> },
 ];
 
 export default function Sales() {
@@ -354,7 +353,7 @@ export default function Sales() {
       {/* Right: Cart */}
       <GlassCard className="w-full lg:w-96 flex flex-col animate-slide-in-left">
         {/* Order Type */}
-        <div className="p-4 border-b border-border">
+        <div className={`border-b border-border ${orderType === "delivery" ? "p-3" : "p-4"}`}>
           <div className="flex gap-2">
             {[
               { type: "takeaway" as OrderType, icon: <ShoppingBag className="w-4 h-4" />, label: "Takeaway" },
@@ -383,34 +382,36 @@ export default function Sales() {
           )}
           
           {orderType === "delivery" && (
-            <div className="mt-3 space-y-2">
-              <Input
-                placeholder="Customer Name *"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="bg-muted/50"
-                required
-              />
-              <Input
-                placeholder="Phone Number *"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                type="tel"
-                className="bg-muted/50"
-                required
-              />
+            <div className="mt-2.5 space-y-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                <Input
+                  placeholder="Customer Name *"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="bg-muted/50 text-sm h-9"
+                  required
+                />
+                <Input
+                  placeholder="Phone Number *"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  type="tel"
+                  className="bg-muted/50 text-sm h-9"
+                  required
+                />
+              </div>
               <Input
                 placeholder="Delivery Address *"
                 value={deliveryAddress}
                 onChange={(e) => setDeliveryAddress(e.target.value)}
-                className="bg-muted/50"
+                className="bg-muted/50 text-sm h-9"
                 required
               />
               <Input
                 placeholder="Delivery Notes (Optional)"
                 value={deliveryNotes}
                 onChange={(e) => setDeliveryNotes(e.target.value)}
-                className="bg-muted/50"
+                className="bg-muted/50 text-sm h-9"
               />
             </div>
           )}
@@ -441,15 +442,15 @@ export default function Sales() {
               <p className="text-xs">কার্ট খালি</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {cart.map((item) => (
                 <div
                   key={item.itemId}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-muted/30"
+                  className="flex items-center gap-2.5 p-2.5 rounded-lg bg-muted/30"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{item.itemName}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm font-medium truncate">{item.itemName}</p>
+                    <p className="text-xs text-muted-foreground">
                       {formatCurrency(item.unitPrice)} × {item.quantity}
                     </p>
                   </div>
@@ -457,27 +458,27 @@ export default function Sales() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-[26px] w-[26px]"
                       onClick={() => updateQuantity(item.itemId, -1)}
                     >
-                      <Minus className="w-3 h-3" />
+                      <Minus className="w-[10px] h-[10px]" />
                     </Button>
-                    <span className="w-6 text-center font-medium">{item.quantity}</span>
+                    <span className="w-5 text-center text-sm font-medium">{item.quantity}</span>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-[26px] w-[26px]"
                       onClick={() => updateQuantity(item.itemId, 1)}
                     >
-                      <Plus className="w-3 h-3" />
+                      <Plus className="w-[10px] h-[10px]" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-destructive"
+                      className="h-[26px] w-[26px] text-destructive"
                       onClick={() => removeFromCart(item.itemId)}
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-[10px] h-[10px]" />
                     </Button>
                   </div>
                 </div>
@@ -558,7 +559,7 @@ export default function Sales() {
           </div>
 
           {/* Payment Methods */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {paymentMethods.map((pm) => (
               <Button
                 key={pm.id}

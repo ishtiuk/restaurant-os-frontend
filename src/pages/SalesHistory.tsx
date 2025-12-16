@@ -37,6 +37,11 @@ import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
+const formatSaleId = (id: string) => {
+  // Show first 8 characters of UUID for readability
+  return id.substring(0, 8).toUpperCase();
+};
+
 export default function SalesHistoryPage() {
   const { sales, updateSaleTotalWithAudit, replaceSale } = useAppData();
   const { user } = useAuth();
@@ -142,12 +147,16 @@ export default function SalesHistoryPage() {
     const colors: Record<string, string> = {
       cash: "bg-accent/20 text-accent",
       card: "bg-primary/20 text-primary",
-      bkash: "bg-pink-500/20 text-pink-500",
-      nagad: "bg-orange-500/20 text-orange-500",
+      online: "bg-pink-500/20 text-pink-500",
+    };
+    const labels: Record<string, string> = {
+      cash: "Cash",
+      card: "Card",
+      online: "Online Pay",
     };
     return (
       <Badge className={`${colors[method] || "bg-muted text-muted-foreground"} border-0 capitalize`}>
-        {method}
+        {labels[method] || method}
       </Badge>
     );
   };
@@ -233,11 +242,13 @@ export default function SalesHistoryPage() {
             <tbody>
               {filteredSales.map((sale) => (
                 <tr key={sale.id} className="border-b border-border/50 table-row-hover">
-                  <td className="p-4 font-mono font-medium">{sale.id}</td>
-                  <td className="p-4 text-muted-foreground">
+                  <td className="p-4 font-mono font-medium text-sm" title={sale.id}>
+                    {formatSaleId(sale.id)}
+                  </td>
+                  <td className="p-4 text-muted-foreground text-sm">
                     {new Date(sale.createdAt).toLocaleString()}
                   </td>
-                  <td className="p-4">
+                  <td className="p-4 text-sm">
                     {sale.customerName || (
                       <span className="text-muted-foreground">Walk-in</span>
                     )}
@@ -305,7 +316,12 @@ export default function SalesHistoryPage() {
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
         <DialogContent className="max-w-lg glass-card">
           <DialogHeader>
-            <DialogTitle className="font-display gradient-text">Sale Details - {selectedSale?.id}</DialogTitle>
+            <DialogTitle className="font-display gradient-text">
+              Sale Details - {selectedSale && formatSaleId(selectedSale.id)}
+              <span className="text-xs font-normal text-muted-foreground ml-2 font-mono">
+                ({selectedSale?.id})
+              </span>
+            </DialogTitle>
             <DialogDescription>
               {selectedSale && new Date(selectedSale.createdAt).toLocaleString()}
             </DialogDescription>
@@ -382,7 +398,7 @@ export default function SalesHistoryPage() {
           <DialogHeader>
             <DialogTitle className="font-display text-destructive flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
-              Edit Sale - {selectedSale?.id}
+              Edit Sale - {selectedSale && formatSaleId(selectedSale.id)}
             </DialogTitle>
             <DialogDescription>
               This action will be logged. Please provide a valid reason.

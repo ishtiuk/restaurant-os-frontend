@@ -134,7 +134,7 @@ export default function Finance() {
                     <span className="flex items-center gap-2">
                       {item.method === "Cash" && <Wallet className="w-4 h-4" />}
                       {item.method === "Card" && <CreditCard className="w-4 h-4" />}
-                      {(item.method === "bKash" || item.method === "Nagad") && <Smartphone className="w-4 h-4" />}
+                      {item.method === "Online Payment" && <Smartphone className="w-4 h-4" />}
                       {item.method}
                     </span>
                     <span className="font-medium">{formatCurrency(item.amount)}</span>

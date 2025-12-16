@@ -107,7 +107,7 @@ export interface SaleItem {
   notes?: string;
 }
 
-export type PaymentMethod = 'cash' | 'card' | 'bkash' | 'nagad' | 'rocket' | 'split';
+export type PaymentMethod = 'cash' | 'card' | 'online' | 'rocket' | 'split';
 
 export interface Customer {
   id: string;

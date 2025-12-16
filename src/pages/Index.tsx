@@ -125,7 +125,7 @@ const testimonials = [
   {
     name: "Rafiq Hassan",
     role: "Owner, Chittagong Seafood",
-    content: "Finally, software that understands Bangladeshi restaurant needs. bKash integration is perfect!",
+    content: "Finally, software that understands Bangladeshi restaurant needs. Online payment integration is perfect!",
     rating: 5
   }
 ];

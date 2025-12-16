@@ -16,6 +16,7 @@ import {
   LogOut,
   User,
   Clock,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -44,6 +45,7 @@ const operationsNavigation = [
 
 const analyticsNavigation = [
   { path: "/reports", label: "Reports", labelBn: "রিপোর্ট", icon: BarChart3 },
+  { path: "/sales-history", label: "Sales History", labelBn: "বিক্রয় ইতিহাস", icon: History },
   { path: "/finance", label: "Finance", labelBn: "আর্থিক", icon: Wallet },
   { path: "/settings", label: "Settings", labelBn: "সেটিংস", icon: Settings },
 ];
