@@ -72,6 +72,25 @@ class ApiClient {
     }
 
     if (!res.ok) {
+      // Handle 401 Unauthorized - token is invalid or user doesn't exist
+      // Don't trigger logout on login endpoint (login failures are expected)
+      if (res.status === 401 && !endpoint.includes("/auth/login")) {
+        // Clear authentication data
+        this.token = null;
+        this.tenantId = null;
+        localStorage.removeItem("restaurant-os.auth.user");
+        
+        // Dispatch custom event to trigger logout in AuthContext
+        window.dispatchEvent(new CustomEvent("auth:logout"));
+        
+        // Redirect to login page (only if not already there and not on login page)
+        const currentPath = window.location.pathname;
+        if (currentPath !== "/login" && currentPath !== "/") {
+          // Use window.location for full page reload to clear all state
+          window.location.href = "/login";
+        }
+      }
+      
       let message = "An error occurred";
       if (data?.detail) {
         if (typeof data.detail === "string") message = data.detail;

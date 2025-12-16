@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { authApi } from "@/lib/api/auth";
 import { apiClient } from "@/lib/api";
 
@@ -63,6 +63,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
   });
+
+  // Listen for logout events from API client (401 responses)
+  useEffect(() => {
+    const handleLogout = () => {
+      setUser(null);
+      localStorage.removeItem(STORAGE_KEY);
+      authApi.logout();
+    };
+
+    window.addEventListener("auth:logout", handleLogout);
+    return () => {
+      window.removeEventListener("auth:logout", handleLogout);
+    };
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
