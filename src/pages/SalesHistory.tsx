@@ -40,7 +40,7 @@ const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}
 export default function SalesHistoryPage() {
   const { sales, updateSaleTotalWithAudit, replaceSale } = useAppData();
   const { user } = useAuth();
-  const canEditSales = user?.role === "admin" || user?.role === "superadmin";
+  const canEditSales = user?.role === "owner" || user?.role === "superadmin";
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);

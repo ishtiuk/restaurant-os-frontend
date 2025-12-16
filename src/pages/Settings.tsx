@@ -564,8 +564,8 @@ export default function Settings() {
             <Receipt className="w-5 h-5 text-secondary" />
           </div>
           <div>
-            <h3 className="font-semibold">Invoice Settings</h3>
-            <p className="text-sm text-muted-foreground">চালান সেটিংস</p>
+            <h3 className="font-semibold">Invoice & Print Settings</h3>
+            <p className="text-sm text-muted-foreground">চালান ও প্রিন্ট সেটিংস • Thermal Printer Configuration</p>
           </div>
         </div>
 
@@ -576,21 +576,40 @@ export default function Settings() {
           </div>
           <div className="space-y-2">
             <Label>Paper Size</Label>
-            <Select defaultValue="a4">
+            <Select defaultValue="80mm">
               <SelectTrigger className="bg-muted/50">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="a4">A4</SelectItem>
-                <SelectItem value="thermal">Thermal (80mm)</SelectItem>
-                <SelectItem value="thermal58">Thermal (58mm)</SelectItem>
+                <SelectItem value="80mm">
+                  <div className="flex flex-col">
+                    <span>Thermal 80mm</span>
+                    <span className="text-xs text-muted-foreground">Standard thermal receipt</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="58mm">
+                  <div className="flex flex-col">
+                    <span>Thermal 58mm</span>
+                    <span className="text-xs text-muted-foreground">Compact thermal receipt</span>
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              Only thermal paper sizes are supported for POS receipts and KOT slips.
+            </p>
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Footer Text</Label>
             <Input defaultValue="Thank you for dining with us! আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!" className="bg-muted/50" />
           </div>
+        </div>
+        
+        <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/60">
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
+            <Receipt className="w-4 h-4" />
+            All receipts (POS, KOT, Table Bills) will use the selected thermal paper size for consistent printing.
+          </p>
         </div>
       </GlassCard>
 

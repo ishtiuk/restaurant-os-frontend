@@ -755,7 +755,7 @@ export default function Tables() {
                 <Button 
                   variant="outline" 
                   className="flex-1" 
-                  onClick={() => printContent('table-bill-print', { title: 'Bill', paperSize: 'thermal' })}
+                  onClick={() => printContent('table-bill-print', { title: 'Bill', paperSize: '80mm' })}
                 >
                   <Receipt className="w-4 h-4 mr-2" />
                   Print Bill
@@ -838,7 +838,7 @@ export default function Tables() {
                 <Button 
                   variant="outline" 
                   className="flex-1" 
-                  onClick={() => printContent('kot-slip-print', { title: 'KOT', paperSize: 'thermal' })}
+                  onClick={() => printContent('kot-slip-print', { title: 'KOT', paperSize: '80mm' })}
                 >
                   <Printer className="w-4 h-4 mr-2" />
                   Print KOT

@@ -12,6 +12,7 @@ export interface AuthResponse {
     is_superuser?: boolean;
     last_login?: string;
     tenant_id?: string | null;
+    permissions?: Record<string, boolean>;
   };
   expires_in: number;
 }
