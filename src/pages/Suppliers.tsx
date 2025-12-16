@@ -4,8 +4,13 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Phone, Mail, MapPin, Truck, Clock, Check, X, Eye } from "lucide-react";
-import { suppliersApi, type SupplierDto } from "@/lib/api/suppliers";
+import { Plus, Search, Phone, Mail, MapPin, Truck, Clock, Check, X, Eye, DollarSign, Receipt } from "lucide-react";
+import {
+  suppliersApi,
+  type SupplierDto,
+  type SupplierPaymentDto,
+  type SupplierPaymentCreateInput,
+} from "@/lib/api/suppliers";
 import { purchasesApi, type PurchaseOrderDto } from "@/lib/api/purchases";
 import {
   Dialog,
@@ -43,11 +48,23 @@ export default function Suppliers() {
   const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderDto[]>([]);
+  const [payments, setPayments] = useState<SupplierPaymentDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showLedger, setShowLedger] = useState(false);
   const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [showAddPayment, setShowAddPayment] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [paymentForm, setPaymentForm] = useState<SupplierPaymentCreateInput>({
+    supplier_id: "",
+    purchase_order_id: null,
+    amount: 0,
+    payment_date: new Date().toISOString().slice(0, 10),
+    payment_method: "cash",
+    reference_no: "",
+    notes: "",
+  });
+  const [submittingPayment, setSubmittingPayment] = useState(false);
   const [supplierForm, setSupplierForm] = useState({
     name: "",
     phone: "",
@@ -105,20 +122,82 @@ export default function Suppliers() {
       .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
   }, [selectedSupplier, purchaseOrders]);
 
-  // Calculate totals from POs
+  // Calculate totals from POs and payments
   const poStats = useMemo(() => {
-    if (!selectedSupplier) return { totalPurchases: 0, totalPending: 0, totalReceived: 0 };
+    if (!selectedSupplier) return { totalPurchases: 0, totalPending: 0, totalReceived: 0, totalPaid: 0 };
     const pos = supplierPOs;
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
     return {
       totalPurchases: pos.reduce((sum, po) => sum + po.total_amount, 0),
       totalPending: pos.filter((po) => po.status === "pending").reduce((sum, po) => sum + po.total_amount, 0),
       totalReceived: pos.filter((po) => po.status === "received").reduce((sum, po) => sum + po.total_amount, 0),
+      totalPaid,
     };
-  }, [selectedSupplier, supplierPOs]);
+  }, [selectedSupplier, supplierPOs, payments]);
 
-  const openLedger = (supplierId: string) => {
+  // Calculate remaining balance per PO
+  const getPORemainingBalance = (poId: string) => {
+    const po = supplierPOs.find((p) => p.id === poId);
+    if (!po) return 0;
+    const paidForPO = payments
+      .filter((p) => p.purchase_order_id === poId)
+      .reduce((sum, p) => sum + p.amount, 0);
+    return Math.max(0, po.total_amount - paidForPO);
+  };
+
+  const handleCreatePayment = async () => {
+    if (!paymentForm.amount || paymentForm.amount <= 0) {
+      toast({ title: "Payment amount must be greater than 0", variant: "destructive" });
+      return;
+    }
+    if (!selectedSupplier) return;
+
+    setSubmittingPayment(true);
+    try {
+      const created = await suppliersApi.createPayment({
+        ...paymentForm,
+        supplier_id: selectedSupplier.id,
+      });
+      setPayments((prev) => [created, ...prev]);
+      // Refresh supplier to get updated balance
+      const updatedSupplier = await suppliersApi.get(selectedSupplier.id);
+      setSuppliers((prev) => prev.map((s) => (s.id === updatedSupplier.id ? updatedSupplier : s)));
+      setShowAddPayment(false);
+      setPaymentForm({
+        supplier_id: "",
+        purchase_order_id: null,
+        amount: 0,
+        payment_date: new Date().toISOString().slice(0, 10),
+        payment_method: "cash",
+        reference_no: "",
+        notes: "",
+      });
+      toast({ title: "Payment recorded successfully" });
+    } catch (error: any) {
+      toast({
+        title: "Failed to record payment",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
+
+  const openLedger = async (supplierId: string) => {
     setSelectedSupplierId(supplierId);
     setShowLedger(true);
+    // Load payments for this supplier
+    try {
+      const paymentsData = await suppliersApi.listPayments({ supplier_id: supplierId });
+      setPayments(paymentsData);
+    } catch (error: any) {
+      toast({
+        title: "Failed to load payments",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCreateSupplier = async () => {
@@ -295,15 +374,18 @@ export default function Suppliers() {
                   </p>
                 </GlassCard>
                 <GlassCard className="p-3">
-                  <p className="text-xs text-muted-foreground">Purchase Orders</p>
-                  <p className="text-xl font-display font-bold">{supplierPOs.length}</p>
+                  <p className="text-xs text-muted-foreground">Total Paid</p>
+                  <p className="text-xl font-display font-bold text-success">
+                    {formatCurrency(poStats.totalPaid)}
+                  </p>
                 </GlassCard>
               </div>
 
-              {/* Tabs: Purchase Orders */}
+              {/* Tabs: Purchase Orders & Payments */}
               <Tabs defaultValue="purchase-orders" className="w-full">
-                <TabsList className="grid w-full grid-cols-1">
+                <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="purchase-orders">Purchase Orders</TabsTrigger>
+                  <TabsTrigger value="payments">Payments</TabsTrigger>
                 </TabsList>
                 <TabsContent value="purchase-orders" className="space-y-3">
                   <div className="overflow-x-auto border border-border rounded-lg">
@@ -320,44 +402,136 @@ export default function Suppliers() {
                         </tr>
                       </thead>
                       <tbody>
-                        {supplierPOs.map((po) => (
-                          <tr key={po.id} className="border-t border-border/50">
-                            <td className="p-3 font-medium">PO-{po.id.slice(-8).toUpperCase()}</td>
-                            <td className="p-3 text-muted-foreground">{formatDate(po.order_date)}</td>
-                            <td className="p-3 text-muted-foreground">{po.invoice_no || "-"}</td>
-                            <td className="p-3">
-                              <div className="flex flex-col gap-1">
-                                {po.items.slice(0, 2).map((item, idx) => (
-                                  <span key={idx} className="text-xs">
-                                    {item.quantity}x {item.item_name}
+                        {supplierPOs.map((po) => {
+                          const remaining = getPORemainingBalance(po.id);
+                          const paid = po.total_amount - remaining;
+                          return (
+                            <tr key={po.id} className="border-t border-border/50">
+                              <td className="p-3 font-medium">PO-{po.id.slice(-8).toUpperCase()}</td>
+                              <td className="p-3 text-muted-foreground">{formatDate(po.order_date)}</td>
+                              <td className="p-3 text-muted-foreground">{po.invoice_no || "-"}</td>
+                              <td className="p-3">
+                                <div className="flex flex-col gap-1">
+                                  {po.items.slice(0, 2).map((item, idx) => (
+                                    <span key={idx} className="text-xs">
+                                      {item.quantity}x {item.item_name}
+                                    </span>
+                                  ))}
+                                  {po.items.length > 2 && (
+                                    <span className="text-xs text-muted-foreground">
+                                      +{po.items.length - 2} more
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3 text-right">
+                                <div className="flex flex-col">
+                                  <span className="font-display font-semibold">
+                                    {formatCurrency(po.total_amount)}
                                   </span>
-                                ))}
-                                {po.items.length > 2 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    +{po.items.length - 2} more
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-3 text-right font-display font-semibold">
-                              {formatCurrency(po.total_amount)}
-                            </td>
-                            <td className="p-3 text-center">{getStatusBadge(po.status)}</td>
-                            <td className="p-3 text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate(`/purchases?po=${po.id}`)}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
+                                  {paid > 0 && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Paid: {formatCurrency(paid)}
+                                    </span>
+                                  )}
+                                  {remaining > 0 && (
+                                    <span className="text-xs text-warning">
+                                      Due: {formatCurrency(remaining)}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3 text-center">{getStatusBadge(po.status)}</td>
+                              <td className="p-3 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => navigate(`/purchases?po=${po.id}`)}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                         {supplierPOs.length === 0 && (
                           <tr>
                             <td colSpan={7} className="p-4 text-center text-muted-foreground">
                               No purchase orders yet. Click "New Order" to create one.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </TabsContent>
+                <TabsContent value="payments" className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-semibold">Payment History</h3>
+                    <Button variant="glow" size="sm" onClick={() => setShowAddPayment(true)}>
+                      <DollarSign className="w-4 h-4 mr-1" />
+                      Record Payment
+                    </Button>
+                  </div>
+                  <div className="overflow-x-auto border border-border rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="p-3 text-left">Date</th>
+                          <th className="p-3 text-left">PO #</th>
+                          <th className="p-3 text-left">Method</th>
+                          <th className="p-3 text-left">Reference</th>
+                          <th className="p-3 text-right">Amount</th>
+                          <th className="p-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payments.map((payment) => (
+                          <tr key={payment.id} className="border-t border-border/50">
+                            <td className="p-3 text-muted-foreground">{formatDate(payment.payment_date)}</td>
+                            <td className="p-3 text-muted-foreground">
+                              {payment.purchase_order_id
+                                ? `PO-${payment.purchase_order_id.slice(-8).toUpperCase()}`
+                                : "General"}
+                            </td>
+                            <td className="p-3">{payment.payment_method || "-"}</td>
+                            <td className="p-3 text-muted-foreground">{payment.reference_no || "-"}</td>
+                            <td className="p-3 text-right font-display font-semibold text-success">
+                              {formatCurrency(payment.amount)}
+                            </td>
+                            <td className="p-3 text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  if (window.confirm("Delete this payment?")) {
+                                    try {
+                                      await suppliersApi.deletePayment(payment.id);
+                                      setPayments((prev) => prev.filter((p) => p.id !== payment.id));
+                                      const updatedSupplier = await suppliersApi.get(selectedSupplier!.id);
+                                      setSuppliers((prev) =>
+                                        prev.map((s) => (s.id === updatedSupplier.id ? updatedSupplier : s))
+                                      );
+                                      toast({ title: "Payment deleted" });
+                                    } catch (error: any) {
+                                      toast({
+                                        title: "Failed to delete payment",
+                                        description: error.message,
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }
+                                }}
+                              >
+                                <X className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                        {payments.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="p-4 text-center text-muted-foreground">
+                              No payments recorded yet.
                             </td>
                           </tr>
                         )}
@@ -370,6 +544,105 @@ export default function Suppliers() {
           ) : (
             <p className="text-muted-foreground">No supplier selected</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Payment Dialog */}
+      <Dialog open={showAddPayment} onOpenChange={setShowAddPayment}>
+        <DialogContent className="max-w-md glass-card">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text">Record Payment</DialogTitle>
+            <DialogDescription>Record a payment to {selectedSupplier?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Amount *</Label>
+              <Input
+                type="number"
+                value={paymentForm.amount || ""}
+                onChange={(e) =>
+                  setPaymentForm((f) => ({ ...f, amount: parseFloat(e.target.value) || 0 }))
+                }
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+                className="bg-muted/50"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Payment Date *</Label>
+              <Input
+                type="date"
+                value={paymentForm.payment_date}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, payment_date: e.target.value }))}
+                className="bg-muted/50"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Payment Method</Label>
+              <select
+                value={paymentForm.payment_method || "cash"}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, payment_method: e.target.value }))}
+                className="w-full px-3 py-2 rounded-md border border-border bg-muted/50 text-sm"
+              >
+                <option value="cash">Cash</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="check">Check</option>
+                <option value="mobile_banking">Mobile Banking</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Against Purchase Order (Optional)</Label>
+              <select
+                value={paymentForm.purchase_order_id || ""}
+                onChange={(e) =>
+                  setPaymentForm((f) => ({
+                    ...f,
+                    purchase_order_id: e.target.value || null,
+                  }))
+                }
+                className="w-full px-3 py-2 rounded-md border border-border bg-muted/50 text-sm"
+              >
+                <option value="">General Payment</option>
+                {supplierPOs
+                  .filter((po) => getPORemainingBalance(po.id) > 0)
+                  .map((po) => (
+                    <option key={po.id} value={po.id}>
+                      PO-{po.id.slice(-8).toUpperCase()} - {formatCurrency(po.total_amount)} (Due:{" "}
+                      {formatCurrency(getPORemainingBalance(po.id))})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Reference No. (Optional)</Label>
+              <Input
+                value={paymentForm.reference_no || ""}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, reference_no: e.target.value }))}
+                placeholder="Check number, transaction ID, etc."
+                className="bg-muted/50"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Notes (Optional)</Label>
+              <Textarea
+                value={paymentForm.notes || ""}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, notes: e.target.value }))}
+                placeholder="Additional notes..."
+                rows={2}
+                className="bg-muted/50"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddPayment(false)}>
+              Cancel
+            </Button>
+            <Button variant="glow" onClick={handleCreatePayment} disabled={submittingPayment}>
+              {submittingPayment ? "Recording..." : "Record Payment"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

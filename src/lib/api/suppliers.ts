@@ -34,6 +34,29 @@ export interface SupplierUpdateInput {
   is_active?: boolean;
 }
 
+export interface SupplierPaymentDto {
+  id: string;
+  supplier_id: string;
+  purchase_order_id?: string | null;
+  amount: number;
+  payment_date: string;
+  payment_method?: string | null;
+  reference_no?: string | null;
+  notes?: string | null;
+  created_at: string;
+  created_by?: string | null;
+}
+
+export interface SupplierPaymentCreateInput {
+  supplier_id: string;
+  purchase_order_id?: string | null;
+  amount: number;
+  payment_date?: string; // ISO format
+  payment_method?: string;
+  reference_no?: string;
+  notes?: string;
+}
+
 export const suppliersApi = {
   list(isActive?: boolean): Promise<SupplierDto[]> {
     const params = new URLSearchParams();
@@ -62,6 +85,23 @@ export const suppliersApi = {
 
   delete(id: string): Promise<void> {
     return apiClient.delete(`/suppliers/${id}`);
+  },
+
+  // Payment methods
+  listPayments(params?: { supplier_id?: string; purchase_order_id?: string }): Promise<SupplierPaymentDto[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.supplier_id) searchParams.append("supplier_id", params.supplier_id);
+    if (params?.purchase_order_id) searchParams.append("purchase_order_id", params.purchase_order_id);
+    const query = searchParams.toString();
+    return apiClient.get<SupplierPaymentDto[]>(`/suppliers/payments${query ? `?${query}` : ""}`);
+  },
+
+  createPayment(input: SupplierPaymentCreateInput): Promise<SupplierPaymentDto> {
+    return apiClient.post<SupplierPaymentDto>("/suppliers/payments", input);
+  },
+
+  deletePayment(paymentId: string): Promise<void> {
+    return apiClient.delete(`/suppliers/payments/${paymentId}`);
   },
 };
 

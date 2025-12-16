@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { useAppData } from "@/contexts/AppDataContext";
 import { suppliersApi, type SupplierDto } from "@/lib/api/suppliers";
 import { purchasesApi, type PurchaseOrderDto, type PurchaseOrderItemCreateInput } from "@/lib/api/purchases";
-import { productsApi, type ProductDto } from "@/lib/api/products";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Truck, Check, Clock, X, Eye, Trash2 } from "lucide-react";
+import { Plus, Truck, Check, Clock, X, Eye, Trash2, CheckCircle2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
@@ -57,7 +56,7 @@ const getStatusBadge = (status: string) => {
 };
 
 interface POItem {
-  product_id: number;
+  product_id: number | null; // Always null - manual entry only
   item_name: string;
   quantity: number;
   unit_price: number;
@@ -71,7 +70,6 @@ export default function Purchases() {
   const { items } = useAppData(); // Use items from context for product selection
 
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
-  const [products, setProducts] = useState<ProductDto[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -118,10 +116,6 @@ export default function Purchases() {
         ]);
         setSuppliers(suppliersData);
         setPurchaseOrders(posData);
-
-        // Load products
-        const productsData = await productsApi.list();
-        setProducts(productsData);
       } catch (error: any) {
         toast({
           title: "Failed to load data",
@@ -157,7 +151,7 @@ export default function Purchases() {
       items: [
         ...f.items,
         {
-          product_id: 0,
+          product_id: null,
           item_name: "",
           quantity: 1,
           unit_price: 0,
@@ -173,12 +167,6 @@ export default function Purchases() {
       const item = { ...newItems[index], ...updates };
       if (updates.quantity !== undefined || updates.unit_price !== undefined) {
         item.total = item.quantity * item.unit_price;
-      }
-      if (updates.product_id !== undefined) {
-        const product = products.find((p) => p.id === updates.product_id);
-        if (product) {
-          item.item_name = product.name;
-        }
       }
       newItems[index] = item;
       return { ...f, items: newItems };
@@ -199,8 +187,12 @@ export default function Purchases() {
     }
 
     for (const item of form.items) {
-      if (!item.product_id || item.quantity <= 0 || item.unit_price <= 0) {
-        toast({ title: "Fill all item fields correctly", variant: "destructive" });
+      if (!item.item_name || item.item_name.trim() === "") {
+        toast({ title: "Item name is required", variant: "destructive" });
+        return;
+      }
+      if (item.quantity <= 0 || item.unit_price <= 0) {
+        toast({ title: "Quantity and unit price must be greater than 0", variant: "destructive" });
         return;
       }
     }
@@ -208,8 +200,8 @@ export default function Purchases() {
     setCreating(true);
     try {
       const itemsToCreate: PurchaseOrderItemCreateInput[] = form.items.map((item) => ({
-        product_id: item.product_id,
-        item_name: item.item_name,
+        product_id: item.product_id || null, // null for manual entries
+        item_name: item.item_name.trim(),
         quantity: item.quantity,
         unit_price: item.unit_price,
         total: item.total,
@@ -446,69 +438,72 @@ export default function Purchases() {
                 </Button>
               </div>
               {form.items.map((item, index) => (
-                <div key={index} className="grid grid-cols-12 gap-2 p-3 border border-border rounded-lg">
-                  <div className="col-span-12 md:col-span-4">
-                    <Select
-                      value={String(item.product_id || "")}
-                      onValueChange={(v) => updateItem(index, { product_id: Number(v) })}
-                    >
-                      <SelectTrigger className="bg-muted/50">
-                        <SelectValue placeholder="Select product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map((p) => (
-                          <SelectItem key={p.id} value={String(p.id)}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-6 md:col-span-2">
-                    <Input
-                      type="number"
-                      placeholder="Qty"
-                      value={item.quantity || ""}
-                      onChange={(e) => updateItem(index, { quantity: parseFloat(e.target.value) || 0 })}
-                      className="bg-muted/50"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <div className="col-span-6 md:col-span-2">
-                    <Input
-                      type="number"
-                      placeholder="Unit Price"
-                      value={item.unit_price || ""}
-                      onChange={(e) => updateItem(index, { unit_price: parseFloat(e.target.value) || 0 })}
-                      className="bg-muted/50"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                  <div className="col-span-8 md:col-span-3">
-                    <Input
-                      type="text"
-                      value={formatCurrency(item.total)}
-                      readOnly
-                      className="bg-muted/50 font-semibold"
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeItem(index)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                <div key={index} className="space-y-3 p-4 border border-border rounded-lg bg-muted/20">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    {/* Item Name */}
+                    <div className="col-span-12 md:col-span-5">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Item Name *</Label>
+                      <Input
+                        type="text"
+                        placeholder="e.g., Rice, Cleaning Supplies, Equipment"
+                        value={item.item_name}
+                        onChange={(e) => updateItem(index, { item_name: e.target.value })}
+                        className="bg-muted/50"
+                      />
+                    </div>
+                    {/* Quantity */}
+                    <div className="col-span-6 md:col-span-2">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Quantity</Label>
+                      <Input
+                        type="number"
+                        placeholder="Qty"
+                        value={item.quantity || ""}
+                        onChange={(e) => updateItem(index, { quantity: parseFloat(e.target.value) || 0 })}
+                        className="bg-muted/50"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                    {/* Unit Price */}
+                    <div className="col-span-6 md:col-span-2">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Unit Price</Label>
+                      <Input
+                        type="number"
+                        placeholder="Price"
+                        value={item.unit_price || ""}
+                        onChange={(e) => updateItem(index, { unit_price: parseFloat(e.target.value) || 0 })}
+                        className="bg-muted/50"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                    {/* Total */}
+                    <div className="col-span-8 md:col-span-2">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Total</Label>
+                      <Input
+                        type="text"
+                        value={formatCurrency(item.total)}
+                        readOnly
+                        className="bg-muted/50 font-semibold"
+                      />
+                    </div>
+                    {/* Remove */}
+                    <div className="col-span-4 md:col-span-1 flex items-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeItem(index)}
+                        className="text-destructive h-10 w-full"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
               {form.items.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  Click "Add Item" to add products to this purchase order
+                  Click "Add Item" to add items to this purchase order. You can enter any item manually.
                 </p>
               )}
             </div>

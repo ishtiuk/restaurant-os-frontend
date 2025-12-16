@@ -2,7 +2,7 @@ import { apiClient } from "@/lib/api";
 
 export interface PurchaseOrderItemDto {
   id: string;
-  product_id: number;
+  product_id: number | null; // Null for non-inventory items
   item_name: string;
   quantity: number;
   unit_price: number;
@@ -27,8 +27,8 @@ export interface PurchaseOrderDto {
 }
 
 export interface PurchaseOrderItemCreateInput {
-  product_id: number;
-  item_name: string;
+  product_id: number | null; // Optional: null for non-inventory items (supplies, raw materials, etc.)
+  item_name: string; // Required: item name (from product or manual entry)
   quantity: number;
   unit_price: number;
   total: number;
