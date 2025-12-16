@@ -71,7 +71,11 @@ type AppData = {
   markPurchaseOrderReceived: (poId: string) => Promise<void>;
 
   saveTableOrder: (tableId: string, items: TableOrder["items"], opts?: { kotItems?: TableOrder["items"] }) => Promise<void>;
-  finalizeTableBill: (tableId: string, paymentMethod: Sale["paymentMethod"]) => Promise<Sale>;
+  finalizeTableBill: (
+    tableId: string,
+    paymentMethod: Sale["paymentMethod"],
+    options?: { discount?: number; serviceCharge?: number }
+  ) => Promise<Sale>;
   ensureTableSession: (tableId: string) => Promise<TableOrder>;
   markTableBilling: (tableId: string) => Promise<void>;
 
@@ -684,7 +688,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         }
       },
 
-      finalizeTableBill: async (tableId, paymentMethod) => {
+      finalizeTableBill: async (tableId, paymentMethod, options = {}) => {
         if (user?.token) {
           try {
             const table = tables.find((t) => t.id === tableId);
@@ -694,11 +698,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             if (!table || !order) throw new Error("No active order for this table");
             if (order.status === "completed") throw new Error("Bill already completed");
 
+            // Use provided discount/service charge or fall back to order values
+            const discount = options.discount !== undefined ? options.discount : order.discount;
+            const serviceCharge =
+              options.serviceCharge !== undefined
+                ? options.serviceCharge
+                : order.serviceCharge;
+
             // Finalize via API
             const result = await tablesApi.finalizeBill(tableId, order.id, {
               payment_method: paymentMethod,
-              service_charge: order.serviceCharge,
-              discount: order.discount,
+              service_charge: serviceCharge,
+              discount: discount,
             });
 
             // Update local state

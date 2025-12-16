@@ -341,7 +341,14 @@ export default function Tables() {
     if (!selectedTable || !currentOrder) return;
     setShowFinalizeConfirm(false);
     setBillLoading(true);
-    finalizeTableBill(selectedTable.id, billPayment)
+    
+    // Calculate service charge if enabled
+    const serviceChargeAmount = billServiceCharge ? currentOrder.subtotal * 0.05 : 0;
+    
+    finalizeTableBill(selectedTable.id, billPayment, {
+      discount: billDiscount,
+      serviceCharge: serviceChargeAmount,
+    })
       .then((sale) => {
         toast({
           title: `✅ Bill finalized for ${selectedTable.tableNo}`,
@@ -351,6 +358,8 @@ export default function Tables() {
         setCart([]);
         setBaselineItems([]);
         setSelectedTable(null);
+        setBillDiscount(0);
+        setBillServiceCharge(false);
       })
       .catch(() => toast({ title: "Unable to finalize bill", variant: "destructive" }))
       .finally(() => setBillLoading(false));
@@ -954,38 +963,43 @@ export default function Tables() {
                 <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
               </div>
               <div className="bg-muted/30 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Total Amount:</span>
-                  <span className="text-2xl font-display font-bold text-primary">
-                    {currentOrder ? formatCurrency(currentOrder.total) : "৳0"}
-                  </span>
-                </div>
-                {currentOrder && (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal:</span>
-                      <span>{formatCurrency(currentOrder.subtotal)}</span>
-                    </div>
-                    {currentOrder.vatAmount > 0 && (
+                {currentOrder && (() => {
+                  const serviceChargeAmount = billServiceCharge ? currentOrder.subtotal * 0.05 : 0;
+                  const calculatedTotal = currentOrder.total + serviceChargeAmount - billDiscount;
+                  
+                  return (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Total Amount:</span>
+                        <span className="text-2xl font-display font-bold text-primary">
+                          {formatCurrency(calculatedTotal)}
+                        </span>
+                      </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">VAT:</span>
-                        <span>{formatCurrency(currentOrder.vatAmount)}</span>
+                        <span className="text-muted-foreground">Subtotal:</span>
+                        <span>{formatCurrency(currentOrder.subtotal)}</span>
                       </div>
-                    )}
-                    {currentOrder.serviceCharge > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Service Charge:</span>
-                        <span>{formatCurrency(currentOrder.serviceCharge)}</span>
-                      </div>
-                    )}
-                    {currentOrder.discount > 0 && (
-                      <div className="flex justify-between text-sm text-accent">
-                        <span>Discount:</span>
-                        <span>-{formatCurrency(currentOrder.discount)}</span>
-                      </div>
-                    )}
-                  </>
-                )}
+                      {currentOrder.vatAmount > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">VAT:</span>
+                          <span>{formatCurrency(currentOrder.vatAmount)}</span>
+                        </div>
+                      )}
+                      {serviceChargeAmount > 0 && (
+                        <div className="flex justify-between text-sm text-primary">
+                          <span>Service Charge:</span>
+                          <span>+{formatCurrency(serviceChargeAmount)}</span>
+                        </div>
+                      )}
+                      {billDiscount > 0 && (
+                        <div className="flex justify-between text-sm text-accent">
+                          <span>Discount:</span>
+                          <span>-{formatCurrency(billDiscount)}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div className="flex items-start gap-2 pt-2">
                 <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
