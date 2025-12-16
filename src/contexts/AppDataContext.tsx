@@ -240,16 +240,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               id: o.id,
               tableId: o.table_id,
               tableNo: table?.table_no || o.table_id,
-              items: o.items.map((i) => ({
-                itemId: String(i.product_id),
-                itemName: i.item_name,
-                quantity: i.quantity,
-                unitPrice: i.unit_price,
-                discount: i.discount,
-                total: i.total,
-                notes: i.notes ?? undefined,
-                available: 9999,
-              })),
+              items: o.items.map((i) => {
+                // Look up product to get vatRate
+                const product = prods.find((p) => p.id === i.product_id);
+                return {
+                  itemId: String(i.product_id),
+                  itemName: i.item_name,
+                  quantity: i.quantity,
+                  unitPrice: i.unit_price,
+                  discount: i.discount,
+                  total: i.total,
+                  notes: i.notes ?? undefined,
+                  available: 9999,
+                  vatRate: product?.vat_rate != null ? Number(product.vat_rate) : undefined,
+                };
+              }),
               subtotal: o.subtotal,
               vatAmount: o.vat_amount,
               serviceCharge: o.service_charge,
@@ -389,8 +394,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           try {
             const { kotItems } = opts ?? {};
             const subtotal = orderItems.reduce((s, i) => s + i.total, 0);
-            const vatAmount = subtotal * 0.05;
-            const total = subtotal + vatAmount;
+            // Calculate VAT from each item's VAT rate
+            // In Bangladesh, prices are VAT-inclusive, so extract VAT: vat = (price * qty) * (vatRate / (100 + vatRate))
+            const vatAmount = orderItems.reduce((sum, item) => {
+              const cartItem = items.find((ci) => ci.itemId === item.itemId);
+              const vatRate = (cartItem as any)?.vatRate;
+              if (!vatRate || vatRate === 0) return sum;
+              const itemVat = (item.total * vatRate) / (100 + vatRate);
+              return sum + itemVat;
+            }, 0);
+            const total = subtotal; // Subtotal already includes VAT
 
             // Create/update order via API
             const orderInput = {
@@ -457,16 +470,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               id: created.id,
               tableId: created.table_id,
               tableNo: tables.find((t) => t.id === tableId)?.tableNo || tableId,
-              items: created.items.map((i) => ({
-                itemId: String(i.product_id), // Use product_id from backend
-                itemName: i.item_name,
-                quantity: i.quantity,
-                unitPrice: i.unit_price,
-                discount: i.discount,
-                total: i.total,
-                notes: i.notes ?? undefined,
-                available: 9999,
-              })),
+              items: created.items.map((i) => {
+                // Look up product to get vatRate
+                const product = items.find((p) => p.id === String(i.product_id));
+                return {
+                  itemId: String(i.product_id), // Use product_id from backend
+                  itemName: i.item_name,
+                  quantity: i.quantity,
+                  unitPrice: i.unit_price,
+                  discount: i.discount,
+                  total: i.total,
+                  notes: i.notes ?? undefined,
+                  available: 9999,
+                  vatRate: product?.vatRate,
+                };
+              }),
               subtotal: created.subtotal,
               vatAmount: created.vat_amount,
               serviceCharge: created.service_charge,
@@ -497,8 +515,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           let orderId: string | undefined;
           setTableOrders((prev) => {
             const existingOrderIdx = prev.findIndex((o) => o.tableId === tableId && o.status !== "completed");
-            const subtotal = orderItems.reduce((s, i) => s + i.total, 0);
-            const vatAmount = subtotal * 0.05;
+            // In Bangladesh, prices are VAT-inclusive, but backend expects VAT-exclusive subtotal
+            const subtotalInclusive = orderItems.reduce((s, i) => s + i.total, 0);
+            // Calculate VAT from each item's VAT rate
+            // Extract VAT from VAT-inclusive prices: vat = (price * qty) * (vatRate / (100 + vatRate))
+            const vatAmount = orderItems.reduce((sum, item) => {
+              const cartItem = items.find((ci) => ci.itemId === item.itemId);
+              const vatRate = (cartItem as any)?.vatRate;
+              if (!vatRate || vatRate === 0) return sum;
+              const itemVat = (item.total * vatRate) / (100 + vatRate);
+              return sum + itemVat;
+            }, 0);
+            // Subtotal without VAT (for backend accounting)
+            const subtotal = subtotalInclusive - vatAmount;
+            // Total = Subtotal (VAT-exclusive) + VAT
             const total = subtotal + vatAmount;
             const nowIso = new Date().toISOString();
 

@@ -139,10 +139,32 @@ export default function Tables() {
 
   const currentOrder = useMemo(() => {
     if (!selectedTable) return null;
+    let order: typeof tableOrders[0] | null = null;
     if (selectedTable.currentOrderId) {
-      return tableOrders.find((o) => o.id === selectedTable.currentOrderId) || null;
+      order = tableOrders.find((o) => o.id === selectedTable.currentOrderId) || null;
+    } else {
+      order = tableOrders.find((o) => o.tableId === selectedTable.id && o.status !== "completed") || null;
     }
-    return tableOrders.find((o) => o.tableId === selectedTable.id && o.status !== "completed") || null;
+    
+    // Recalculate VAT if order exists but VAT is 0 and products have VAT rates
+    if (order && order.vatAmount === 0) {
+      const recalculatedVat = order.items.reduce((sum, item) => {
+        if (!item.vatRate || item.vatRate === 0) return sum;
+        // Extract VAT from VAT-inclusive price
+        const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+        return sum + itemVat;
+      }, 0);
+      
+      if (recalculatedVat > 0) {
+        // Return order with recalculated VAT for display
+        return {
+          ...order,
+          vatAmount: recalculatedVat,
+        };
+      }
+    }
+    
+    return order;
   }, [selectedTable, tableOrders]);
 
   const primeCartFromOrder = (itemsToUse: CartItem[] | undefined) => {
@@ -224,6 +246,7 @@ export default function Tables() {
           discount: 0,
           total: item.price,
           available: item.isPackaged ? item.stockQty : 9999, // Unlimited for cooked items
+          vatRate: item.vatRate, // Store VAT rate from product
         },
       ];
     });
@@ -258,8 +281,22 @@ export default function Tables() {
     setCart((prev) => prev.filter((c) => c.itemId !== itemId));
   };
 
-  const subtotal = cart.reduce((sum, c) => sum + c.total, 0);
-  const vatAmount = subtotal * 0.05;
+  // In Bangladesh, prices shown to customers are VAT-inclusive
+  // But for backend accounting, we need to separate VAT
+  const subtotalInclusive = cart.reduce((sum, c) => sum + c.total, 0);
+  // Calculate VAT from each product's VAT rate
+  // Extract VAT from VAT-inclusive prices: vat = (price * qty) * (vatRate / (100 + vatRate))
+  // Round to integer (real-world requirement in Bangladesh)
+  const calculatedVat = cart.reduce((sum, item) => {
+    if (!item.vatRate || item.vatRate === 0) return sum;
+    // VAT-inclusive price: extract VAT amount
+    const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+    return sum + itemVat;
+  }, 0);
+  const vatAmount = Math.round(calculatedVat);
+  // Subtotal without VAT (for backend accounting) - round after subtracting VAT
+  const subtotal = Math.round(subtotalInclusive - calculatedVat);
+  // Total = Subtotal (VAT-exclusive) + VAT (rounded)
   const total = subtotal + vatAmount;
   const hasDeltaItems = useMemo(() => {
     const baselineMap = new Map(baselineItems.map((b) => [b.itemId, b.quantity]));
@@ -656,14 +693,38 @@ export default function Tables() {
                 </div>
 
                 <div className="border-t-2 border-dashed border-border pt-2 mt-2 space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span>{formatCurrency(currentOrder.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">VAT (5%)</span>
-                    <span>{formatCurrency(currentOrder.vatAmount)}</span>
-                  </div>
+                  {(() => {
+                    // Calculate VAT from order items if vatAmount is 0 or missing
+                    const calculatedVat = currentOrder.vatAmount > 0 
+                      ? currentOrder.vatAmount 
+                      : currentOrder.items.reduce((sum, item) => {
+                          if (!item.vatRate || item.vatRate === 0) return sum;
+                          const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                          return sum + itemVat;
+                        }, 0);
+                    
+                    // Round VAT to integer (real-world requirement in Bangladesh)
+                    const displayVat = Math.round(calculatedVat);
+                    
+                    // Calculate VAT-exclusive subtotal from items (sum of item totals - VAT)
+                    const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+                    const displaySubtotal = itemsTotal - calculatedVat;
+                    
+                    return (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Subtotal</span>
+                          <span>{formatCurrency(Math.round(displaySubtotal))}</span>
+                        </div>
+                        {displayVat > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">VAT</span>
+                            <span>{formatCurrency(displayVat)}</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   {currentOrder.serviceCharge > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Service Charge</span>
@@ -676,10 +737,31 @@ export default function Tables() {
                       <span>-{formatCurrency(currentOrder.discount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between font-bold text-lg pt-2 border-t-2 border-border">
-                    <span>Total</span>
-                    <span className="gradient-text">{formatCurrency(currentOrder.total)}</span>
-                  </div>
+                  {(() => {
+                    // Calculate VAT from order items
+                    const calculatedVat = currentOrder.vatAmount > 0 
+                      ? currentOrder.vatAmount 
+                      : currentOrder.items.reduce((sum, item) => {
+                          if (!item.vatRate || item.vatRate === 0) return sum;
+                          const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                          return sum + itemVat;
+                        }, 0);
+                    const displayVat = Math.round(calculatedVat);
+                    
+                    // Calculate VAT-exclusive subtotal
+                    const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+                    const displaySubtotal = Math.round(itemsTotal - calculatedVat);
+                    
+                    // Total = Subtotal + VAT
+                    const displayTotal = displaySubtotal + displayVat;
+                    
+                    return (
+                      <div className="flex justify-between font-bold text-lg pt-2 border-t-2 border-border">
+                        <span>Total</span>
+                        <span className="gradient-text">{formatCurrency(displayTotal)}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="text-center text-xs text-muted-foreground mt-4 pt-3 border-t-2 border-dashed border-border">
@@ -707,17 +789,19 @@ export default function Tables() {
                     value={billDiscount}
                     onChange={(e) => {
                       const val = Number(e.target.value) || 0;
+                      // Calculate max discount from items total (VAT-inclusive)
+                      const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
                       if (val < 0) {
                         setBillDiscount(0);
-                      } else if (val > currentOrder.subtotal) {
-                        setBillDiscount(currentOrder.subtotal);
+                      } else if (val > itemsTotal) {
+                        setBillDiscount(itemsTotal);
                       } else {
                         setBillDiscount(val);
                       }
                     }}
                     className="w-28 bg-muted/50"
                     min={0}
-                    max={currentOrder.subtotal}
+                    max={currentOrder.items.reduce((sum, item) => sum + item.total, 0)}
                     placeholder="৳0"
                   />
                 </div>
@@ -964,8 +1048,25 @@ export default function Tables() {
               </div>
               <div className="bg-muted/30 rounded-lg p-4 space-y-2">
                 {currentOrder && (() => {
-                  const serviceChargeAmount = billServiceCharge ? currentOrder.subtotal * 0.05 : 0;
-                  const calculatedTotal = currentOrder.total + serviceChargeAmount - billDiscount;
+                  // Calculate VAT from order items
+                  const calculatedVat = currentOrder.vatAmount > 0 
+                    ? currentOrder.vatAmount 
+                    : currentOrder.items.reduce((sum, item) => {
+                        if (!item.vatRate || item.vatRate === 0) return sum;
+                        const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                        return sum + itemVat;
+                      }, 0);
+                  const displayVat = Math.round(calculatedVat);
+                  
+                  // Calculate VAT-exclusive subtotal
+                  const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+                  const displaySubtotal = Math.round(itemsTotal - calculatedVat);
+                  
+                  // Service charge is calculated on VAT-inclusive amount (itemsTotal)
+                  const serviceChargeAmount = billServiceCharge ? Math.round(itemsTotal * 0.05) : 0;
+                  
+                  // Total = Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
+                  const calculatedTotal = displaySubtotal + displayVat + serviceChargeAmount - billDiscount;
                   
                   return (
                     <>
@@ -977,12 +1078,12 @@ export default function Tables() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Subtotal:</span>
-                        <span>{formatCurrency(currentOrder.subtotal)}</span>
+                        <span>{formatCurrency(displaySubtotal)}</span>
                       </div>
-                      {currentOrder.vatAmount > 0 && (
+                      {displayVat > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">VAT:</span>
-                          <span>{formatCurrency(currentOrder.vatAmount)}</span>
+                          <span>{formatCurrency(displayVat)}</span>
                         </div>
                       )}
                       {serviceChargeAmount > 0 && (

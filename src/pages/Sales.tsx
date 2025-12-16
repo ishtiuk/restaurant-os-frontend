@@ -116,6 +116,7 @@ export default function Sales() {
           discount: 0,
           total: item.price,
           available: item.isPackaged ? item.stockQty : 9999, // Unlimited for cooked items
+          vatRate: item.vatRate, // Store VAT rate from product
         },
       ];
     });
@@ -148,13 +149,34 @@ export default function Sales() {
     setCart((prev) => prev.filter((c) => c.itemId !== itemId));
   }, []);
 
-  const subtotal = useMemo(() => cart.reduce((sum, c) => sum + c.total, 0), [cart]);
-  // VAT is already included in item prices, so vatAmount is always 0
-  const vatAmount = 0;
+  // In Bangladesh, prices shown to customers are VAT-inclusive
+  // But for backend accounting, we need to separate VAT
+  const subtotalInclusive = useMemo(() => cart.reduce((sum, c) => sum + c.total, 0), [cart]);
+  // Calculate VAT from each product's VAT rate
+  // Extract VAT from VAT-inclusive prices: vat = (price * qty) * (vatRate / (100 + vatRate))
+  // Round to integer (real-world requirement in Bangladesh)
+  const vatAmount = useMemo(() => {
+    const calculated = cart.reduce((sum, item) => {
+      if (!item.vatRate || item.vatRate === 0) return sum;
+      // VAT-inclusive price: extract VAT amount
+      const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+      return sum + itemVat;
+    }, 0);
+    return Math.round(calculated);
+  }, [cart]);
+  // Subtotal without VAT (for backend accounting)
+  // Calculate VAT first (with decimals), then round, then subtract from inclusive total
+  const calculatedVat = cart.reduce((sum, item) => {
+    if (!item.vatRate || item.vatRate === 0) return sum;
+    const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+    return sum + itemVat;
+  }, 0);
+  const subtotal = Math.round(subtotalInclusive - calculatedVat);
   const serviceCharge = useMemo(
-    () => (includeServiceCharge ? subtotal * SERVICE_CHARGE_RATE : 0),
-    [subtotal, includeServiceCharge]
+    () => (includeServiceCharge ? subtotalInclusive * SERVICE_CHARGE_RATE : 0),
+    [subtotalInclusive, includeServiceCharge]
   );
+  // Total = Subtotal (VAT-exclusive) + VAT + Service Charge - Discount
   const total = useMemo(
     () => subtotal + vatAmount + serviceCharge - discount,
     [subtotal, vatAmount, serviceCharge, discount]
@@ -651,7 +673,7 @@ export default function Sales() {
                   </div>
                   {lastSale.vatAmount > 0 && (
                     <div className="flex justify-between">
-                      <span>VAT (5%)</span>
+                      <span>VAT</span>
                       <span>{formatCurrency(lastSale.vatAmount)}</span>
                     </div>
                   )}

@@ -104,7 +104,7 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
         </div>
         {sale.vatAmount > 0 && (
           <div className="slip-total-row">
-            <span>VAT (5%):</span>
+            <span>VAT:</span>
             <span>{formatCurrency(sale.vatAmount)}</span>
           </div>
         )}

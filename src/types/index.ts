@@ -148,6 +148,7 @@ export interface DashboardStats {
 
 export interface CartItem extends SaleItem {
   available: number;
+  vatRate?: number; // VAT rate from product
 }
 
 export interface KitchenTicket {

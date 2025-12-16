@@ -30,7 +30,19 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
     hour12: true,
   });
 
-  const finalTotal = order.total + serviceCharge - extraDiscount;
+  // Calculate correct total: Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
+  const calculatedVat = order.vatAmount > 0 
+    ? order.vatAmount 
+    : order.items.reduce((sum, item) => {
+        const vatRate = (item as any).vatRate;
+        if (!vatRate || vatRate === 0) return sum;
+        const itemVat = (item.total * vatRate) / (100 + vatRate);
+        return sum + itemVat;
+      }, 0);
+  const displayVat = Math.round(calculatedVat);
+  const itemsTotal = order.items.reduce((sum, item) => sum + item.total, 0);
+  const displaySubtotal = Math.round(itemsTotal - calculatedVat);
+  const finalTotal = displaySubtotal + displayVat + serviceCharge - extraDiscount;
 
   return (
     <div id="table-bill-print">
@@ -83,16 +95,39 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
 
       {/* Totals */}
       <div className="slip-totals">
-        <div className="slip-total-row">
-          <span>Subtotal:</span>
-          <span>{formatCurrency(order.subtotal)}</span>
-        </div>
-        {order.vatAmount > 0 && (
-          <div className="slip-total-row">
-            <span>VAT (5%):</span>
-            <span>{formatCurrency(order.vatAmount)}</span>
-          </div>
-        )}
+        {(() => {
+          // Calculate VAT from order items if vatAmount is 0 or missing
+          const calculatedVat = order.vatAmount > 0 
+            ? order.vatAmount 
+            : order.items.reduce((sum, item) => {
+                const vatRate = (item as any).vatRate;
+                if (!vatRate || vatRate === 0) return sum;
+                const itemVat = (item.total * vatRate) / (100 + vatRate);
+                return sum + itemVat;
+              }, 0);
+          
+          // Round VAT to integer (real-world requirement in Bangladesh)
+          const displayVat = Math.round(calculatedVat);
+          
+          // Calculate VAT-exclusive subtotal from items (sum of item totals - VAT)
+          const itemsTotal = order.items.reduce((sum, item) => sum + item.total, 0);
+          const displaySubtotal = Math.round(itemsTotal - calculatedVat);
+          
+          return (
+            <>
+              <div className="slip-total-row">
+                <span>Subtotal:</span>
+                <span>{formatCurrency(displaySubtotal)}</span>
+              </div>
+              {displayVat > 0 && (
+                <div className="slip-total-row">
+                  <span>VAT:</span>
+                  <span>{formatCurrency(displayVat)}</span>
+                </div>
+              )}
+            </>
+          );
+        })()}
         {serviceCharge > 0 && (
           <div className="slip-total-row">
             <span>Service (5%):</span>
