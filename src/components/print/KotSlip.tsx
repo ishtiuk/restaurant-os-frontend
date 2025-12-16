@@ -1,5 +1,6 @@
 import React from "react";
 import { CartItem } from "@/types";
+import { getPrintSettings } from "@/utils/printUtils";
 
 interface KotSlipProps {
   kotNumber: number;
@@ -14,6 +15,7 @@ export const KotSlip: React.FC<KotSlipProps> = ({
   items,
   time,
 }) => {
+  const settings = getPrintSettings();
   const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
   const kotDate = new Date(time);
   const formattedDate = kotDate.toLocaleDateString('en-GB', {
@@ -30,35 +32,25 @@ export const KotSlip: React.FC<KotSlipProps> = ({
     <div id="kot-slip-print">
       {/* KOT Header */}
       <div className="kot-header">
-        <h1>🍳 KITCHEN ORDER</h1>
-        <h2>KOT #{kotNumber}</h2>
+        <p className="kot-title">🍳 KITCHEN ORDER</p>
+        <p className="kot-number">KOT #{kotNumber}</p>
       </div>
 
       {/* Table & Time Info */}
       <div className="kot-table-info">
         <div>
-          <span style={{ fontSize: '12px' }}>TABLE</span>
-          <div className="kot-table-no">{tableNo}</div>
+          <p className="kot-table-label">TABLE</p>
+          <p className="kot-table-number">{tableNo}</p>
         </div>
         <div className="kot-time">
-          <div>{formattedDate}</div>
-          <div style={{ fontWeight: 'bold' }}>{formattedTime}</div>
+          <p>{formattedDate}</p>
+          <p style={{ fontWeight: 'bold' }}>{formattedTime}</p>
         </div>
       </div>
 
       {/* Items List */}
-      <div className="kot-items">
-        <div style={{ 
-          fontWeight: 'bold', 
-          marginBottom: '8px', 
-          paddingBottom: '4px',
-          borderBottom: '1px solid #333',
-          fontSize: '12px',
-          textTransform: 'uppercase',
-          letterSpacing: '1px'
-        }}>
-          Order Items:
-        </div>
+      <div className="slip-items">
+        <p className="kot-items-label">Order Items:</p>
         {items.map((item, idx) => (
           <div key={idx} className="kot-item">
             <span className="kot-item-qty">{item.quantity}x</span>
@@ -69,13 +61,7 @@ export const KotSlip: React.FC<KotSlipProps> = ({
 
       {/* Summary */}
       <div className="kot-footer">
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          fontWeight: 'bold',
-          fontSize: '13px',
-          marginBottom: '8px'
-        }}>
+        <div className="kot-summary">
           <span>Total Items:</span>
           <span>{totalQty}</span>
         </div>

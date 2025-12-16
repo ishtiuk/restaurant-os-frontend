@@ -1,8 +1,398 @@
-// Print utility functions for receipts, bills, and KOT slips
+// Unified Thermal-First Printing System
+// Supports 58mm and 80mm thermal paper sizes only
+
+export type ThermalPaperSize = '58mm' | '80mm';
+
+export interface PrintSettings {
+  paperSize: ThermalPaperSize;
+  invoicePrefix: string;
+  footerText: string;
+  restaurantName: string;
+  restaurantNameBn: string;
+  address: string;
+  phone: string;
+}
+
+// Default settings - can be overridden from Settings page
+export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
+  paperSize: '80mm',
+  invoicePrefix: 'INV-',
+  footerText: 'Thank you for dining with us! আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!',
+  restaurantName: 'RestaurantOS',
+  restaurantNameBn: 'রেস্টুরেন্ট ওএস',
+  address: '123 Restaurant Street, Dhaka',
+  phone: '01700-000000',
+};
+
+// Paper size configurations
+const PAPER_CONFIG: Record<ThermalPaperSize, {
+  widthMm: number;
+  contentWidthMm: number;
+  fontSize: {
+    title: number;
+    subtitle: number;
+    body: number;
+    small: number;
+    qty: number;
+  };
+  padding: number;
+}> = {
+  '58mm': {
+    widthMm: 58,
+    contentWidthMm: 54,
+    fontSize: {
+      title: 14,
+      subtitle: 11,
+      body: 10,
+      small: 8,
+      qty: 14,
+    },
+    padding: 2,
+  },
+  '80mm': {
+    widthMm: 80,
+    contentWidthMm: 76,
+    fontSize: {
+      title: 18,
+      subtitle: 14,
+      body: 12,
+      small: 10,
+      qty: 18,
+    },
+    padding: 2,
+  },
+};
+
+// Get current print settings (from localStorage or defaults)
+export const getPrintSettings = (): PrintSettings => {
+  try {
+    const stored = localStorage.getItem('restaurant-os.print-settings');
+    if (stored) {
+      return { ...DEFAULT_PRINT_SETTINGS, ...JSON.parse(stored) };
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_PRINT_SETTINGS;
+};
+
+// Save print settings
+export const savePrintSettings = (settings: Partial<PrintSettings>) => {
+  const current = getPrintSettings();
+  const updated = { ...current, ...settings };
+  localStorage.setItem('restaurant-os.print-settings', JSON.stringify(updated));
+  return updated;
+};
+
+// Generate thermal print styles based on paper size
+const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
+  const config = PAPER_CONFIG[paperSize];
+  
+  return `
+    @page {
+      size: ${config.widthMm}mm auto;
+      margin: ${config.padding}mm;
+    }
+    
+    @media print {
+      html, body {
+        width: ${config.contentWidthMm}mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+    }
+    
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    
+    body {
+      font-family: 'Courier New', 'Consolas', monospace;
+      font-size: ${config.fontSize.body}px;
+      line-height: 1.3;
+      color: #000;
+      background: #fff;
+      margin: 0;
+      padding: ${config.padding}mm;
+      width: ${config.contentWidthMm}mm;
+      max-width: ${config.contentWidthMm}mm;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+    }
+    
+    /* Header Styles */
+    .slip-header {
+      text-align: center;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 2px dashed #000;
+    }
+    
+    .slip-header .restaurant-name {
+      font-size: ${config.fontSize.title}px;
+      font-weight: bold;
+      margin: 0;
+      letter-spacing: 1px;
+    }
+    
+    .slip-header .restaurant-name-bn {
+      font-size: ${config.fontSize.subtitle}px;
+      margin: 2px 0;
+    }
+    
+    .slip-header .address,
+    .slip-header .phone {
+      font-size: ${config.fontSize.small}px;
+      margin: 2px 0;
+      color: #333;
+    }
+    
+    /* Order Info Section */
+    .slip-info {
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed #000;
+    }
+    
+    .slip-info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 1px 0;
+      font-size: ${config.fontSize.body}px;
+    }
+    
+    .slip-info-row.highlight {
+      font-weight: bold;
+      font-size: ${config.fontSize.subtitle}px;
+    }
+    
+    .slip-info-row .label {
+      flex-shrink: 0;
+    }
+    
+    .slip-info-row .value {
+      text-align: right;
+      word-break: break-all;
+    }
+    
+    /* Items Section */
+    .slip-items {
+      margin: 6px 0;
+    }
+    
+    .slip-items-header {
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      font-size: ${config.fontSize.small}px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid #000;
+      margin-bottom: 4px;
+    }
+    
+    .slip-item {
+      display: flex;
+      padding: 2px 0;
+      border-bottom: 1px dotted #999;
+      font-size: ${config.fontSize.body}px;
+    }
+    
+    .slip-item:last-child {
+      border-bottom: none;
+    }
+    
+    .slip-item-qty {
+      flex-shrink: 0;
+      font-weight: bold;
+      width: ${paperSize === '58mm' ? '25px' : '35px'};
+      font-size: ${config.fontSize.body}px;
+    }
+    
+    .slip-item-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 4px;
+    }
+    
+    .slip-item-price {
+      flex-shrink: 0;
+      text-align: right;
+      min-width: ${paperSize === '58mm' ? '45px' : '55px'};
+    }
+    
+    /* Totals Section */
+    .slip-totals {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 2px dashed #000;
+    }
+    
+    .slip-total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 1px 0;
+      font-size: ${config.fontSize.body}px;
+    }
+    
+    .slip-total-row.discount {
+      color: #006400;
+    }
+    
+    .slip-total-row.grand {
+      font-size: ${config.fontSize.subtitle}px;
+      font-weight: bold;
+      padding-top: 4px;
+      margin-top: 4px;
+      border-top: 2px solid #000;
+    }
+    
+    /* Footer Section */
+    .slip-footer {
+      text-align: center;
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 2px dashed #000;
+      font-size: ${config.fontSize.small}px;
+    }
+    
+    .slip-footer p {
+      margin: 3px 0;
+    }
+    
+    /* KOT Specific Styles */
+    .kot-header {
+      text-align: center;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 3px double #000;
+    }
+    
+    .kot-header .kot-title {
+      font-size: ${config.fontSize.title}px;
+      font-weight: bold;
+      margin: 0;
+      letter-spacing: 2px;
+    }
+    
+    .kot-header .kot-number {
+      font-size: ${config.fontSize.subtitle}px;
+      font-weight: bold;
+      margin: 4px 0 0 0;
+    }
+    
+    .kot-table-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      margin-bottom: 6px;
+      border-bottom: 1px dashed #000;
+    }
+    
+    .kot-table-label {
+      font-size: ${config.fontSize.small}px;
+    }
+    
+    .kot-table-number {
+      font-size: ${config.fontSize.title + 4}px;
+      font-weight: bold;
+    }
+    
+    .kot-time {
+      font-size: ${config.fontSize.small}px;
+      text-align: right;
+    }
+    
+    .kot-items-label {
+      font-weight: bold;
+      font-size: ${config.fontSize.small}px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #000;
+      margin-bottom: 4px;
+    }
+    
+    .kot-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 4px 0;
+      border-bottom: 1px dotted #999;
+      font-size: ${config.fontSize.body}px;
+    }
+    
+    .kot-item:last-child {
+      border-bottom: none;
+    }
+    
+    .kot-item-qty {
+      font-size: ${config.fontSize.qty}px;
+      font-weight: bold;
+      min-width: ${paperSize === '58mm' ? '30px' : '40px'};
+      margin-right: 6px;
+    }
+    
+    .kot-item-name {
+      flex: 1;
+      font-size: ${config.fontSize.body + 1}px;
+    }
+    
+    .kot-footer {
+      text-align: center;
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 2px dashed #000;
+      font-size: ${config.fontSize.small}px;
+    }
+    
+    .kot-summary {
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      font-size: ${config.fontSize.body}px;
+      margin-bottom: 6px;
+    }
+    
+    /* Delivery Info */
+    .delivery-info {
+      background: #f0f0f0;
+      padding: 4px 6px;
+      margin: 6px 0;
+      border: 1px solid #999;
+    }
+    
+    .delivery-info-title {
+      font-size: ${config.fontSize.small}px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin: 0 0 2px 0;
+    }
+    
+    .delivery-info p {
+      margin: 1px 0;
+      font-size: ${config.fontSize.body}px;
+    }
+    
+    /* Order Type Badge */
+    .order-type-badge {
+      display: inline-block;
+      background: #000;
+      color: #fff;
+      padding: 1px 6px;
+      font-size: ${config.fontSize.small}px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+  `;
+};
 
 interface PrintOptions {
   title?: string;
-  paperSize?: 'thermal' | 'a4';
+  paperSize?: ThermalPaperSize;
 }
 
 export const printContent = (elementId: string, options: PrintOptions = {}) => {
@@ -12,7 +402,8 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
     return;
   }
 
-  const { title = 'Print', paperSize = 'thermal' } = options;
+  const settings = getPrintSettings();
+  const { title = 'Print', paperSize = settings.paperSize } = options;
   
   // Create print window
   const printWindow = window.open('', '_blank', 'width=400,height=600');
@@ -21,234 +412,7 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
     return;
   }
 
-  const thermalStyles = `
-    @page {
-      size: 80mm auto;
-      margin: 2mm;
-    }
-    body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 12px;
-      line-height: 1.4;
-      color: #000;
-      background: #fff;
-      margin: 0;
-      padding: 8px;
-      width: 76mm;
-    }
-  `;
-
-  const a4Styles = `
-    @page {
-      size: A4;
-      margin: 15mm;
-    }
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      font-size: 14px;
-      line-height: 1.6;
-      color: #000;
-      background: #fff;
-      margin: 0;
-      padding: 20px;
-      max-width: 210mm;
-    }
-  `;
-
-  const commonStyles = `
-    * {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .print-header {
-      text-align: center;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 2px dashed #333;
-    }
-    .print-header h1 {
-      font-size: 18px;
-      font-weight: bold;
-      margin: 0 0 4px 0;
-    }
-    .print-header h2 {
-      font-size: 14px;
-      font-weight: bold;
-      margin: 0 0 4px 0;
-    }
-    .print-header p {
-      font-size: 11px;
-      margin: 2px 0;
-      color: #555;
-    }
-    .print-info {
-      margin-bottom: 10px;
-    }
-    .print-info-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 2px 0;
-    }
-    .print-info-row.highlight {
-      font-weight: bold;
-      font-size: 14px;
-    }
-    .print-divider {
-      border-top: 1px dashed #333;
-      margin: 8px 0;
-    }
-    .print-divider-double {
-      border-top: 2px dashed #333;
-      margin: 10px 0;
-    }
-    .print-items {
-      margin: 10px 0;
-    }
-    .print-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 3px 0;
-      border-bottom: 1px dotted #ccc;
-    }
-    .print-item:last-child {
-      border-bottom: none;
-    }
-    .print-item-name {
-      flex: 1;
-      margin-right: 8px;
-    }
-    .print-item-qty {
-      font-weight: bold;
-      margin-right: 8px;
-      min-width: 30px;
-    }
-    .print-item-price {
-      text-align: right;
-      min-width: 60px;
-    }
-    .print-totals {
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 2px dashed #333;
-    }
-    .print-total-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 2px 0;
-    }
-    .print-total-row.grand {
-      font-size: 16px;
-      font-weight: bold;
-      padding-top: 6px;
-      margin-top: 6px;
-      border-top: 2px solid #000;
-    }
-    .print-total-row.discount {
-      color: #228B22;
-    }
-    .print-footer {
-      text-align: center;
-      margin-top: 12px;
-      padding-top: 8px;
-      border-top: 2px dashed #333;
-      font-size: 11px;
-    }
-    .print-footer p {
-      margin: 4px 0;
-    }
-    /* KOT Specific Styles */
-    .kot-header {
-      text-align: center;
-      margin-bottom: 12px;
-      padding-bottom: 10px;
-      border-bottom: 3px double #000;
-    }
-    .kot-header h1 {
-      font-size: 22px;
-      font-weight: bold;
-      margin: 0;
-      letter-spacing: 2px;
-    }
-    .kot-header h2 {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 6px 0 0 0;
-    }
-    .kot-table-info {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      margin-bottom: 8px;
-      border-bottom: 1px dashed #333;
-    }
-    .kot-table-no {
-      font-size: 24px;
-      font-weight: bold;
-    }
-    .kot-time {
-      font-size: 11px;
-      text-align: right;
-    }
-    .kot-items {
-      margin: 10px 0;
-    }
-    .kot-item {
-      display: flex;
-      align-items: flex-start;
-      padding: 6px 0;
-      border-bottom: 1px dotted #999;
-      font-size: 14px;
-    }
-    .kot-item:last-child {
-      border-bottom: none;
-    }
-    .kot-item-qty {
-      font-size: 18px;
-      font-weight: bold;
-      min-width: 40px;
-      margin-right: 8px;
-    }
-    .kot-item-name {
-      flex: 1;
-      font-size: 14px;
-    }
-    .kot-footer {
-      text-align: center;
-      margin-top: 12px;
-      padding-top: 8px;
-      border-top: 2px dashed #333;
-      font-size: 11px;
-    }
-    /* Delivery specific */
-    .delivery-info {
-      background: #f5f5f5;
-      padding: 8px;
-      margin: 8px 0;
-      border: 1px solid #ddd;
-    }
-    .delivery-info h3 {
-      font-size: 12px;
-      font-weight: bold;
-      margin: 0 0 4px 0;
-      text-transform: uppercase;
-    }
-    .delivery-info p {
-      margin: 2px 0;
-      font-size: 12px;
-    }
-    .order-type-badge {
-      display: inline-block;
-      background: #000;
-      color: #fff;
-      padding: 2px 8px;
-      font-size: 10px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-  `;
+  const styles = generateThermalStyles(paperSize);
 
   printWindow.document.write(`
     <!DOCTYPE html>
@@ -256,10 +420,7 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
     <head>
       <title>${title}</title>
       <meta charset="UTF-8">
-      <style>
-        ${paperSize === 'thermal' ? thermalStyles : a4Styles}
-        ${commonStyles}
-      </style>
+      <style>${styles}</style>
     </head>
     <body>
       ${element.innerHTML}
@@ -280,3 +441,12 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
 export const formatCurrencyForPrint = (amount: number): string => {
   return `৳${amount.toLocaleString('bn-BD')}`;
 };
+
+// Get paper config for UI display
+export const getPaperConfig = (paperSize: ThermalPaperSize) => PAPER_CONFIG[paperSize];
+
+// Available paper sizes for settings
+export const AVAILABLE_PAPER_SIZES: { value: ThermalPaperSize; label: string; description: string }[] = [
+  { value: '80mm', label: 'Thermal 80mm', description: 'Standard thermal receipt (80mm width)' },
+  { value: '58mm', label: 'Thermal 58mm', description: 'Compact thermal receipt (58mm width)' },
+];

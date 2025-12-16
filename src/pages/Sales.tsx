@@ -684,7 +684,7 @@ export default function Sales() {
                 <Button 
                   variant="outline" 
                   className="flex-1" 
-                  onClick={() => printContent('sales-receipt-print', { title: 'Receipt', paperSize: 'thermal' })}
+                  onClick={() => printContent('sales-receipt-print', { title: 'Receipt', paperSize: '80mm' })}
                 >
                   <Printer className="w-4 h-4 mr-2" />
                   Print Receipt
