@@ -380,7 +380,7 @@ export default function Items() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <p className="text-xl font-display font-bold text-primary">
+                  <p className="text-lg font-display font-bold text-primary">
                     {formatCurrency(item.price)}
                   </p>
                   <p className="text-sm text-muted-foreground">

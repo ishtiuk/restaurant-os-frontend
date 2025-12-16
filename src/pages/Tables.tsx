@@ -513,10 +513,25 @@ export default function Tables() {
                   <div
                     key={item.id}
                     onClick={() => addToCart(item)}
-                    className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
+                    className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors relative"
                   >
                     <p className="font-medium text-sm truncate">{item.name}</p>
                     <p className="text-primary font-semibold">{formatCurrency(item.price)}</p>
+                    {/* Stock Badge - Bottom Right Corner */}
+                    <div className="absolute bottom-2 right-2">
+                      {item.isPackaged ? (
+                        <Badge 
+                          variant={item.stockQty === 0 ? "destructive" : item.stockQty <= 5 ? "secondary" : "default"}
+                          className="text-xs font-semibold shadow-lg"
+                        >
+                          {item.stockQty === 0 ? "Out" : `Stock: ${item.stockQty}`}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs font-semibold shadow-lg bg-background/90">
+                          Cooked • ∞
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

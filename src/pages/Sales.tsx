@@ -42,7 +42,6 @@ import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
-const VAT_RATE = 0.05;
 const SERVICE_CHARGE_RATE = 0.05;
 
 type OrderType = "dine-in" | "takeaway" | "delivery";
@@ -60,11 +59,10 @@ export default function Sales() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [orderType, setOrderType] = useState<OrderType>("dine-in");
+  const [orderType, setOrderType] = useState<OrderType>("takeaway");
   const [tableNo, setTableNo] = useState("");
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>("cash");
   const [discount, setDiscount] = useState(0);
-  const [includeVat, setIncludeVat] = useState(true);
   const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
@@ -152,7 +150,8 @@ export default function Sales() {
   }, []);
 
   const subtotal = useMemo(() => cart.reduce((sum, c) => sum + c.total, 0), [cart]);
-  const vatAmount = useMemo(() => (includeVat ? subtotal * VAT_RATE : 0), [subtotal, includeVat]);
+  // VAT is already included in item prices, so vatAmount is always 0
+  const vatAmount = 0;
   const serviceCharge = useMemo(
     () => (includeServiceCharge ? subtotal * SERVICE_CHARGE_RATE : 0),
     [subtotal, includeServiceCharge]
@@ -313,10 +312,10 @@ export default function Sales() {
               <GlassCard
                 key={item.id}
                 hover
-                className="p-3 cursor-pointer transition-all duration-200"
+                className="p-3 cursor-pointer transition-all duration-200 relative"
                 onClick={() => addToCart(item)}
               >
-                <div className="aspect-square mb-2 rounded-lg bg-muted/30 overflow-hidden">
+                <div className="aspect-square mb-2 rounded-lg bg-muted/30 overflow-hidden relative">
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
                   ) : (
@@ -324,6 +323,21 @@ export default function Sales() {
                       <UtensilsCrossed className="w-8 h-8" />
                     </div>
                   )}
+                  {/* Stock Badge - Bottom Right Corner */}
+                  <div className="absolute bottom-2 right-2">
+                    {item.isPackaged ? (
+                      <Badge 
+                        variant={item.stockQty === 0 ? "destructive" : item.stockQty <= 5 ? "secondary" : "default"}
+                        className="text-xs font-semibold shadow-lg"
+                      >
+                        {item.stockQty === 0 ? "Out" : `Stock: ${item.stockQty}`}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs font-semibold shadow-lg bg-background/90">
+                        Cooked • ∞
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <h4 className="font-medium text-sm truncate">{item.name}</h4>
                 <div className="mt-1">
@@ -343,9 +357,9 @@ export default function Sales() {
         <div className="p-4 border-b border-border">
           <div className="flex gap-2">
             {[
-              { type: "dine-in" as OrderType, icon: <UtensilsCrossed className="w-4 h-4" />, label: "Dine-in" },
               { type: "takeaway" as OrderType, icon: <ShoppingBag className="w-4 h-4" />, label: "Takeaway" },
               { type: "delivery" as OrderType, icon: <Truck className="w-4 h-4" />, label: "Delivery" },
+              { type: "dine-in" as OrderType, icon: <UtensilsCrossed className="w-4 h-4" />, label: "Dine-in" },
             ].map((opt) => (
               <Button
                 key={opt.type}
@@ -477,14 +491,6 @@ export default function Sales() {
           {/* Toggles */}
           <div className="flex gap-2">
             <Button
-              variant={includeVat ? "default" : "outline"}
-              size="sm"
-              onClick={() => setIncludeVat(!includeVat)}
-              className="flex-1"
-            >
-              VAT 5%
-            </Button>
-            <Button
               variant={includeServiceCharge ? "default" : "outline"}
               size="sm"
               onClick={() => setIncludeServiceCharge(!includeServiceCharge)}
@@ -533,12 +539,6 @@ export default function Sales() {
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
-            {includeVat && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">VAT (5%)</span>
-                <span>{formatCurrency(vatAmount)}</span>
-              </div>
-            )}
             {includeServiceCharge && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Service (5%)</span>
