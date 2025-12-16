@@ -20,6 +20,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,7 +64,9 @@ export default function Suppliers() {
   const [showLedger, setShowLedger] = useState(false);
   const [showAddSupplier, setShowAddSupplier] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [showDeletePayment, setShowDeletePayment] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<SupplierPaymentDto | null>(null);
   const [paymentForm, setPaymentForm] = useState<SupplierPaymentCreateInput>({
     supplier_id: "",
     purchase_order_id: null,
@@ -503,24 +515,9 @@ export default function Suppliers() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={async () => {
-                                  if (window.confirm("Delete this payment?")) {
-                                    try {
-                                      await suppliersApi.deletePayment(payment.id);
-                                      setPayments((prev) => prev.filter((p) => p.id !== payment.id));
-                                      const updatedSupplier = await suppliersApi.get(selectedSupplier!.id);
-                                      setSuppliers((prev) =>
-                                        prev.map((s) => (s.id === updatedSupplier.id ? updatedSupplier : s))
-                                      );
-                                      toast({ title: "Payment deleted" });
-                                    } catch (error: any) {
-                                      toast({
-                                        title: "Failed to delete payment",
-                                        description: error.message,
-                                        variant: "destructive",
-                                      });
-                                    }
-                                  }
+                                onClick={() => {
+                                  setPaymentToDelete(payment);
+                                  setShowDeletePayment(true);
                                 }}
                               >
                                 <X className="w-4 h-4 text-destructive" />
@@ -645,6 +642,71 @@ export default function Suppliers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Payment Confirmation Dialog */}
+      <AlertDialog open={showDeletePayment} onOpenChange={setShowDeletePayment}>
+        <AlertDialogContent className="glass-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display gradient-text flex items-center gap-2">
+              <X className="w-5 h-5 text-destructive" />
+              Delete Payment?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you sure you want to delete this payment?</p>
+              {paymentToDelete && (
+                <div className="p-3 rounded-lg bg-muted/50 border border-border mt-2">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-muted-foreground">Amount:</span>
+                    <span className="font-semibold">{formatCurrency(paymentToDelete.amount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-muted-foreground">Date:</span>
+                    <span>{formatDate(paymentToDelete.payment_date)}</span>
+                  </div>
+                  {paymentToDelete.payment_method && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Method:</span>
+                      <span>{paymentToDelete.payment_method}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="text-sm text-muted-foreground mt-2">
+                This action will update the supplier balance and cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="mt-2 sm:mt-0">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!paymentToDelete || !selectedSupplier) return;
+                try {
+                  await suppliersApi.deletePayment(paymentToDelete.id);
+                  setPayments((prev) => prev.filter((p) => p.id !== paymentToDelete.id));
+                  const updatedSupplier = await suppliersApi.get(selectedSupplier.id);
+                  setSuppliers((prev) =>
+                    prev.map((s) => (s.id === updatedSupplier.id ? updatedSupplier : s))
+                  );
+                  setShowDeletePayment(false);
+                  setPaymentToDelete(null);
+                  toast({ title: "Payment deleted" });
+                } catch (error: any) {
+                  toast({
+                    title: "Failed to delete payment",
+                    description: error.message,
+                    variant: "destructive",
+                  });
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              <X className="w-4 h-4 mr-2" />
+              Delete Payment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Add Supplier Dialog */}
       <Dialog open={showAddSupplier} onOpenChange={setShowAddSupplier}>
