@@ -110,6 +110,12 @@ export interface FinalizeBillInput {
   discount?: number;
 }
 
+export interface BulkCreateTablesInput {
+  count: number;
+  default_capacity?: number;
+  location?: string;
+}
+
 export const tablesApi = {
   list(): Promise<TableDto[]> {
     return apiClient.get("/tables");
@@ -141,6 +147,9 @@ export const tablesApi = {
     table: TableDto;
   }> {
     return apiClient.patch(`/tables/${tableId}/orders/${orderId}/finalize`, input);
+  },
+  bulkCreate(input: BulkCreateTablesInput): Promise<TableDto[]> {
+    return apiClient.post("/tables/bulk-create", input);
   },
 };
 

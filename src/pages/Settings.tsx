@@ -31,15 +31,18 @@ import {
   Trash2,
   Tag,
   Lock,
+  UtensilsCrossed,
+  Clock,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useLicense, LICENSE_STORAGE_KEY, parseLicenseToken } from "@/contexts/LicenseContext";
 import { usersApi, type StaffUser, type StaffRole } from "@/lib/api/users";
 import { useAuth } from "@/contexts/AuthContext";
+import { tablesApi } from "@/lib/api/tables";
 
 export default function Settings() {
-  const { staff, categories, addCategory, removeCategory } = useAppData();
+  const { staff, categories, addCategory, removeCategory, tables } = useAppData();
   const { license, refreshFromStorage } = useLicense();
   const { user } = useAuth();
   const [language, setLanguage] = useState("en");
@@ -50,6 +53,8 @@ export default function Settings() {
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<StaffUser | null>(null);
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
+  const [numberOfTables, setNumberOfTables] = useState<number>(0);
+  const [isCreatingTables, setIsCreatingTables] = useState(false);
 
   useEffect(() => {
     // Load staff users from backend when authenticated
@@ -66,11 +71,72 @@ export default function Settings() {
     }
   }, [user?.token]);
 
-  const handleSave = () => {
+  useEffect(() => {
+    // Load current table count
+    if (tables && tables.length > 0) {
+      setNumberOfTables(tables.length);
+    }
+  }, [tables]);
+
+  const handleSave = async () => {
     toast({
       title: "Settings saved!",
       description: "Your changes have been applied.",
     });
+  };
+
+  const handleCreateTables = async () => {
+    if (!numberOfTables || numberOfTables < 1) {
+      toast({
+        title: "Invalid number",
+        description: "Please enter a number between 1 and 100.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCreatingTables(true);
+    try {
+      const currentCount = tables.length;
+      const needed = numberOfTables - currentCount;
+
+      if (needed <= 0) {
+        toast({
+          title: "Tables already exist",
+          description: `You already have ${currentCount} table${currentCount !== 1 ? "s" : ""}. Increase the number to create more.`,
+        });
+        setIsCreatingTables(false);
+        return;
+      }
+
+      await tablesApi.bulkCreate({
+        count: needed,
+        default_capacity: 4,
+      });
+
+      toast({
+        title: "Tables created!",
+        description: `Successfully created ${needed} table${needed !== 1 ? "s" : ""}. Refreshing...`,
+      });
+
+      // Refresh tables by fetching from API
+      const updatedTables = await tablesApi.list();
+      // Update the numberOfTables to reflect the new total
+      setNumberOfTables(updatedTables.length);
+      
+      // Trigger a re-render by updating a dummy state or reloading
+      // Since we don't have direct access to setTables, we'll use a small delay and reload
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err: any) {
+      toast({
+        title: "Failed to create tables",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+      setIsCreatingTables(false);
+    }
   };
 
   const handleActivateLicense = () => {
@@ -355,6 +421,65 @@ export default function Settings() {
             <Input defaultValue="TL-2024-001234" className="bg-muted/50" />
           </div>
         </div>
+      </GlassCard>
+
+      {/* Table Management */}
+      <GlassCard className="p-6 animate-fade-in stagger-2">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+            <UtensilsCrossed className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold">Table Management</h3>
+            <p className="text-sm text-muted-foreground">টেবিল ব্যবস্থাপনা • Configure restaurant tables</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="numberOfTables">Number of Tables</Label>
+            <Input
+              id="numberOfTables"
+              type="number"
+              min="1"
+              max="100"
+              value={numberOfTables || ""}
+              onChange={(e) => setNumberOfTables(parseInt(e.target.value) || 0)}
+              placeholder="Enter number of tables"
+              className="bg-muted/50"
+            />
+            <p className="text-xs text-muted-foreground">
+              Current: {tables.length} table{tables.length !== 1 ? "s" : ""}. Enter the total number of tables you want.
+            </p>
+          </div>
+          <div className="space-y-2 flex items-end">
+            <Button
+              variant="glow"
+              onClick={handleCreateTables}
+              disabled={isCreatingTables || !numberOfTables || numberOfTables <= tables.length}
+              className="w-full"
+            >
+              {isCreatingTables ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Tables
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+        {numberOfTables > 0 && numberOfTables <= tables.length && (
+          <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/60">
+            <p className="text-sm text-muted-foreground">
+              You already have {tables.length} table{tables.length !== 1 ? "s" : ""}. Increase the number above to create more tables.
+            </p>
+          </div>
+        )}
       </GlassCard>
 
         {/* Categories Management */}

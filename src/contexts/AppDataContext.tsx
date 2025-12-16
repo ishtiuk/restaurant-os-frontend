@@ -426,19 +426,25 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               }
             }
 
-            // Refresh tables
-            const refreshedTables = await tablesApi.list().catch(() => tables);
+            // Refresh tables and active orders to get currentOrderId
+            const [refreshedTables, activeOrders] = await Promise.all([
+              tablesApi.list().catch(() => tables),
+              tablesApi.listActiveOrders().catch(() => []),
+            ]);
             if (refreshedTables !== tables) {
               setTables(
-                refreshedTables.map((t) => ({
-                  id: t.id,
-                  tableNo: t.table_no,
-                  capacity: t.capacity,
-                  status: t.status as RestaurantTable["status"],
-                  location: t.location ?? undefined,
-                  isActive: t.is_active,
-                  currentOrderId: undefined,
-                }))
+                refreshedTables.map((t) => {
+                  const order = activeOrders.find((o) => o.table_id === t.id && o.status !== "completed");
+                  return {
+                    id: t.id,
+                    tableNo: t.table_no,
+                    capacity: t.capacity,
+                    status: t.status as RestaurantTable["status"],
+                    location: t.location ?? undefined,
+                    isActive: t.is_active,
+                    currentOrderId: order?.id,
+                  };
+                })
               );
             }
 
@@ -572,63 +578,26 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               return existing;
             }
 
-            // No existing order - create empty order via API
+            // No existing order - don't create empty order
+            // Order will be created when user adds items via saveTableOrder
+            // Return a temporary order object for UI purposes
             const table = tables.find((t) => t.id === tableId);
-            const orderInput = {
-              table_id: tableId,
+            const tempOrder: TableOrder = {
+              id: `temp-${tableId}`,
+              tableId,
+              tableNo: table?.tableNo || tableId,
               items: [],
               subtotal: 0,
-              vat_amount: 0,
-              service_charge: 0,
+              vatAmount: 0,
+              serviceCharge: 0,
               discount: 0,
               total: 0,
-            };
-            const created = await tablesApi.createOrder(orderInput);
-            
-            // Update table status
-            await tablesApi.update(tableId, { status: "occupied" });
-            
-            // Refresh tables
-            const refreshedTables = await tablesApi.list();
-            setTables(
-              refreshedTables.map((t) => ({
-                id: t.id,
-                tableNo: t.table_no,
-                capacity: t.capacity,
-                status: t.status as RestaurantTable["status"],
-                location: t.location ?? undefined,
-                isActive: t.is_active,
-                currentOrderId: t.id === tableId ? created.id : undefined,
-              }))
-            );
-
-            // Map and add order to local state
-            const mappedOrder: TableOrder = {
-              id: created.id,
-              tableId: created.table_id,
-              tableNo: table?.tableNo || tableId,
-              items: created.items.map((i) => ({
-                itemId: String(i.product_id),
-                itemName: i.item_name,
-                quantity: i.quantity,
-                unitPrice: i.unit_price,
-                discount: i.discount,
-                total: i.total,
-                notes: i.notes ?? undefined,
-                available: 9999,
-              })),
-              subtotal: created.subtotal,
-              vatAmount: created.vat_amount,
-              serviceCharge: created.service_charge,
-              discount: created.discount,
-              total: created.total,
-              status: created.status as TableOrder["status"],
-              createdAt: created.created_at,
-              updatedAt: created.updated_at,
+              status: "active",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
               kots: [],
             };
-            setTableOrders((prev) => [mappedOrder, ...prev]);
-            return mappedOrder;
+            return tempOrder;
           } catch (err: any) {
             console.error("Failed to ensure table session", err);
             throw new Error(err?.message || "Failed to ensure table session");

@@ -33,6 +33,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,6 +50,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { tablesApi } from "@/lib/api/tables";
+import { Label } from "@/components/ui/label";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -120,6 +132,10 @@ export default function Tables() {
   const [billDiscount, setBillDiscount] = useState(0);
   const [baselineItems, setBaselineItems] = useState<CartItem[]>([]);
   const [lastKot, setLastKot] = useState<{ kotNumber: number; items: CartItem[]; time: string } | null>(null);
+  const [showAddTableDialog, setShowAddTableDialog] = useState(false);
+  const [newTable, setNewTable] = useState({ tableNo: "", capacity: 4, location: "" });
+  const [isCreatingTable, setIsCreatingTable] = useState(false);
+  const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
 
   const currentOrder = useMemo(() => {
     if (!selectedTable) return null;
@@ -138,16 +154,30 @@ export default function Tables() {
   const handleTableClick = async (table: RestaurantTable) => {
     setSelectedTable(table);
     if (table.status === "empty" || table.status === "reserved") {
-      const session = await ensureTableSession(table.id);
-      setSelectedTable({ ...table, status: "occupied", currentOrderId: session.id });
-      primeCartFromOrder(session.items);
+      // For empty tables, just open the dialog with empty cart
+      // Order will be created when user adds items and saves
+      setCart([]);
+      setBaselineItems([]);
       setShowOrderDialog(true);
       return;
     }
 
     if (table.status === "occupied") {
-      const order = tableOrders.find((o) => o.id === table.currentOrderId);
-      primeCartFromOrder(order?.items);
+      // For occupied tables, load existing order
+      const existingOrder = tableOrders.find((o) => o.id === table.currentOrderId);
+      if (existingOrder) {
+        primeCartFromOrder(existingOrder.items);
+      } else {
+        // Try to ensure session exists (might have been created elsewhere)
+        try {
+          const session = await ensureTableSession(table.id);
+          primeCartFromOrder(session.items);
+        } catch (err) {
+          // If no order exists, start with empty cart
+          setCart([]);
+          setBaselineItems([]);
+        }
+      }
       setShowOrderDialog(true);
       return;
     }
@@ -304,13 +334,12 @@ export default function Tables() {
 
   const handleFinalizeBill = () => {
     if (!selectedTable || !currentOrder) return;
-    
-    // Confirmation dialog
-    const confirmMsg = `Finalize bill for ${selectedTable.tableNo}?\n\nTotal Amount: ${formatCurrency(currentOrder.total)}\n\nTable will be marked as free after payment.`;
-    if (!window.confirm(confirmMsg)) {
-      return;
-    }
-    
+    setShowFinalizeConfirm(true);
+  };
+
+  const confirmFinalizeBill = () => {
+    if (!selectedTable || !currentOrder) return;
+    setShowFinalizeConfirm(false);
     setBillLoading(true);
     finalizeTableBill(selectedTable.id, billPayment)
       .then((sale) => {
@@ -327,6 +356,47 @@ export default function Tables() {
       .finally(() => setBillLoading(false));
   };
 
+  const handleAddTable = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!newTable.tableNo.trim()) {
+      toast({
+        title: "Table number required",
+        description: "Please enter a table number.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCreatingTable(true);
+    try {
+      await tablesApi.create({
+        table_no: newTable.tableNo.trim(),
+        capacity: newTable.capacity || 4,
+        location: newTable.location.trim() || undefined,
+        is_active: true,
+      });
+
+      toast({
+        title: "Table created!",
+        description: `Table ${newTable.tableNo} has been added.`,
+      });
+
+      setNewTable({ tableNo: "", capacity: 4, location: "" });
+      setShowAddTableDialog(false);
+      
+      // Refresh tables
+      window.location.reload();
+    } catch (err: any) {
+      toast({
+        title: "Failed to create table",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingTable(false);
+    }
+  };
+
   const occupiedCount = tables.filter((t) => t.status === "occupied").length;
   const billingCount = tables.filter((t) => t.status === "billing").length;
   const emptyCount = tables.filter((t) => t.status === "empty").length;
@@ -339,6 +409,10 @@ export default function Tables() {
           <h1 className="text-3xl font-display font-bold gradient-text">Table Management</h1>
           <p className="text-muted-foreground">টেবিল ম্যানেজমেন্ট • Dine-in Orders</p>
         </div>
+        <Button variant="glow" onClick={() => setShowAddTableDialog(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Table
+        </Button>
       </div>
 
       {/* Stats */}
@@ -785,6 +859,151 @@ export default function Tables() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Add Table Dialog */}
+      <Dialog open={showAddTableDialog} onOpenChange={setShowAddTableDialog}>
+        <DialogContent className="sm:max-w-md glass-card">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text">Add New Table</DialogTitle>
+            <DialogDescription>নতুন টেবিল যোগ করুন • Create a new table</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddTable} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="tableNo">Table Number *</Label>
+              <Input
+                id="tableNo"
+                value={newTable.tableNo}
+                onChange={(e) => setNewTable((prev) => ({ ...prev, tableNo: e.target.value }))}
+                placeholder="e.g. T1, Table 5, VIP-1"
+                required
+                className="bg-muted/50"
+              />
+              <p className="text-xs text-muted-foreground">
+                Unique identifier for this table
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="capacity">Capacity (Seats)</Label>
+              <Input
+                id="capacity"
+                type="number"
+                min="1"
+                value={newTable.capacity}
+                onChange={(e) => setNewTable((prev) => ({ ...prev, capacity: parseInt(e.target.value) || 4 }))}
+                className="bg-muted/50"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="location">Location (Optional)</Label>
+              <Input
+                id="location"
+                value={newTable.location}
+                onChange={(e) => setNewTable((prev) => ({ ...prev, location: e.target.value }))}
+                placeholder="e.g. Main Hall, VIP Room, Outdoor"
+                className="bg-muted/50"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowAddTableDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="glow" disabled={isCreatingTable}>
+                {isCreatingTable ? (
+                  <>
+                    <Clock className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Table
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Finalize Bill Confirmation Dialog */}
+      <AlertDialog open={showFinalizeConfirm} onOpenChange={setShowFinalizeConfirm}>
+        <AlertDialogContent className="glass-card border-2 border-primary/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display gradient-text text-xl">
+              Finalize Bill?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 pt-2">
+              <div className="flex items-center gap-2 text-base">
+                <UtensilsCrossed className="w-5 h-5 text-primary" />
+                <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Total Amount:</span>
+                  <span className="text-2xl font-display font-bold text-primary">
+                    {currentOrder ? formatCurrency(currentOrder.total) : "৳0"}
+                  </span>
+                </div>
+                {currentOrder && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span>{formatCurrency(currentOrder.subtotal)}</span>
+                    </div>
+                    {currentOrder.vatAmount > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">VAT:</span>
+                        <span>{formatCurrency(currentOrder.vatAmount)}</span>
+                      </div>
+                    )}
+                    {currentOrder.serviceCharge > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Service Charge:</span>
+                        <span>{formatCurrency(currentOrder.serviceCharge)}</span>
+                      </div>
+                    )}
+                    {currentOrder.discount > 0 && (
+                      <div className="flex justify-between text-sm text-accent">
+                        <span>Discount:</span>
+                        <span>-{formatCurrency(currentOrder.discount)}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="flex items-start gap-2 pt-2">
+                <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
+                <p className="text-sm">
+                  Table will be marked as <span className="font-semibold text-accent">free</span> after payment is processed.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="mt-2 sm:mt-0">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmFinalizeBill}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={billLoading}
+            >
+              {billLoading ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Confirm & Finalize
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
