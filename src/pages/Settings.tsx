@@ -40,6 +40,8 @@ import { useLicense, LICENSE_STORAGE_KEY, parseLicenseToken } from "@/contexts/L
 import { usersApi, type StaffUser, type StaffRole } from "@/lib/api/users";
 import { useAuth } from "@/contexts/AuthContext";
 import { tablesApi } from "@/lib/api/tables";
+import { tenantApi, type TenantSettingsDto } from "@/lib/api/tenant";
+import { savePrintSettings } from "@/utils/printUtils";
 
 export default function Settings() {
   const { staff, categories, addCategory, removeCategory, tables } = useAppData();
@@ -55,6 +57,21 @@ export default function Settings() {
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
   const [numberOfTables, setNumberOfTables] = useState<number>(0);
   const [isCreatingTables, setIsCreatingTables] = useState(false);
+  const [tenantSettings, setTenantSettings] = useState<TenantSettingsDto | null>(null);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [businessProfile, setBusinessProfile] = useState({
+    name: "",
+    phone: "",
+    address: "",
+    vatRegistrationNo: "",
+    tradeLicense: "",
+  });
+  const [invoiceSettings, setInvoiceSettings] = useState({
+    invoicePrefix: "INV-",
+    paperSize: "thermal" as "thermal" | "thermal58",
+    footerText: "",
+  });
 
   useEffect(() => {
     // Load staff users from backend when authenticated
@@ -78,11 +95,108 @@ export default function Settings() {
     }
   }, [tables]);
 
+  useEffect(() => {
+    // Load tenant settings
+    const loadSettings = async () => {
+      if (!user?.token) return;
+      setIsLoadingSettings(true);
+      try {
+        const settings = await tenantApi.getSettings();
+        setTenantSettings(settings);
+        setBusinessProfile({
+          name: settings.name || "",
+          phone: settings.phone || "",
+          address: settings.address || "",
+          vatRegistrationNo: settings.vat_registration_no || "",
+          tradeLicense: settings.trade_license || "",
+        });
+        setInvoiceSettings({
+          invoicePrefix: settings.invoice_prefix || "INV-",
+          paperSize: (settings.paper_size === "thermal58" ? "thermal58" : "thermal"),
+          footerText: settings.footer_text || "",
+        });
+        
+        // Sync to localStorage for print system
+        savePrintSettings({
+          paperSize: settings.paper_size === 'thermal58' ? '58mm' : '80mm',
+          invoicePrefix: settings.invoice_prefix || 'INV-',
+          footerText: settings.footer_text || '',
+          restaurantName: settings.name || '',
+          restaurantNameBn: settings.name_bn || '',
+          address: settings.address || '',
+          phone: settings.phone || '',
+        });
+      } catch (err) {
+        console.error("Failed to load settings", err);
+        toast({
+          title: "Failed to load settings",
+          description: "Using default values.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+    if (user?.token) {
+      loadSettings();
+    }
+  }, [user?.token]);
+
   const handleSave = async () => {
-    toast({
-      title: "Settings saved!",
-      description: "Your changes have been applied.",
-    });
+    if (!user?.token) return;
+    setIsSavingSettings(true);
+    try {
+      await tenantApi.updateSettings({
+        name: businessProfile.name || undefined,
+        phone: businessProfile.phone || undefined,
+        address: businessProfile.address || undefined,
+        vat_registration_no: businessProfile.vatRegistrationNo || undefined,
+        trade_license: businessProfile.tradeLicense || undefined,
+        invoice_prefix: invoiceSettings.invoicePrefix || undefined,
+        paper_size: invoiceSettings.paperSize,
+        footer_text: invoiceSettings.footerText || undefined,
+      });
+      toast({
+        title: "Settings saved!",
+        description: "Your changes have been applied.",
+      });
+      // Reload settings to get updated values
+      const updated = await tenantApi.getSettings();
+      setTenantSettings(updated);
+      
+      // Sync print settings to localStorage for immediate use by print system
+      savePrintSettings({
+        paperSize: updated.paper_size === 'thermal58' ? '58mm' : '80mm',
+        invoicePrefix: updated.invoice_prefix || 'INV-',
+        footerText: updated.footer_text || '',
+        restaurantName: updated.name || '',
+        restaurantNameBn: updated.name_bn || '',
+        address: updated.address || '',
+        phone: updated.phone || '',
+      });
+      
+      // Also update business profile state
+      setBusinessProfile({
+        name: updated.name || "",
+        phone: updated.phone || "",
+        address: updated.address || "",
+        vatRegistrationNo: updated.vat_registration_no || "",
+        tradeLicense: updated.trade_license || "",
+      });
+      setInvoiceSettings({
+        invoicePrefix: updated.invoice_prefix || "INV-",
+        paperSize: (updated.paper_size === "thermal58" ? "thermal58" : "thermal"),
+        footerText: updated.footer_text || "",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to save settings",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   const handleCreateTables = async () => {
@@ -402,23 +516,53 @@ export default function Settings() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Restaurant Name</Label>
-            <Input defaultValue="Dhaka Spice House" className="bg-muted/50" />
+            <Input
+              value={businessProfile.name}
+              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Enter restaurant name"
+              className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
           </div>
           <div className="space-y-2">
             <Label>Phone Number</Label>
-            <Input defaultValue="+880 1712-345678" className="bg-muted/50" />
+            <Input
+              value={businessProfile.phone}
+              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, phone: e.target.value }))}
+              placeholder="Enter phone number"
+              className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Address</Label>
-            <Input defaultValue="123 Gulshan Avenue, Dhaka 1212" className="bg-muted/50" />
+            <Input
+              value={businessProfile.address}
+              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, address: e.target.value }))}
+              placeholder="Enter address"
+              className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
           </div>
           <div className="space-y-2">
             <Label>VAT Registration No.</Label>
-            <Input defaultValue="BIN-123456789" className="bg-muted/50" />
+            <Input
+              value={businessProfile.vatRegistrationNo}
+              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, vatRegistrationNo: e.target.value }))}
+              placeholder="Enter VAT registration number"
+              className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
           </div>
           <div className="space-y-2">
             <Label>Trade License</Label>
-            <Input defaultValue="TL-2024-001234" className="bg-muted/50" />
+            <Input
+              value={businessProfile.tradeLicense}
+              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, tradeLicense: e.target.value }))}
+              placeholder="Enter trade license number"
+              className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
           </div>
         </div>
       </GlassCard>
@@ -572,22 +716,34 @@ export default function Settings() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Invoice Prefix</Label>
-            <Input defaultValue="INV-" className="bg-muted/50" />
+            <Input
+              value={invoiceSettings.invoicePrefix}
+              onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, invoicePrefix: e.target.value }))}
+              placeholder="INV-"
+              className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
           </div>
           <div className="space-y-2">
             <Label>Paper Size</Label>
-            <Select defaultValue="80mm">
+            <Select
+              value={invoiceSettings.paperSize}
+              onValueChange={(value) => {
+                setInvoiceSettings((prev) => ({ ...prev, paperSize: value as "thermal" | "thermal58" }));
+              }}
+              disabled={isLoadingSettings}
+            >
               <SelectTrigger className="bg-muted/50">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="80mm">
+                <SelectItem value="thermal">
                   <div className="flex flex-col">
                     <span>Thermal 80mm</span>
                     <span className="text-xs text-muted-foreground">Standard thermal receipt</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="58mm">
+                <SelectItem value="thermal58">
                   <div className="flex flex-col">
                     <span>Thermal 58mm</span>
                     <span className="text-xs text-muted-foreground">Compact thermal receipt</span>
@@ -601,7 +757,13 @@ export default function Settings() {
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Footer Text</Label>
-            <Input defaultValue="Thank you for dining with us! আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!" className="bg-muted/50" />
+            <Input
+              value={invoiceSettings.footerText}
+              onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, footerText: e.target.value }))}
+              placeholder="ধন্যবাদ, আবার আসবেন"
+              className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
           </div>
         </div>
         
@@ -680,9 +842,18 @@ export default function Settings() {
 
         {/* Save Button for Business Tab */}
         <div className="flex justify-end">
-          <Button variant="glow" size="lg" onClick={handleSave}>
-            <Save className="w-4 h-4 mr-2" />
-            Save Changes
+          <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
+            {isSavingSettings ? (
+              <>
+                <Clock className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Save Changes
+              </>
+            )}
           </Button>
         </div>
         </TabsContent>

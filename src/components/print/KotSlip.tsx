@@ -1,6 +1,6 @@
 import React from "react";
 import { CartItem } from "@/types";
-import { getPrintSettings } from "@/utils/printUtils";
+import { getPrintSettingsSync } from "@/utils/printUtils";
 
 interface KotSlipProps {
   kotNumber: number;
@@ -15,7 +15,7 @@ export const KotSlip: React.FC<KotSlipProps> = ({
   items,
   time,
 }) => {
-  const settings = getPrintSettings();
+  const settings = getPrintSettingsSync();
   const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
   const kotDate = new Date(time);
   const formattedDate = kotDate.toLocaleDateString('en-GB', {

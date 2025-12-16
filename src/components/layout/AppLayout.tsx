@@ -10,8 +10,8 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background flex w-full">
-      {/* Desktop Sidebar */}
-      <Sidebar className="hidden lg:flex" />
+      {/* Desktop Sidebar - Fixed */}
+      <Sidebar className="hidden lg:flex fixed inset-y-0 left-0 z-30" />
 
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -31,7 +31,7 @@ export function AppLayout() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-screen overflow-hidden lg:ml-64">
         {/* Mobile Header */}
         <MobileHeader onMenuClick={() => setSidebarOpen(true)} />
 

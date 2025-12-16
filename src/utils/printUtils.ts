@@ -17,7 +17,7 @@ export interface PrintSettings {
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   paperSize: '80mm',
   invoicePrefix: 'INV-',
-  footerText: 'Thank you for dining with us! আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!',
+  footerText: 'ধন্যবাদ, আবার আসবেন',
   restaurantName: 'RestaurantOS',
   restaurantNameBn: 'রেস্টুরেন্ট ওএস',
   address: '123 Restaurant Street, Dhaka',
@@ -64,6 +64,7 @@ const PAPER_CONFIG: Record<ThermalPaperSize, {
 };
 
 // Get current print settings (from localStorage or defaults)
+// Settings are synced to localStorage by Settings page when loaded/saved
 export const getPrintSettings = (): PrintSettings => {
   try {
     const stored = localStorage.getItem('restaurant-os.print-settings');
@@ -76,9 +77,12 @@ export const getPrintSettings = (): PrintSettings => {
   return DEFAULT_PRINT_SETTINGS;
 };
 
+// Alias for consistency (same as getPrintSettings)
+export const getPrintSettingsSync = getPrintSettings;
+
 // Save print settings
 export const savePrintSettings = (settings: Partial<PrintSettings>) => {
-  const current = getPrintSettings();
+  const current = getPrintSettingsSync();
   const updated = { ...current, ...settings };
   localStorage.setItem('restaurant-os.print-settings', JSON.stringify(updated));
   return updated;
@@ -402,7 +406,9 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
     return;
   }
 
-  const settings = getPrintSettings();
+  // Use sync version for immediate access (reads from localStorage cache)
+  // Settings are synced to localStorage when saved in Settings page
+  const settings = getPrintSettingsSync();
   const { title = 'Print', paperSize = settings.paperSize } = options;
   
   const styles = generateThermalStyles(paperSize);

@@ -1,6 +1,6 @@
 import React from "react";
 import { TableOrder } from "@/types";
-import { getPrintSettings } from "@/utils/printUtils";
+import { getPrintSettingsSync } from "@/utils/printUtils";
 
 interface TableBillReceiptProps {
   order: TableOrder;
@@ -17,7 +17,7 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
   serviceCharge = 0,
   extraDiscount = 0,
 }) => {
-  const settings = getPrintSettings();
+  const settings = getPrintSettingsSync();
   const orderDate = new Date(order.createdAt);
   const formattedDate = orderDate.toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -119,8 +119,7 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
 
       {/* Footer */}
       <div className="slip-footer">
-        <p><strong>{settings.footerText.split('!')[0]}!</strong></p>
-        <p>{settings.footerText.split('!')[1] || 'আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!'}</p>
+        <p><strong>{settings.footerText || 'ধন্যবাদ, আবার আসবেন'}</strong></p>
         <p style={{ marginTop: '6px' }}>--- Powered by RestaurantOS ---</p>
       </div>
     </div>

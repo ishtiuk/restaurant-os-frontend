@@ -1,6 +1,6 @@
 import React from "react";
 import { Sale } from "@/types";
-import { getPrintSettings } from "@/utils/printUtils";
+import { getPrintSettingsSync } from "@/utils/printUtils";
 
 interface SalesReceiptProps {
   sale: Sale;
@@ -21,7 +21,7 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
   deliveryAddress,
   deliveryNotes,
 }) => {
-  const settings = getPrintSettings();
+  const settings = getPrintSettingsSync();
   const saleDate = new Date(sale.createdAt);
   const formattedDate = saleDate.toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -128,8 +128,7 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
 
       {/* Footer */}
       <div className="slip-footer">
-        <p><strong>{settings.footerText.split('!')[0]}!</strong></p>
-        <p>{settings.footerText.split('!')[1] || 'আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!'}</p>
+        <p><strong>{settings.footerText || 'ধন্যবাদ, আবার আসবেন'}</strong></p>
         <p style={{ marginTop: '6px' }}>--- Powered by RestaurantOS ---</p>
       </div>
     </div>

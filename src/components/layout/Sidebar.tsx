@@ -57,7 +57,7 @@ export function Sidebar({ className, onClose }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "w-64 bg-sidebar border-r border-sidebar-border flex flex-col",
+        "w-64 bg-sidebar border-r border-sidebar-border flex flex-col h-screen",
         className
       )}
     >

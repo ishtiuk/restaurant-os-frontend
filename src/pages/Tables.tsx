@@ -659,8 +659,7 @@ export default function Tables() {
                 </div>
 
                 <div className="text-center text-xs text-muted-foreground mt-4 pt-3 border-t-2 border-dashed border-border">
-                  <p>Thank you for dining with us!</p>
-                  <p>আমাদের সাথে খাওয়ার জন্য ধন্যবাদ!</p>
+                  <p>ধন্যবাদ, আবার আসবেন</p>
                 </div>
               </div>
 
@@ -755,7 +754,7 @@ export default function Tables() {
                 <Button 
                   variant="outline" 
                   className="flex-1" 
-                  onClick={() => printContent('table-bill-print', { title: 'Bill', paperSize: '80mm' })}
+                  onClick={() => printContent('table-bill-print', { title: 'Bill' })}
                 >
                   <Receipt className="w-4 h-4 mr-2" />
                   Print Bill
@@ -838,7 +837,7 @@ export default function Tables() {
                 <Button 
                   variant="outline" 
                   className="flex-1" 
-                  onClick={() => printContent('kot-slip-print', { title: 'KOT', paperSize: '80mm' })}
+                  onClick={() => printContent('kot-slip-print', { title: 'KOT' })}
                 >
                   <Printer className="w-4 h-4 mr-2" />
                   Print KOT
