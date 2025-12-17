@@ -462,7 +462,7 @@ export default function StaffPage() {
         <DialogContent className="max-w-md glass-card">
           <DialogHeader>
             <DialogTitle className="font-display gradient-text">Add Staff</DialogTitle>
-            <DialogDescription>Frontend-only staff record</DialogDescription>
+            <DialogDescription>Add a new staff member to the system</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">

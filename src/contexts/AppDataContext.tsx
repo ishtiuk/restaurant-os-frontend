@@ -39,6 +39,7 @@ import { categoriesApi } from "@/lib/api/categories";
 import { productsApi } from "@/lib/api/products";
 import { salesApi, type SaleDto } from "@/lib/api/sales";
 import { tablesApi, type TableDto, type TableOrderDto } from "@/lib/api/tables";
+import { staffApi } from "@/lib/api/staff";
 
 export type TableOrder = (typeof seedTableOrders)[number];
 
@@ -120,8 +121,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(seedPurchaseOrders);
   const [sales, setSales] = useState<Sale[]>(hasToken ? [] : seedSales);
   const [customers] = useState<Customer[]>(seedCustomers);
-  const [staff, setStaff] = useState<Staff[]>(seedStaff);
-  const [staffPayments, setStaffPayments] = useState<StaffPayment[]>(seedStaffPayments);
+  const [staff, setStaff] = useState<Staff[]>(hasToken ? [] : seedStaff);
+  const [staffPayments, setStaffPayments] = useState<StaffPayment[]>(hasToken ? [] : seedStaffPayments);
   const [attendance, setAttendance] = useState<Attendance[]>(seedAttendance);
   const [vatEntries, setVatEntries] = useState<VatEntry[]>(seedVatEntries);
   const [expenses, setExpenses] = useState<Expense[]>(seedExpenses);
@@ -151,12 +152,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const load = async () => {
       try {
-        const [cats, prods, salesData, tablesData, activeOrdersData] = await Promise.all([
+        const [cats, prods, salesData, tablesData, activeOrdersData, staffData, paymentsData] = await Promise.all([
           categoriesApi.list(),
           productsApi.list(),
           salesApi.list(100, 0).catch(() => []), // Load sales, but don't fail if endpoint doesn't exist yet
           tablesApi.list().catch(() => []), // Load tables, but don't fail if endpoint doesn't exist yet
           tablesApi.listActiveOrders().catch(() => []), // Load active table orders
+          staffApi.list().catch(() => []), // Load staff, but don't fail if endpoint doesn't exist yet
+          staffApi.listPayments().catch(() => []), // Load staff payments, but don't fail if endpoint doesn't exist yet
         ]);
         setCategories(
           cats.map((c) => ({
@@ -274,6 +277,34 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             return order ? { ...t, currentOrderId: order.id } : t;
           })
         );
+        // Map staff from API to frontend format
+        setStaff(
+          staffData.map((s) => ({
+            id: s.id,
+            name: s.name,
+            nameBn: s.name_bn ?? undefined,
+            phone: s.phone,
+            email: s.email ?? undefined,
+            role: s.role as Staff["role"],
+            salary: Number(s.salary),
+            joiningDate: s.joining_date ?? new Date().toISOString().slice(0, 10),
+            isActive: s.is_active,
+            emergencyContact: s.emergency_contact ?? undefined,
+            address: s.address ?? undefined,
+          }))
+        );
+        // Map staff payments from API to frontend format
+        setStaffPayments(
+          paymentsData.map((p) => ({
+            id: p.id,
+            staffId: p.staff_id,
+            amount: Number(p.amount),
+            type: p.type as StaffPayment["type"],
+            description: p.description ?? p.type,
+            date: p.date,
+            createdAt: p.created_at,
+          }))
+        );
       } catch (err) {
         console.error("API load failed, falling back to seeds", err);
         setCategories(seedCategories);
@@ -281,6 +312,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         setSales(seedSales);
         setTables(seedTables);
         setTableOrders(seedTableOrders as TableOrder[]);
+        setStaff(seedStaff);
+        setStaffPayments(seedStaffPayments);
       }
     };
     load();
@@ -891,6 +924,35 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       },
 
       createStaffPayment: async (input) => {
+        if (user?.token) {
+          try {
+            const paymentInput = {
+              staff_id: input.staffId,
+              amount: input.amount,
+              type: input.type,
+              date: input.date || todayISO(),
+              description: input.description,
+              reference_no: undefined,
+            };
+            const created = await staffApi.createPayment(paymentInput);
+            // Map API response to frontend format
+            const mapped: StaffPayment = {
+              id: created.id,
+              staffId: created.staff_id,
+              amount: Number(created.amount),
+              type: created.type as StaffPayment["type"],
+              description: created.description ?? created.type,
+              date: created.date,
+              createdAt: created.created_at,
+            };
+            setStaffPayments((prev) => [mapped, ...prev]);
+            return mapped;
+          } catch (err: any) {
+            console.error("Failed to create staff payment", err);
+            throw new Error(err?.message || "Failed to create staff payment");
+          }
+        }
+        // Fallback for offline mode
         await delay(200);
         const created: StaffPayment = {
           ...input,
@@ -902,6 +964,43 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       },
 
       createStaff: async (input) => {
+        if (user?.token) {
+          try {
+            const staffInput = {
+              name: input.name,
+              name_bn: input.nameBn,
+              phone: input.phone,
+              email: input.email,
+              role: input.role,
+              salary: input.salary,
+              joining_date: input.joiningDate || todayISO(),
+              address: input.address,
+              emergency_contact: input.emergencyContact,
+              is_active: input.isActive ?? true,
+            };
+            const created = await staffApi.create(staffInput);
+            // Map API response to frontend format
+            const mapped: Staff = {
+              id: created.id,
+              name: created.name,
+              nameBn: created.name_bn ?? undefined,
+              phone: created.phone,
+              email: created.email ?? undefined,
+              role: created.role as Staff["role"],
+              salary: Number(created.salary),
+              joiningDate: created.joining_date ?? todayISO(),
+              isActive: created.is_active,
+              emergencyContact: created.emergency_contact ?? undefined,
+              address: created.address ?? undefined,
+            };
+            setStaff((prev) => [mapped, ...prev]);
+            return mapped;
+          } catch (err: any) {
+            console.error("Failed to create staff", err);
+            throw new Error(err?.message || "Failed to create staff");
+          }
+        }
+        // Fallback for offline mode
         await delay(200);
         const created: Staff = { ...input, id: newId("STF") };
         setStaff((prev) => [created, ...prev]);
@@ -909,8 +1008,44 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       },
 
       updateStaff: async (staffId, updates) => {
-        await delay(150);
-        setStaff((prev) => prev.map((s) => (s.id === staffId ? { ...s, ...updates } : s)));
+        if (user?.token) {
+          try {
+            const updateInput: any = {};
+            if (updates.name !== undefined) updateInput.name = updates.name;
+            if (updates.nameBn !== undefined) updateInput.name_bn = updates.nameBn;
+            if (updates.phone !== undefined) updateInput.phone = updates.phone;
+            if (updates.email !== undefined) updateInput.email = updates.email;
+            if (updates.role !== undefined) updateInput.role = updates.role;
+            if (updates.salary !== undefined) updateInput.salary = updates.salary;
+            if (updates.joiningDate !== undefined) updateInput.joining_date = updates.joiningDate;
+            if (updates.address !== undefined) updateInput.address = updates.address;
+            if (updates.emergencyContact !== undefined) updateInput.emergency_contact = updates.emergencyContact;
+            if (updates.isActive !== undefined) updateInput.is_active = updates.isActive;
+            const updated = await staffApi.update(staffId, updateInput);
+            // Map API response to frontend format and update local state
+            const mapped: Staff = {
+              id: updated.id,
+              name: updated.name,
+              nameBn: updated.name_bn ?? undefined,
+              phone: updated.phone,
+              email: updated.email ?? undefined,
+              role: updated.role as Staff["role"],
+              salary: Number(updated.salary),
+              joiningDate: updated.joining_date ?? todayISO(),
+              isActive: updated.is_active,
+              emergencyContact: updated.emergency_contact ?? undefined,
+              address: updated.address ?? undefined,
+            };
+            setStaff((prev) => prev.map((s) => (s.id === staffId ? mapped : s)));
+          } catch (err: any) {
+            console.error("Failed to update staff", err);
+            throw new Error(err?.message || "Failed to update staff");
+          }
+        } else {
+          // Fallback for offline mode
+          await delay(150);
+          setStaff((prev) => prev.map((s) => (s.id === staffId ? { ...s, ...updates } : s)));
+        }
       },
 
       updateSaleTotalWithAudit: async (saleId, { newTotal, editedBy, reason }) => {

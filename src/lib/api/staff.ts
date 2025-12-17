@@ -1,0 +1,159 @@
+import { apiClient } from "@/lib/api";
+
+export interface StaffDto {
+  id: string;
+  name: string;
+  name_bn?: string | null;
+  phone: string;
+  email?: string | null;
+  role: string;
+  salary: number;
+  joining_date?: string | null; // ISO date string
+  address?: string | null;
+  emergency_contact?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StaffCreateInput {
+  name: string;
+  name_bn?: string;
+  phone: string;
+  email?: string;
+  role: string;
+  salary: number;
+  joining_date?: string; // ISO date string (YYYY-MM-DD)
+  address?: string;
+  emergency_contact?: string;
+  is_active?: boolean;
+}
+
+export interface StaffUpdateInput {
+  name?: string;
+  name_bn?: string;
+  phone?: string;
+  email?: string;
+  role?: string;
+  salary?: number;
+  joining_date?: string; // ISO date string (YYYY-MM-DD)
+  address?: string;
+  emergency_contact?: string;
+  is_active?: boolean;
+}
+
+export interface StaffPaymentDto {
+  id: string;
+  staff_id: string;
+  amount: number;
+  type: "salary" | "advance" | "bonus" | "deduction";
+  date: string; // ISO date string
+  description?: string | null;
+  reference_no?: string | null;
+  created_at: string;
+  created_by?: string | null;
+}
+
+export interface StaffPaymentCreateInput {
+  staff_id: string;
+  amount: number;
+  type: "salary" | "advance" | "bonus" | "deduction";
+  date?: string; // ISO date string (YYYY-MM-DD), defaults to today
+  description?: string;
+  reference_no?: string;
+}
+
+export interface StaffBalanceDto {
+  staff_id: string;
+  total_salary: number;
+  total_paid: number;
+  total_advances: number;
+  total_deductions: number;
+  balance: number;
+  due_amount: number;
+}
+
+export interface StaffStatsDto {
+  total_staff_count: number;
+  total_monthly_salary: number;
+}
+
+export const staffApi = {
+  list(params?: {
+    role?: string;
+    is_active?: boolean;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<StaffDto[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.role) searchParams.append("role", params.role);
+    if (params?.is_active !== undefined) searchParams.append("is_active", String(params.is_active));
+    if (params?.search) searchParams.append("search", params.search);
+    if (params?.limit) searchParams.append("limit", String(params.limit));
+    if (params?.offset) searchParams.append("offset", String(params.offset));
+    const query = searchParams.toString();
+    return apiClient.get<StaffDto[]>(`/staff${query ? `?${query}` : ""}`);
+  },
+
+  get(id: string): Promise<StaffDto> {
+    return apiClient.get<StaffDto>(`/staff/${id}`);
+  },
+
+  getWithPayments(id: string): Promise<StaffDto> {
+    return apiClient.get<StaffDto>(`/staff/${id}/with-payments`);
+  },
+
+  create(input: StaffCreateInput): Promise<StaffDto> {
+    return apiClient.post<StaffDto>("/staff", input);
+  },
+
+  update(id: string, input: StaffUpdateInput): Promise<StaffDto> {
+    return apiClient.patch<StaffDto>(`/staff/${id}`, input);
+  },
+
+  delete(id: string): Promise<void> {
+    return apiClient.delete(`/staff/${id}`);
+  },
+
+  getBalance(staffId: string): Promise<StaffBalanceDto> {
+    return apiClient.get<StaffBalanceDto>(`/staff/${staffId}/balance`);
+  },
+
+  getStats(): Promise<StaffStatsDto> {
+    return apiClient.get<StaffStatsDto>("/staff/stats");
+  },
+
+  // Payment methods
+  listPayments(params?: {
+    staff_id?: string;
+    payment_type?: string;
+    start_date?: string;
+    end_date?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<StaffPaymentDto[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.staff_id) searchParams.append("staff_id", params.staff_id);
+    if (params?.payment_type) searchParams.append("payment_type", params.payment_type);
+    if (params?.start_date) searchParams.append("start_date", params.start_date);
+    if (params?.end_date) searchParams.append("end_date", params.end_date);
+    if (params?.limit) searchParams.append("limit", String(params.limit));
+    if (params?.offset) searchParams.append("offset", String(params.offset));
+    const query = searchParams.toString();
+    return apiClient.get<StaffPaymentDto[]>(`/staff/payments${query ? `?${query}` : ""}`);
+  },
+
+  getPayment(id: string): Promise<StaffPaymentDto> {
+    return apiClient.get<StaffPaymentDto>(`/staff/payments/${id}`);
+  },
+
+  createPayment(input: StaffPaymentCreateInput): Promise<StaffPaymentDto> {
+    return apiClient.post<StaffPaymentDto>("/staff/payments", input);
+  },
+
+  deletePayment(paymentId: string): Promise<void> {
+    return apiClient.delete(`/staff/payments/${paymentId}`);
+  },
+};
+
