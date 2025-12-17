@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -88,6 +88,8 @@ export default function StaffPage() {
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     type: "salary",
@@ -102,6 +104,14 @@ export default function StaffPage() {
     address: "",
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // Set loading to false once data is loaded
+  useEffect(() => {
+    // Data is loaded when staff array is populated (even if empty)
+    if (staff !== undefined) {
+      setLoading(false);
+    }
+  }, [staff]);
 
   const filteredStaff = staff.filter(
     (s) =>
@@ -149,16 +159,24 @@ export default function StaffPage() {
       return;
     }
     setSubmitting(true);
-    await createStaffPayment({
-      staffId: selectedStaff.id,
-      amount,
-      type: paymentForm.type as StaffPayment["type"],
-      description: paymentForm.description || paymentForm.type,
-      date: new Date().toISOString().slice(0, 10),
-    });
-    setSubmitting(false);
-    setShowPaymentDialog(false);
-    toast({ title: "Payment recorded" });
+    setError(null);
+    try {
+      await createStaffPayment({
+        staffId: selectedStaff.id,
+        amount,
+        type: paymentForm.type as StaffPayment["type"],
+        description: paymentForm.description || paymentForm.type,
+        date: new Date().toISOString().slice(0, 10),
+      });
+      setShowPaymentDialog(false);
+      setPaymentForm({ amount: "", type: "salary", description: "" });
+      toast({ title: "Payment recorded" });
+    } catch (err: any) {
+      setError(err?.message || "Failed to record payment");
+      toast({ title: "Failed to record payment", description: err?.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCreateStaff = async () => {
@@ -166,21 +184,33 @@ export default function StaffPage() {
       toast({ title: "Name & phone required", variant: "destructive" });
       return;
     }
+    const salary = Number(staffForm.salary);
+    if (isNaN(salary) || salary < 0) {
+      toast({ title: "Invalid salary amount", variant: "destructive" });
+      return;
+    }
     setSubmitting(true);
-    await createStaff({
-      name: staffForm.name,
-      phone: staffForm.phone,
-      role: staffForm.role as Staff["role"],
-      salary: Number(staffForm.salary) || 0,
-      joiningDate: new Date().toISOString().slice(0, 10),
-      isActive: true,
-      email: staffForm.email || undefined,
-      address: staffForm.address || undefined,
-    });
-    setSubmitting(false);
-    setShowAddDialog(false);
-    setStaffForm({ name: "", phone: "", role: "waiter", salary: "20000", email: "", address: "" });
-    toast({ title: "Staff added" });
+    setError(null);
+    try {
+      await createStaff({
+        name: staffForm.name,
+        phone: staffForm.phone,
+        role: staffForm.role as Staff["role"],
+        salary,
+        joiningDate: new Date().toISOString().slice(0, 10),
+        isActive: true,
+        email: staffForm.email || undefined,
+        address: staffForm.address || undefined,
+      });
+      setShowAddDialog(false);
+      setStaffForm({ name: "", phone: "", role: "waiter", salary: "20000", email: "", address: "" });
+      toast({ title: "Staff added" });
+    } catch (err: any) {
+      setError(err?.message || "Failed to add staff");
+      toast({ title: "Failed to add staff", description: err?.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -230,9 +260,33 @@ export default function StaffPage() {
         </div>
       </GlassCard>
 
+      {/* Error Message */}
+      {error && (
+        <GlassCard className="p-4 bg-destructive/10 border-destructive/20">
+          <p className="text-destructive">{error}</p>
+        </GlassCard>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <GlassCard className="p-8 text-center">
+          <p className="text-muted-foreground">Loading staff data...</p>
+        </GlassCard>
+      )}
+
       {/* Staff Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in stagger-3">
-        {filteredStaff.map((staff) => {
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in stagger-3">
+          {filteredStaff.length === 0 ? (
+            <div className="col-span-full text-center py-12">
+              <User className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <p className="text-muted-foreground text-lg">No staff members found</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {searchQuery ? "Try a different search term" : "Add your first staff member to get started"}
+              </p>
+            </div>
+          ) : (
+            filteredStaff.map((staff) => {
           const balance = calculateBalance(staff);
           // TODO: Re-enable when attendance backend is implemented
           // const attendance = getStaffAttendance(staff.id);
@@ -300,9 +354,11 @@ export default function StaffPage() {
                 </Button>
               </div>
             </GlassCard>
-          );
-        })}
-      </div>
+            );
+          })
+          )}
+        </div>
+      )}
 
       {/* Staff Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>

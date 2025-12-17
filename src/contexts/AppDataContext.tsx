@@ -121,8 +121,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(seedPurchaseOrders);
   const [sales, setSales] = useState<Sale[]>(hasToken ? [] : seedSales);
   const [customers] = useState<Customer[]>(seedCustomers);
-  const [staff, setStaff] = useState<Staff[]>(hasToken ? [] : seedStaff);
-  const [staffPayments, setStaffPayments] = useState<StaffPayment[]>(hasToken ? [] : seedStaffPayments);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [staffPayments, setStaffPayments] = useState<StaffPayment[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>(seedAttendance);
   const [vatEntries, setVatEntries] = useState<VatEntry[]>(seedVatEntries);
   const [expenses, setExpenses] = useState<Expense[]>(seedExpenses);
@@ -306,14 +306,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           }))
         );
       } catch (err) {
-        console.error("API load failed, falling back to seeds", err);
-        setCategories(seedCategories);
-        setItems(seedItems);
-        setSales(seedSales);
-        setTables(seedTables);
-        setTableOrders(seedTableOrders as TableOrder[]);
-        setStaff(seedStaff);
-        setStaffPayments(seedStaffPayments);
+        console.error("API load failed", err);
+        // Only fallback to seed data for non-critical features
+        // Staff and staff payments require API - don't fallback
+        if (!user?.token) {
+          // Only use seed data if no token (offline demo mode)
+          setCategories(seedCategories);
+          setItems(seedItems);
+          setSales(seedSales);
+          setTables(seedTables);
+          setTableOrders(seedTableOrders as TableOrder[]);
+        }
+        // Staff and staff payments always require API - no fallback
       }
     };
     load();
