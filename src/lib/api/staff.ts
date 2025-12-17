@@ -63,45 +63,20 @@ export interface StaffPaymentCreateInput {
   reference_no?: string;
 }
 
-export interface StaffBalanceDto {
-  staff_id: string;
-  total_salary: number;
-  total_paid: number;
-  total_advances: number;
-  total_deductions: number;
-  balance: number;
-  due_amount: number;
-}
-
-export interface StaffStatsDto {
-  total_staff_count: number;
-  total_monthly_salary: number;
-}
-
 export const staffApi = {
   list(params?: {
     role?: string;
     is_active?: boolean;
-    search?: string;
-    limit?: number;
-    offset?: number;
   }): Promise<StaffDto[]> {
     const searchParams = new URLSearchParams();
     if (params?.role) searchParams.append("role", params.role);
     if (params?.is_active !== undefined) searchParams.append("is_active", String(params.is_active));
-    if (params?.search) searchParams.append("search", params.search);
-    if (params?.limit) searchParams.append("limit", String(params.limit));
-    if (params?.offset) searchParams.append("offset", String(params.offset));
     const query = searchParams.toString();
     return apiClient.get<StaffDto[]>(`/staff${query ? `?${query}` : ""}`);
   },
 
   get(id: string): Promise<StaffDto> {
     return apiClient.get<StaffDto>(`/staff/${id}`);
-  },
-
-  getWithPayments(id: string): Promise<StaffDto> {
-    return apiClient.get<StaffDto>(`/staff/${id}/with-payments`);
   },
 
   create(input: StaffCreateInput): Promise<StaffDto> {
@@ -116,28 +91,14 @@ export const staffApi = {
     return apiClient.delete(`/staff/${id}`);
   },
 
-  getBalance(staffId: string): Promise<StaffBalanceDto> {
-    return apiClient.get<StaffBalanceDto>(`/staff/${staffId}/balance`);
-  },
-
-  getStats(): Promise<StaffStatsDto> {
-    return apiClient.get<StaffStatsDto>("/staff/stats");
-  },
-
   // Payment methods
   listPayments(params?: {
     staff_id?: string;
-    payment_type?: string;
-    start_date?: string;
-    end_date?: string;
     limit?: number;
     offset?: number;
   }): Promise<StaffPaymentDto[]> {
     const searchParams = new URLSearchParams();
     if (params?.staff_id) searchParams.append("staff_id", params.staff_id);
-    if (params?.payment_type) searchParams.append("payment_type", params.payment_type);
-    if (params?.start_date) searchParams.append("start_date", params.start_date);
-    if (params?.end_date) searchParams.append("end_date", params.end_date);
     if (params?.limit) searchParams.append("limit", String(params.limit));
     if (params?.offset) searchParams.append("offset", String(params.offset));
     const query = searchParams.toString();

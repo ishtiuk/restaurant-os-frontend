@@ -18,9 +18,21 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Truck, Check, Clock, X, Eye, Trash2, CheckCircle2, HelpCircle, Info, Calculator } from "lucide-react";
+import { Plus, Truck, Check, Clock, X, Eye, Trash2, CheckCircle2, HelpCircle, Info, Calculator, Calendar as CalendarIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 const formatDate = (dateString: string) => {
@@ -89,6 +101,10 @@ export default function Purchases() {
   const [showView, setShowView] = useState(false);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrderDto | null>(null);
   const [creating, setCreating] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [poPage, setPoPage] = useState(1);
+  const [poPageSize] = useState(20);
+  const [poTotal, setPoTotal] = useState(0);
   const [form, setForm] = useState({
     supplierId: "",
     invoiceNo: "",
@@ -134,9 +150,10 @@ export default function Purchases() {
           }
         }, 30000); // 30 second timeout
         
+        const offset = (poPage - 1) * poPageSize;
         const [suppliersData, posData] = await Promise.all([
           suppliersApi.list(),
-          purchasesApi.list({ limit: 1000 }),
+          purchasesApi.list({ limit: poPageSize, offset: offset }),
         ]);
         
         clearTimeout(timeoutId);
@@ -144,6 +161,12 @@ export default function Purchases() {
         if (mounted) {
           setSuppliers(suppliersData || []);
           setPurchaseOrders(posData || []);
+          // Estimate total - if we got a full page, there might be more
+          if (posData.length === poPageSize) {
+            setPoTotal((poPage + 1) * poPageSize);
+          } else {
+            setPoTotal((poPage - 1) * poPageSize + posData.length);
+          }
         }
       } catch (error: any) {
         clearTimeout(timeoutId);
@@ -169,7 +192,7 @@ export default function Purchases() {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, []);
+  }, [poPage, poPageSize]);
 
   const totalPendingValue = useMemo(
     () =>
@@ -291,6 +314,11 @@ export default function Purchases() {
       const updated = await purchasesApi.receive(poId, {
         items: receiveItems,
       });
+
+      // Update the selected PO if it's the one being received
+      if (selectedPO?.id === poId) {
+        setSelectedPO(updated);
+      }
 
       setPurchaseOrders((prev) => prev.map((p) => (p.id === poId ? updated : p)));
       toast({ title: "Purchase order marked as received" });
@@ -419,11 +447,71 @@ export default function Purchases() {
             </tbody>
           </table>
         </div>
+        {poTotal > poPageSize && (
+          <Pagination className="mt-4">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => {
+                    if (poPage > 1) {
+                      setPoPage(poPage - 1);
+                    }
+                  }}
+                  className={poPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              {Array.from({ length: Math.ceil(poTotal / poPageSize) }, (_, i) => i + 1)
+                .filter((page) => {
+                  const totalPages = Math.ceil(poTotal / poPageSize);
+                  return (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= poPage - 1 && page <= poPage + 1)
+                  );
+                })
+                .map((page, idx, arr) => {
+                  const showEllipsisBefore = idx > 0 && arr[idx - 1] < page - 1;
+                  return (
+                    <React.Fragment key={page}>
+                      {showEllipsisBefore && (
+                        <PaginationItem>
+                          <span className="px-2">...</span>
+                        </PaginationItem>
+                      )}
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => setPoPage(page)}
+                          isActive={poPage === page}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </React.Fragment>
+                  );
+                })}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => {
+                    if (poPage < Math.ceil(poTotal / poPageSize)) {
+                      setPoPage(poPage + 1);
+                    }
+                  }}
+                  className={
+                    poPage >= Math.ceil(poTotal / poPageSize)
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
       </GlassCard>
 
       {/* New PO Dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-3xl glass-card max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl glass-card max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display gradient-text">New Purchase Order</DialogTitle>
             <DialogDescription>Create a new purchase order for items you're purchasing from a supplier</DialogDescription>
@@ -466,12 +554,42 @@ export default function Purchases() {
               </div>
               <div className="space-y-1">
                 <Label>Expected Delivery Date (Optional)</Label>
-                <Input
-                  type="date"
-                  value={form.expectedDeliveryDate}
-                  onChange={(e) => setForm((f) => ({ ...f, expectedDeliveryDate: e.target.value }))}
-                  className="bg-muted/50"
-                />
+                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                        !form.expectedDeliveryDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {form.expectedDeliveryDate ? (
+                        format(new Date(form.expectedDeliveryDate), "dd/MM/yyyy")
+                      ) : (
+                        <span>dd/mm/yyyy</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={form.expectedDeliveryDate ? new Date(form.expectedDeliveryDate) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          setForm((f) => ({
+                            ...f,
+                            expectedDeliveryDate: format(date, "yyyy-MM-dd"),
+                          }));
+                          setCalendarOpen(false); // Close calendar after selection
+                        } else {
+                          setForm((f) => ({ ...f, expectedDeliveryDate: "" }));
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1">
                 <Label>Invoice No. (Optional)</Label>
@@ -529,17 +647,19 @@ export default function Purchases() {
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                     {/* Item Name - Full width on mobile, 5 cols on desktop */}
                     <div className="col-span-12 md:col-span-5">
-                      <Label className="text-xs text-muted-foreground mb-1 block">
-                        Item Name *
+                      <div className="flex items-center gap-1 mb-1 h-5">
+                        <Label className="text-xs text-muted-foreground leading-none">
+                          Item Name *
+                        </Label>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help inline-block ml-1" />
+                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help flex-shrink-0" />
                           </TooltipTrigger>
                           <TooltipContent>
                             <p>Enter the name of the item (e.g., Rice, Cleaning Supplies, Equipment)</p>
                           </TooltipContent>
                         </Tooltip>
-                      </Label>
+                      </div>
                       <Input
                         type="text"
                         placeholder="e.g., Rice, Cleaning Supplies, Equipment"
@@ -550,17 +670,19 @@ export default function Purchases() {
                     </div>
                     {/* Quantity - 3 cols on mobile, 2 cols on desktop */}
                     <div className="col-span-4 md:col-span-2">
-                      <Label className="text-xs text-muted-foreground mb-1 block">
-                        Quantity
+                      <div className="flex items-center gap-1 mb-1 h-5">
+                        <Label className="text-xs text-muted-foreground leading-none">
+                          Quantity
+                        </Label>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help inline-block ml-1" />
+                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help flex-shrink-0" />
                           </TooltipTrigger>
                           <TooltipContent>
                             <p>How many units are you purchasing?</p>
                           </TooltipContent>
                         </Tooltip>
-                      </Label>
+                      </div>
                       <Input
                         type="number"
                         placeholder="Qty"
@@ -573,17 +695,19 @@ export default function Purchases() {
                     </div>
                     {/* Unit Price - 4 cols on mobile, 2 cols on desktop */}
                     <div className="col-span-4 md:col-span-2">
-                      <Label className="text-xs text-muted-foreground mb-1 block">
-                        Unit Price (৳)
+                      <div className="flex items-center gap-1 mb-1 h-5">
+                        <Label className="text-xs text-muted-foreground leading-none">
+                          Unit Price (৳)
+                        </Label>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help inline-block ml-1" />
+                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help flex-shrink-0" />
                           </TooltipTrigger>
                           <TooltipContent>
                             <p>Price per unit in Taka (৳)</p>
                           </TooltipContent>
                         </Tooltip>
-                      </Label>
+                      </div>
                       <Input
                         type="number"
                         placeholder="0.00"
@@ -596,10 +720,12 @@ export default function Purchases() {
                     </div>
                     {/* Total - 4 cols on mobile, 3 cols on desktop */}
                     <div className="col-span-4 md:col-span-3">
-                      <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
-                        <Calculator className="w-3 h-3" />
-                        Total (৳)
-                      </Label>
+                      <div className="flex items-center gap-1 mb-1 h-5">
+                        <Label className="text-xs text-muted-foreground leading-none flex items-center gap-1">
+                          <Calculator className="w-3 h-3 flex-shrink-0" />
+                          Total (৳)
+                        </Label>
+                      </div>
                       <Input
                         type="text"
                         value={formatCurrency(item.total)}

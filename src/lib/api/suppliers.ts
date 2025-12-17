@@ -88,10 +88,17 @@ export const suppliersApi = {
   },
 
   // Payment methods
-  listPayments(params?: { supplier_id?: string; purchase_order_id?: string }): Promise<SupplierPaymentDto[]> {
+  listPayments(params?: {
+    supplier_id?: string;
+    purchase_order_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<SupplierPaymentDto[]> {
     const searchParams = new URLSearchParams();
     if (params?.supplier_id) searchParams.append("supplier_id", params.supplier_id);
     if (params?.purchase_order_id) searchParams.append("purchase_order_id", params.purchase_order_id);
+    if (params?.limit) searchParams.append("limit", String(params.limit));
+    if (params?.offset) searchParams.append("offset", String(params.offset));
     const query = searchParams.toString();
     return apiClient.get<SupplierPaymentDto[]>(`/suppliers/payments${query ? `?${query}` : ""}`);
   },

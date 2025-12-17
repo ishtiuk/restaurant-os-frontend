@@ -5,6 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Staff, StaffPayment } from "@/types";
 import { useAppData } from "@/contexts/AppDataContext";
+import { staffApi } from "@/lib/api/staff";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import {
   Plus,
   Search,
@@ -104,6 +113,10 @@ export default function StaffPage() {
     address: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [staffPaymentPage, setStaffPaymentPage] = useState(1);
+  const [staffPaymentPageSize] = useState(10);
+  const [staffPaymentTotal, setStaffPaymentTotal] = useState(0);
+  const [currentStaffPayments, setCurrentStaffPayments] = useState<StaffPayment[]>([]);
 
   // Set loading to false once data is loaded
   useEffect(() => {
@@ -112,6 +125,44 @@ export default function StaffPage() {
       setLoading(false);
     }
   }, [staff]);
+
+  // Load staff payments with pagination when viewing a staff member
+  useEffect(() => {
+    const loadStaffPayments = async () => {
+      if (!selectedStaff) {
+        setCurrentStaffPayments([]);
+        return;
+      }
+      try {
+        const offset = (staffPaymentPage - 1) * staffPaymentPageSize;
+        const paymentsData = await staffApi.listPayments({
+          staff_id: selectedStaff.id,
+          limit: staffPaymentPageSize,
+          offset: offset,
+        });
+        const mappedPayments: StaffPayment[] = paymentsData.map((p) => ({
+          id: p.id,
+          staffId: p.staff_id,
+          amount: Number(p.amount),
+          type: p.type as StaffPayment["type"],
+          description: p.description ?? p.type,
+          date: p.date,
+          createdAt: p.created_at,
+        }));
+        setCurrentStaffPayments(mappedPayments);
+        // Estimate total
+        if (paymentsData.length === staffPaymentPageSize) {
+          setStaffPaymentTotal((staffPaymentPage + 1) * staffPaymentPageSize);
+        } else {
+          setStaffPaymentTotal((staffPaymentPage - 1) * staffPaymentPageSize + paymentsData.length);
+        }
+      } catch (error: any) {
+        console.error("Failed to load staff payments", error);
+        setCurrentStaffPayments([]);
+      }
+    };
+    loadStaffPayments();
+  }, [selectedStaff, staffPaymentPage, staffPaymentPageSize]);
 
   const filteredStaff = staff.filter(
     (s) =>
@@ -377,47 +428,111 @@ export default function StaffPage() {
               </TabsList>
 
               <TabsContent value="payments" className="mt-4">
-                <div className="space-y-3 max-h-[400px] overflow-auto custom-scrollbar">
-                  {getStaffPayments(selectedStaff.id).length === 0 ? (
+                <div className="space-y-3">
+                  {currentStaffPayments.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Wallet className="w-12 h-12 mx-auto mb-2 opacity-50" />
                       <p>No payment records</p>
                     </div>
                   ) : (
-                    getStaffPayments(selectedStaff.id).map((payment) => (
-                      <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              payment.type === "salary" || payment.type === "bonus"
-                                ? "bg-accent/20"
-                                : payment.type === "advance"
-                                ? "bg-primary/20"
-                                : "bg-destructive/20"
-                            }`}
-                          >
-                            {payment.type === "deduction" ? (
-                              <TrendingDown className="w-5 h-5 text-destructive" />
-                            ) : (
-                              <TrendingUp className="w-5 h-5 text-accent" />
-                            )}
+                    <>
+                      <div className="max-h-[400px] overflow-auto custom-scrollbar space-y-3">
+                        {currentStaffPayments.map((payment) => (
+                          <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                  payment.type === "salary" || payment.type === "bonus"
+                                    ? "bg-accent/20"
+                                    : payment.type === "advance"
+                                    ? "bg-primary/20"
+                                    : "bg-destructive/20"
+                                }`}
+                              >
+                                {payment.type === "deduction" ? (
+                                  <TrendingDown className="w-5 h-5 text-destructive" />
+                                ) : (
+                                  <TrendingUp className="w-5 h-5 text-accent" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium capitalize">{payment.type}</p>
+                                <p className="text-sm text-muted-foreground">{payment.description}</p>
+                                <p className="text-xs text-muted-foreground">{payment.date}</p>
+                              </div>
+                            </div>
+                            <span
+                              className={`font-display font-semibold ${
+                                payment.type === "deduction" ? "text-destructive" : "text-accent"
+                              }`}
+                            >
+                              {payment.type === "deduction" ? "-" : "+"}
+                              {formatCurrency(payment.amount)}
+                            </span>
                           </div>
-                          <div>
-                            <p className="font-medium capitalize">{payment.type}</p>
-                            <p className="text-sm text-muted-foreground">{payment.description}</p>
-                            <p className="text-xs text-muted-foreground">{payment.date}</p>
-                          </div>
-                        </div>
-                        <span
-                          className={`font-display font-semibold ${
-                            payment.type === "deduction" ? "text-destructive" : "text-accent"
-                          }`}
-                        >
-                          {payment.type === "deduction" ? "-" : "+"}
-                          {formatCurrency(payment.amount)}
-                        </span>
+                        ))}
                       </div>
-                    ))
+                      {staffPaymentTotal > staffPaymentPageSize && (
+                        <Pagination className="mt-4">
+                          <PaginationContent>
+                            <PaginationItem>
+                              <PaginationPrevious
+                                onClick={() => {
+                                  if (staffPaymentPage > 1) {
+                                    setStaffPaymentPage(staffPaymentPage - 1);
+                                  }
+                                }}
+                                className={staffPaymentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                              />
+                            </PaginationItem>
+                            {Array.from({ length: Math.ceil(staffPaymentTotal / staffPaymentPageSize) }, (_, i) => i + 1)
+                              .filter((page) => {
+                                const totalPages = Math.ceil(staffPaymentTotal / staffPaymentPageSize);
+                                return (
+                                  page === 1 ||
+                                  page === totalPages ||
+                                  (page >= staffPaymentPage - 1 && page <= staffPaymentPage + 1)
+                                );
+                              })
+                              .map((page, idx, arr) => {
+                                const showEllipsisBefore = idx > 0 && arr[idx - 1] < page - 1;
+                                return (
+                                  <React.Fragment key={page}>
+                                    {showEllipsisBefore && (
+                                      <PaginationItem>
+                                        <span className="px-2">...</span>
+                                      </PaginationItem>
+                                    )}
+                                    <PaginationItem>
+                                      <PaginationLink
+                                        onClick={() => setStaffPaymentPage(page)}
+                                        isActive={staffPaymentPage === page}
+                                        className="cursor-pointer"
+                                      >
+                                        {page}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  </React.Fragment>
+                                );
+                              })}
+                            <PaginationItem>
+                              <PaginationNext
+                                onClick={() => {
+                                  if (staffPaymentPage < Math.ceil(staffPaymentTotal / staffPaymentPageSize)) {
+                                    setStaffPaymentPage(staffPaymentPage + 1);
+                                  }
+                                }}
+                                className={
+                                  staffPaymentPage >= Math.ceil(staffPaymentTotal / staffPaymentPageSize)
+                                    ? "pointer-events-none opacity-50"
+                                    : "cursor-pointer"
+                                }
+                              />
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      )}
+                    </>
                   )}
                 </div>
               </TabsContent>

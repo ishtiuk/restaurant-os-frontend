@@ -4,7 +4,12 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Phone, Mail, MapPin, Truck, Clock, Check, X, Eye, DollarSign, Receipt, HelpCircle, Info } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { Plus, Search, Phone, Mail, MapPin, Truck, Clock, Check, X, Eye, DollarSign, Receipt, HelpCircle, Info, Calendar as CalendarIcon } from "lucide-react";
 import {
   suppliersApi,
   type SupplierDto,
@@ -35,6 +40,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 const formatDate = (dateString: string) => {
@@ -68,6 +81,10 @@ export default function Suppliers() {
   const [showDeletePayment, setShowDeletePayment] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [paymentToDelete, setPaymentToDelete] = useState<SupplierPaymentDto | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [paymentPage, setPaymentPage] = useState(1);
+  const [paymentPageSize] = useState(10);
+  const [paymentTotal, setPaymentTotal] = useState(0);
   const [paymentForm, setPaymentForm] = useState<SupplierPaymentCreateInput>({
     supplier_id: "",
     purchase_order_id: null,
@@ -226,13 +243,28 @@ export default function Suppliers() {
     }
   };
 
-  const openLedger = async (supplierId: string) => {
+  const openLedger = async (supplierId: string, page: number = 1) => {
     setSelectedSupplierId(supplierId);
     setShowLedger(true);
-    // Load payments for this supplier
+    setPaymentPage(page);
+    // Load payments for this supplier with pagination
     try {
-      const paymentsData = await suppliersApi.listPayments({ supplier_id: supplierId });
+      const offset = (page - 1) * paymentPageSize;
+      const paymentsData = await suppliersApi.listPayments({
+        supplier_id: supplierId,
+        limit: paymentPageSize,
+        offset: offset,
+      });
       setPayments(paymentsData);
+      // If we got a full page, there might be more. For now, we'll assume there are more if we got pageSize items
+      // In a real implementation, the API should return total count
+      if (paymentsData.length === paymentPageSize) {
+        // Likely more pages, set total to indicate there's at least one more page
+        setPaymentTotal((page + 1) * paymentPageSize);
+      } else {
+        // This is the last page
+        setPaymentTotal((page - 1) * paymentPageSize + paymentsData.length);
+      }
     } catch (error: any) {
       toast({
         title: "Failed to load payments",
@@ -268,7 +300,7 @@ export default function Suppliers() {
         variant: "destructive",
       });
     } finally {
-      setSubmitting(false);
+    setSubmitting(false);
     }
   };
 
@@ -527,24 +559,39 @@ export default function Suppliers() {
                 <TabsContent value="payments" className="space-y-3">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold">Payment History</h3>
-                    <Button variant="glow" size="sm" onClick={() => setShowAddPayment(true)}>
+                    <Button 
+                      variant="glow" 
+                      size="sm" 
+                      onClick={() => {
+                        if (!selectedSupplier) {
+                          toast({ title: "Please select a supplier first", variant: "destructive" });
+                          return;
+                        }
+                        setPaymentForm((prev) => ({
+                          ...prev,
+                          supplier_id: selectedSupplier.id,
+                          payment_date: new Date().toISOString().slice(0, 10),
+                        }));
+                        setShowAddPayment(true);
+                      }}
+                    >
                       <DollarSign className="w-4 h-4 mr-1" />
                       Record Payment
-                    </Button>
-                  </div>
-                  <div className="overflow-x-auto border border-border rounded-lg">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="p-3 text-left">Date</th>
+                  </Button>
+                </div>
+              <div className="overflow-x-auto border border-border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="p-3 text-left">Date</th>
                           <th className="p-3 text-left">PO #</th>
                           <th className="p-3 text-left">Method</th>
                           <th className="p-3 text-left">Reference</th>
-                          <th className="p-3 text-right">Amount</th>
+                      <th className="p-3 text-right">Amount</th>
                           <th className="p-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    </tr>
+                  </thead>
+                  <tbody>
                         {payments.map((payment) => (
                           <tr key={payment.id} className="border-t border-border/50">
                             <td className="p-3 text-muted-foreground">{formatDate(payment.payment_date)}</td>
@@ -557,7 +604,7 @@ export default function Suppliers() {
                             <td className="p-3 text-muted-foreground">{payment.reference_no || "-"}</td>
                             <td className="p-3 text-right font-display font-semibold text-success">
                               {formatCurrency(payment.amount)}
-                            </td>
+                        </td>
                             <td className="p-3 text-right">
                               <Button
                                 variant="ghost"
@@ -569,19 +616,86 @@ export default function Suppliers() {
                               >
                                 <X className="w-4 h-4 text-destructive" />
                               </Button>
-                            </td>
-                          </tr>
-                        ))}
+                        </td>
+                      </tr>
+                    ))}
                         {payments.length === 0 && (
-                          <tr>
+                      <tr>
                             <td colSpan={6} className="p-4 text-center text-muted-foreground">
                               No payments recorded yet.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {paymentTotal > paymentPageSize && (
+                <Pagination className="mt-4">
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => {
+                          if (paymentPage > 1 && selectedSupplierId) {
+                            openLedger(selectedSupplierId, paymentPage - 1);
+                          }
+                        }}
+                        className={paymentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.ceil(paymentTotal / paymentPageSize) }, (_, i) => i + 1)
+                      .filter((page) => {
+                        const totalPages = Math.ceil(paymentTotal / paymentPageSize);
+                        return (
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= paymentPage - 1 && page <= paymentPage + 1)
+                        );
+                      })
+                      .map((page, idx, arr) => {
+                        const showEllipsisBefore = idx > 0 && arr[idx - 1] < page - 1;
+                        return (
+                          <React.Fragment key={page}>
+                            {showEllipsisBefore && (
+                              <PaginationItem>
+                                <span className="px-2">...</span>
+                              </PaginationItem>
+                            )}
+                            <PaginationItem>
+                              <PaginationLink
+                                onClick={() => {
+                                  if (selectedSupplierId) {
+                                    openLedger(selectedSupplierId, page);
+                                  }
+                                }}
+                                isActive={paymentPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          </React.Fragment>
+                        );
+                      })}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => {
+                          if (
+                            paymentPage < Math.ceil(paymentTotal / paymentPageSize) &&
+                            selectedSupplierId
+                          ) {
+                            openLedger(selectedSupplierId, paymentPage + 1);
+                          }
+                        }}
+                        className={
+                          paymentPage >= Math.ceil(paymentTotal / paymentPageSize)
+                            ? "pointer-events-none opacity-50"
+                            : "cursor-pointer"
+                        }
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
                 </TabsContent>
               </Tabs>
             </div>
@@ -592,16 +706,24 @@ export default function Suppliers() {
       </Dialog>
 
       {/* Add Payment Dialog */}
-      <Dialog open={showAddPayment} onOpenChange={setShowAddPayment}>
+      <Dialog open={showAddPayment && !!selectedSupplier} onOpenChange={(open) => {
+        if (!open) {
+          setShowAddPayment(false);
+        } else if (!selectedSupplier) {
+          toast({ title: "Please select a supplier first", variant: "destructive" });
+          setShowAddPayment(false);
+        }
+      }}>
         <DialogContent className="max-w-md glass-card">
           <DialogHeader>
             <DialogTitle className="font-display gradient-text">Record Payment</DialogTitle>
-            <DialogDescription>Record a payment to {selectedSupplier?.name}</DialogDescription>
+            <DialogDescription>Record a payment to {selectedSupplier?.name || "supplier"}</DialogDescription>
           </DialogHeader>
+          {selectedSupplier && (
           <div className="space-y-4">
             {selectedSupplier && selectedSupplier.balance > 0 && (
               <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
-                <p className="text-sm font-medium mb-1">Outstanding Balance</p>
+                <p className="text-sm font-medium mb-1">Due Balance</p>
                 <p className="text-xl font-display font-bold text-warning">
                   {formatCurrency(selectedSupplier.balance)}
                 </p>
@@ -640,26 +762,78 @@ export default function Suppliers() {
               </div>
               <div className="space-y-1">
                 <Label>Payment Date *</Label>
-                <Input
-                  type="date"
-                  value={paymentForm.payment_date}
-                  onChange={(e) => setPaymentForm((f) => ({ ...f, payment_date: e.target.value }))}
-                  className="bg-muted/50"
-                />
+                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                        !paymentForm.payment_date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {paymentForm.payment_date ? (
+                        (() => {
+                          try {
+                            const date = new Date(paymentForm.payment_date);
+                            return isNaN(date.getTime()) ? "dd/mm/yyyy" : format(date, "dd/MM/yyyy");
+                          } catch {
+                            return "dd/mm/yyyy";
+                          }
+                        })()
+                      ) : (
+                        <span>dd/mm/yyyy</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={
+                        paymentForm.payment_date
+                          ? (() => {
+                              try {
+                                const date = new Date(paymentForm.payment_date);
+                                return isNaN(date.getTime()) ? undefined : date;
+                              } catch {
+                                return undefined;
+                              }
+                            })()
+                          : undefined
+                      }
+                      onSelect={(date) => {
+                        if (date) {
+                          setPaymentForm((f) => ({
+                            ...f,
+                            payment_date: format(date, "yyyy-MM-dd"),
+                          }));
+                          setCalendarOpen(false);
+                        } else {
+                          setPaymentForm((f) => ({ ...f, payment_date: "" }));
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1">
                 <Label>Payment Method</Label>
-                <select
+                <Select
                   value={paymentForm.payment_method || "cash"}
-                  onChange={(e) => setPaymentForm((f) => ({ ...f, payment_method: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-md border border-border bg-muted/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  onValueChange={(v) => setPaymentForm((f) => ({ ...f, payment_method: v }))}
                 >
-                  <option value="cash">Cash</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="check">Check</option>
-                  <option value="mobile_banking">Mobile Banking</option>
-                  <option value="other">Other</option>
-                </select>
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="check">Check</SelectItem>
+                    <SelectItem value="mobile_banking">Mobile Banking</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -673,26 +847,30 @@ export default function Suppliers() {
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <select
-                  value={paymentForm.purchase_order_id || ""}
-                  onChange={(e) =>
+                <Select
+                  value={paymentForm.purchase_order_id || "general"}
+                  onValueChange={(v) =>
                     setPaymentForm((f) => ({
                       ...f,
-                      purchase_order_id: e.target.value || null,
+                      purchase_order_id: v === "general" ? null : v,
                     }))
                   }
-                  className="w-full px-3 py-2 rounded-md border border-border bg-muted/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="">General Payment</option>
-                  {supplierPOs
-                    .filter((po) => getPORemainingBalance(po.id) > 0)
-                    .map((po) => (
-                      <option key={po.id} value={po.id}>
-                        PO-{po.id.slice(-8).toUpperCase()} - {formatCurrency(po.total_amount)} (Due:{" "}
-                        {formatCurrency(getPORemainingBalance(po.id))})
-                      </option>
-                    ))}
-                </select>
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue placeholder="General Payment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">General Payment</SelectItem>
+                    {supplierPOs
+                      .filter((po) => getPORemainingBalance(po.id) > 0)
+                      .map((po) => (
+                        <SelectItem key={po.id} value={po.id}>
+                          PO-{po.id.slice(-8).toUpperCase()} - {formatCurrency(po.total_amount)} (Due:{" "}
+                          {formatCurrency(getPORemainingBalance(po.id))})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label>Reference No. (Optional)</Label>
@@ -715,11 +893,12 @@ export default function Suppliers() {
               </div>
             </div>
           </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddPayment(false)}>
               Cancel
             </Button>
-            <Button variant="glow" onClick={handleCreatePayment} disabled={submittingPayment}>
+            <Button variant="glow" onClick={handleCreatePayment} disabled={submittingPayment || !selectedSupplier}>
               {submittingPayment ? "Recording..." : "Record Payment"}
             </Button>
           </DialogFooter>
@@ -805,8 +984,8 @@ export default function Suppliers() {
                 Fill in the required fields (marked with *) to add a new supplier. You can add more details later.
               </p>
             </div>
-            <div className="space-y-3">
-              <div className="space-y-1">
+          <div className="space-y-3">
+            <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Label>Name *</Label>
                   <Tooltip>
@@ -853,8 +1032,8 @@ export default function Suppliers() {
                   placeholder="supplier@example.com"
                   className="bg-muted/50"
                 />
-              </div>
-              <div className="space-y-1">
+            </div>
+            <div className="space-y-1">
                 <Label>Address (Optional)</Label>
                 <Input
                   value={supplierForm.address}
@@ -862,8 +1041,8 @@ export default function Suppliers() {
                   placeholder="123 Street, City, Country"
                   className="bg-muted/50"
                 />
-              </div>
-              <div className="space-y-1">
+            </div>
+            <div className="space-y-1">
                 <Label>Contact Person (Optional)</Label>
                 <Input
                   value={supplierForm.contact_person}
@@ -871,8 +1050,8 @@ export default function Suppliers() {
                   placeholder="Name of the person to contact"
                   className="bg-muted/50"
                 />
-              </div>
-              <div className="space-y-1">
+            </div>
+            <div className="space-y-1">
                 <Label>Notes (Optional)</Label>
                 <Textarea
                   value={supplierForm.notes}

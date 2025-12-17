@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,15 @@ import { Label } from "@/components/ui/label";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Sale } from "@/types";
+import { salesApi, type SaleDto } from "@/lib/api/sales";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import {
   Search,
   Filter,
@@ -43,9 +52,11 @@ const formatSaleId = (id: string) => {
 };
 
 export default function SalesHistoryPage() {
-  const { sales, updateSaleTotalWithAudit, replaceSale } = useAppData();
+  const { updateSaleTotalWithAudit, replaceSale } = useAppData();
   const { user } = useAuth();
   const canEditSales = user?.role === "owner" || user?.role === "superadmin";
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -55,6 +66,59 @@ export default function SalesHistoryPage() {
   const [editAmount, setEditAmount] = useState("");
   const [undoStack, setUndoStack] = useState<Record<string, Sale[]>>({});
   const [redoStack, setRedoStack] = useState<Record<string, Sale[]>>({});
+  const [salesPage, setSalesPage] = useState(1);
+  const [salesPageSize] = useState(20);
+  const [salesTotal, setSalesTotal] = useState(0);
+
+  // Load sales with pagination
+  useEffect(() => {
+    const loadSales = async () => {
+      setLoading(true);
+      try {
+        const offset = (salesPage - 1) * salesPageSize;
+        const salesData = await salesApi.list(salesPageSize, offset);
+        const mappedSales: Sale[] = salesData.map((s) => ({
+          id: s.id,
+          createdAt: s.created_at,
+          items: s.items.map((i) => ({
+            itemId: i.item_id,
+            itemName: i.item_name,
+            quantity: i.quantity,
+            unitPrice: i.unit_price,
+            discount: i.discount,
+            total: i.total,
+            notes: i.notes ?? undefined,
+          })),
+          subtotal: s.subtotal,
+          vatAmount: s.vat_amount,
+          serviceCharge: s.service_charge,
+          discount: s.discount,
+          total: s.total,
+          paymentMethod: s.payment_method,
+          customerId: undefined,
+          customerName: s.customer_name ?? undefined,
+          customerPhone: s.customer_phone ?? undefined,
+          deliveryAddress: s.delivery_address ?? undefined,
+          deliveryNotes: s.delivery_notes ?? undefined,
+          tableNo: s.table_no ?? undefined,
+          orderType: s.order_type,
+          status: s.status,
+        }));
+        setSales(mappedSales);
+        // Estimate total - if we got a full page, there might be more
+        if (salesData.length === salesPageSize) {
+          setSalesTotal((salesPage + 1) * salesPageSize);
+        } else {
+          setSalesTotal((salesPage - 1) * salesPageSize + salesData.length);
+        }
+      } catch (error: any) {
+        console.error("Failed to load sales", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSales();
+  }, [salesPage, salesPageSize]);
 
   const filteredSales = useMemo(
     () =>
@@ -310,6 +374,66 @@ export default function SalesHistoryPage() {
             </tbody>
           </table>
         </div>
+        {salesTotal > salesPageSize && (
+          <Pagination className="mt-4">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => {
+                    if (salesPage > 1) {
+                      setSalesPage(salesPage - 1);
+                    }
+                  }}
+                  className={salesPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              {Array.from({ length: Math.ceil(salesTotal / salesPageSize) }, (_, i) => i + 1)
+                .filter((page) => {
+                  const totalPages = Math.ceil(salesTotal / salesPageSize);
+                  return (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= salesPage - 1 && page <= salesPage + 1)
+                  );
+                })
+                .map((page, idx, arr) => {
+                  const showEllipsisBefore = idx > 0 && arr[idx - 1] < page - 1;
+                  return (
+                    <React.Fragment key={page}>
+                      {showEllipsisBefore && (
+                        <PaginationItem>
+                          <span className="px-2">...</span>
+                        </PaginationItem>
+                      )}
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => setSalesPage(page)}
+                          isActive={salesPage === page}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </React.Fragment>
+                  );
+                })}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => {
+                    if (salesPage < Math.ceil(salesTotal / salesPageSize)) {
+                      setSalesPage(salesPage + 1);
+                    }
+                  }}
+                  className={
+                    salesPage >= Math.ceil(salesTotal / salesPageSize)
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
       </GlassCard>
 
       {/* View Sale Dialog */}
