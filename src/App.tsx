@@ -40,44 +40,44 @@ const App = () => (
           <LicenseProvider>
             <PermissionsProvider>
               <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <Routes>
-                  <Route path="/" element={<Login />} />
-                  <Route path="/login" element={<Login />} />
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <Routes>
+                    <Route path="/" element={<Login />} />
+                    <Route path="/login" element={<Login />} />
 
-                  <Route element={<RequireAuth />}>
-                    <Route element={<AppLayout />}>
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      <Route path="/items" element={<Items />} />
-                      <Route path="/sales" element={<Sales />} />
-                      <Route path="/tables" element={<Tables />} />
-                      <Route path="/purchases" element={<Purchases />} />
-                      <Route path="/suppliers" element={<Suppliers />} />
-                      <Route path="/customers" element={<Customers />} />
-                      <Route path="/staff" element={<Staff />} />
-                      <Route path="/attendance" element={<Attendance />} />
-                      <Route path="/finance" element={<Finance />} />
-                      <Route path="/expenses" element={<Expenses />} />
-                      <Route path="/vat" element={<Vat />} />
-                      <Route path="/reports" element={<Reports />} />
-                      <Route path="/sales-history" element={<SalesHistory />} />
+                    <Route element={<RequireAuth />}>
+                      <Route element={<AppLayout />}>
+                        <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/items" element={<Items />} />
+                        <Route path="/sales" element={<Sales />} />
+                        <Route path="/tables" element={<Tables />} />
+                        <Route path="/purchases" element={<Purchases />} />
+                        <Route path="/suppliers" element={<Suppliers />} />
+                        <Route path="/customers" element={<Customers />} />
+                        <Route path="/staff" element={<Staff />} />
+                        <Route path="/attendance" element={<Attendance />} />
+                        <Route path="/finance" element={<Finance />} />
+                        <Route path="/expenses" element={<Expenses />} />
+                        <Route path="/vat" element={<Vat />} />
+                        <Route path="/reports" element={<Reports />} />
+                        <Route path="/sales-history" element={<SalesHistory />} />
 
-                      {/* Settings is available to restaurant owner and superadmin */}
-                      <Route element={<RequireRole role={["owner", "superadmin"]} />}>
-                        <Route path="/settings" element={<Settings />} />
-                      </Route>
+                        {/* Settings is available to restaurant owner and superadmin */}
+                        <Route element={<RequireRole role={["owner", "superadmin"]} />}>
+                          <Route path="/settings" element={<Settings />} />
+                        </Route>
 
-                      <Route element={<RequireRole role="superadmin" />}>
-                        <Route path="/admin" element={<Admin />} />
+                        <Route element={<RequireRole role="superadmin" />}>
+                          <Route path="/admin" element={<Admin />} />
+                        </Route>
                       </Route>
                     </Route>
-                  </Route>
 
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </BrowserRouter>
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </BrowserRouter>
               </TooltipProvider>
             </PermissionsProvider>
           </LicenseProvider>
