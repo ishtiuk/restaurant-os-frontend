@@ -85,6 +85,10 @@ export default function Suppliers() {
   const [paymentPage, setPaymentPage] = useState(1);
   const [paymentPageSize] = useState(10);
   const [paymentTotal, setPaymentTotal] = useState(0);
+  const [poPage, setPoPage] = useState(1);
+  const [poPageSize] = useState(10);
+  const [poTotal, setPoTotal] = useState(0);
+  const [supplierPOsPaginated, setSupplierPOsPaginated] = useState<PurchaseOrderDto[]>([]);
   const [paymentForm, setPaymentForm] = useState<SupplierPaymentCreateInput>({
     supplier_id: "",
     purchase_order_id: null,
@@ -173,13 +177,18 @@ export default function Suppliers() {
     ? suppliers.find((s) => s.id === selectedSupplierId) || null
     : null;
 
-  // Get purchase orders for selected supplier
+  // Get purchase orders for selected supplier (use paginated data if in ledger view, otherwise use all)
   const supplierPOs = useMemo(() => {
     if (!selectedSupplier) return [];
+    if (showLedger && supplierPOsPaginated.length > 0) {
+      // Use paginated data when viewing ledger
+      return supplierPOsPaginated.sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
+    }
+    // Fallback to all purchase orders (for stats calculation)
     return purchaseOrders
       .filter((po) => po.supplier_id === selectedSupplier.id)
       .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
-  }, [selectedSupplier, purchaseOrders]);
+  }, [selectedSupplier, purchaseOrders, showLedger, supplierPOsPaginated]);
 
   // Calculate totals from POs and payments
   const poStats = useMemo(() => {
@@ -243,10 +252,12 @@ export default function Suppliers() {
     }
   };
 
-  const openLedger = async (supplierId: string, page: number = 1) => {
+  const openLedger = async (supplierId: string, page: number = 1, poPageNum: number = 1) => {
     setSelectedSupplierId(supplierId);
     setShowLedger(true);
     setPaymentPage(page);
+    setPoPage(poPageNum);
+    
     // Load payments for this supplier with pagination
     try {
       const offset = (page - 1) * paymentPageSize;
@@ -272,7 +283,51 @@ export default function Suppliers() {
         variant: "destructive",
       });
     }
+    
+    // Load purchase orders for this supplier with pagination
+    try {
+      const poOffset = (poPageNum - 1) * poPageSize;
+      const posData = await purchasesApi.list({
+        supplier_id: supplierId,
+        limit: poPageSize,
+        offset: poOffset,
+      });
+      setSupplierPOsPaginated(posData);
+      // Estimate total
+      if (posData.length === poPageSize) {
+        setPoTotal((poPageNum + 1) * poPageSize);
+      } else {
+        setPoTotal((poPageNum - 1) * poPageSize + posData.length);
+      }
+    } catch (error: any) {
+      console.error("Failed to load purchase orders", error);
+    }
   };
+  
+  // Load purchase orders when PO page changes
+  useEffect(() => {
+    const loadPOs = async () => {
+      if (!selectedSupplierId || !showLedger) return;
+      try {
+        const poOffset = (poPage - 1) * poPageSize;
+        const posData = await purchasesApi.list({
+          supplier_id: selectedSupplierId,
+          limit: poPageSize,
+          offset: poOffset,
+        });
+        setSupplierPOsPaginated(posData);
+        // Estimate total
+        if (posData.length === poPageSize) {
+          setPoTotal((poPage + 1) * poPageSize);
+        } else {
+          setPoTotal((poPage - 1) * poPageSize + posData.length);
+        }
+      } catch (error: any) {
+        console.error("Failed to load purchase orders", error);
+      }
+    };
+    loadPOs();
+  }, [poPage, poPageSize, selectedSupplierId, showLedger]);
 
   const handleCreateSupplier = async () => {
     if (!supplierForm.name || !supplierForm.phone) {
@@ -555,6 +610,73 @@ export default function Suppliers() {
                       </tbody>
                     </table>
                   </div>
+                  {poTotal > poPageSize && (
+                    <Pagination className="mt-4">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => {
+                              if (poPage > 1 && selectedSupplierId) {
+                                openLedger(selectedSupplierId, paymentPage, poPage - 1);
+                              }
+                            }}
+                            className={poPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                        {Array.from({ length: Math.ceil(poTotal / poPageSize) }, (_, i) => i + 1)
+                          .filter((page) => {
+                            const totalPages = Math.ceil(poTotal / poPageSize);
+                            return (
+                              page === 1 ||
+                              page === totalPages ||
+                              (page >= poPage - 1 && page <= poPage + 1)
+                            );
+                          })
+                          .map((page, idx, arr) => {
+                            const showEllipsisBefore = idx > 0 && arr[idx - 1] < page - 1;
+                            return (
+                              <React.Fragment key={page}>
+                                {showEllipsisBefore && (
+                                  <PaginationItem>
+                                    <span className="px-2">...</span>
+                                  </PaginationItem>
+                                )}
+                                <PaginationItem>
+                                  <PaginationLink
+                                    onClick={() => {
+                                      if (selectedSupplierId) {
+                                        openLedger(selectedSupplierId, paymentPage, page);
+                                      }
+                                    }}
+                                    isActive={poPage === page}
+                                    className="cursor-pointer"
+                                  >
+                                    {page}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </React.Fragment>
+                            );
+                          })}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => {
+                              if (
+                                poPage < Math.ceil(poTotal / poPageSize) &&
+                                selectedSupplierId
+                              ) {
+                                openLedger(selectedSupplierId, paymentPage, poPage + 1);
+                              }
+                            }}
+                            className={
+                              poPage >= Math.ceil(poTotal / poPageSize)
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
                 </TabsContent>
                 <TabsContent value="payments" className="space-y-3">
                   <div className="flex justify-between items-center">
