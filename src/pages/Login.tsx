@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,19 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect to dashboard when authenticated (handles Edge browser timing issues)
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Use replace to avoid back button issues
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +34,8 @@ export default function Login() {
         title: "Welcome back!",
         description: "স্বাগতম! Login successful.",
       });
-      navigate("/dashboard");
+      // Navigation will happen automatically via useEffect when isAuthenticated becomes true
+      // This ensures state is fully updated before navigation (fixes Edge browser issues)
     } catch (err: any) {
       toast({
         title: "Login failed",
