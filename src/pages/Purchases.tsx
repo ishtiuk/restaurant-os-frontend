@@ -18,13 +18,26 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Truck, Check, Clock, X, Eye, Trash2, CheckCircle2 } from "lucide-react";
+import { Plus, Truck, Check, Clock, X, Eye, Trash2, CheckCircle2, HelpCircle, Info, Calculator } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+// Convert English digits to Bengali numerals
+const toBengaliNumeral = (num: number | string): string => {
+  const bengaliDigits = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+  return String(num)
+    .split("")
+    .map((digit) => {
+      const parsed = parseInt(digit, 10);
+      return !isNaN(parsed) && parsed >= 0 && parsed <= 9 ? bengaliDigits[parsed] : digit;
+    })
+    .join("");
 };
 
 const getStatusBadge = (status: string) => {
@@ -107,26 +120,55 @@ export default function Purchases() {
 
   // Load data
   useEffect(() => {
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout;
+    
     const load = async () => {
       try {
         setLoading(true);
+        
+        // Set a timeout to ensure loading state is cleared even if API hangs
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            setLoading(false);
+          }
+        }, 30000); // 30 second timeout
+        
         const [suppliersData, posData] = await Promise.all([
           suppliersApi.list(),
           purchasesApi.list({ limit: 1000 }),
         ]);
-        setSuppliers(suppliersData);
-        setPurchaseOrders(posData);
+        
+        clearTimeout(timeoutId);
+        
+        if (mounted) {
+          setSuppliers(suppliersData || []);
+          setPurchaseOrders(posData || []);
+        }
       } catch (error: any) {
-        toast({
-          title: "Failed to load data",
-          description: error.message,
-          variant: "destructive",
-        });
+        clearTimeout(timeoutId);
+        if (mounted) {
+          toast({
+            title: "Failed to load data",
+            description: error?.message || "An unexpected error occurred",
+            variant: "destructive",
+          });
+          setSuppliers([]);
+          setPurchaseOrders([]);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
+    
     load();
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   const totalPendingValue = useMemo(
@@ -292,7 +334,7 @@ export default function Purchases() {
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">Pending Orders</p>
           <p className="text-2xl font-display font-bold text-primary">
-            {purchaseOrders.filter((po) => po.status === "pending").length}
+            {toBengaliNumeral(purchaseOrders.filter((po) => po.status === "pending").length)}
           </p>
         </GlassCard>
         <GlassCard className="p-4">
@@ -361,8 +403,16 @@ export default function Purchases() {
               ))}
               {purchaseOrders.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                    No purchase orders yet. Create your first purchase order to get started.
+                  <td colSpan={7} className="p-8 text-center">
+                    <Truck className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+                    <h3 className="text-lg font-semibold mb-2">No purchase orders yet</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Create your first purchase order to start tracking your purchases from suppliers.
+                    </p>
+                    <Button variant="glow" onClick={() => setShowNew(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create First Purchase Order
+                    </Button>
                   </td>
                 </tr>
               )}
@@ -376,12 +426,28 @@ export default function Purchases() {
         <DialogContent className="max-w-3xl glass-card max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display gradient-text">New Purchase Order</DialogTitle>
-            <DialogDescription>Create a new purchase order</DialogDescription>
+            <DialogDescription>Create a new purchase order for items you're purchasing from a supplier</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-start gap-2">
+              <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                Select a supplier and add the items you're purchasing. You can enter any item manually - it doesn't need to be in your product catalog.
+              </p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Supplier *</Label>
+                <div className="flex items-center gap-2">
+                  <Label>Supplier *</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Select the supplier you're purchasing from. If you don't see them, add them from the Suppliers page first.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Select
                   value={form.supplierId}
                   onValueChange={(v) => setForm((f) => ({ ...f, supplierId: v }))}
@@ -399,7 +465,7 @@ export default function Purchases() {
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Expected Delivery Date</Label>
+                <Label>Expected Delivery Date (Optional)</Label>
                 <Input
                   type="date"
                   value={form.expectedDeliveryDate}
@@ -408,41 +474,72 @@ export default function Purchases() {
                 />
               </div>
               <div className="space-y-1">
-                <Label>Invoice No.</Label>
+                <Label>Invoice No. (Optional)</Label>
                 <Input
                   value={form.invoiceNo}
                   onChange={(e) => setForm((f) => ({ ...f, invoiceNo: e.target.value }))}
                   className="bg-muted/50"
-                  placeholder="INV-2024-001"
+                  placeholder="e.g., INV-2024-001"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <Label>Notes</Label>
+              <Label>Notes (Optional)</Label>
               <Textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 className="bg-muted/50"
-                placeholder="Additional notes..."
+                placeholder="Any additional notes about this purchase order..."
                 rows={2}
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label>Items *</Label>
+                <div className="flex items-center gap-2">
+                  <Label className="text-base font-semibold">Items *</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="w-4 h-4 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>Add items you're purchasing. Enter the item name, quantity, and price. The total will be calculated automatically.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Button variant="outline" size="sm" onClick={addItemToForm}>
                   <Plus className="w-4 h-4 mr-1" />
                   Add Item
                 </Button>
               </div>
               {form.items.map((item, index) => (
-                <div key={index} className="space-y-3 p-4 border border-border rounded-lg bg-muted/20">
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                    {/* Item Name */}
+                <div key={index} className="space-y-3 p-4 border border-border rounded-lg bg-muted/20 hover:border-primary/30 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-muted-foreground">Item #{index + 1}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeItem(index)}
+                      className="text-destructive h-8 w-8 p-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    {/* Item Name - Full width on mobile, 5 cols on desktop */}
                     <div className="col-span-12 md:col-span-5">
-                      <Label className="text-xs text-muted-foreground mb-1 block">Item Name *</Label>
+                      <Label className="text-xs text-muted-foreground mb-1 block">
+                        Item Name *
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help inline-block ml-1" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Enter the name of the item (e.g., Rice, Cleaning Supplies, Equipment)</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </Label>
                       <Input
                         type="text"
                         placeholder="e.g., Rice, Cleaning Supplies, Equipment"
@@ -451,9 +548,19 @@ export default function Purchases() {
                         className="bg-muted/50"
                       />
                     </div>
-                    {/* Quantity */}
-                    <div className="col-span-6 md:col-span-2">
-                      <Label className="text-xs text-muted-foreground mb-1 block">Quantity</Label>
+                    {/* Quantity - 3 cols on mobile, 2 cols on desktop */}
+                    <div className="col-span-4 md:col-span-2">
+                      <Label className="text-xs text-muted-foreground mb-1 block">
+                        Quantity
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help inline-block ml-1" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>How many units are you purchasing?</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </Label>
                       <Input
                         type="number"
                         placeholder="Qty"
@@ -464,12 +571,22 @@ export default function Purchases() {
                         step="0.01"
                       />
                     </div>
-                    {/* Unit Price */}
-                    <div className="col-span-6 md:col-span-2">
-                      <Label className="text-xs text-muted-foreground mb-1 block">Unit Price</Label>
+                    {/* Unit Price - 4 cols on mobile, 2 cols on desktop */}
+                    <div className="col-span-4 md:col-span-2">
+                      <Label className="text-xs text-muted-foreground mb-1 block">
+                        Unit Price (৳)
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help inline-block ml-1" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Price per unit in Taka (৳)</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </Label>
                       <Input
                         type="number"
-                        placeholder="Price"
+                        placeholder="0.00"
                         value={item.unit_price || ""}
                         onChange={(e) => updateItem(index, { unit_price: parseFloat(e.target.value) || 0 })}
                         className="bg-muted/50"
@@ -477,50 +594,75 @@ export default function Purchases() {
                         step="0.01"
                       />
                     </div>
-                    {/* Total */}
-                    <div className="col-span-8 md:col-span-2">
-                      <Label className="text-xs text-muted-foreground mb-1 block">Total</Label>
+                    {/* Total - 4 cols on mobile, 3 cols on desktop */}
+                    <div className="col-span-4 md:col-span-3">
+                      <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                        <Calculator className="w-3 h-3" />
+                        Total (৳)
+                      </Label>
                       <Input
                         type="text"
                         value={formatCurrency(item.total)}
                         readOnly
-                        className="bg-muted/50 font-semibold"
+                        className="bg-muted/50 font-semibold text-primary"
                       />
-                    </div>
-                    {/* Remove */}
-                    <div className="col-span-4 md:col-span-1 flex items-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeItem(index)}
-                        className="text-destructive h-10 w-full"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
                     </div>
                   </div>
                 </div>
               ))}
               {form.items.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Click "Add Item" to add items to this purchase order. You can enter any item manually.
-                </p>
+                <div className="p-6 border-2 border-dashed border-border rounded-lg text-center bg-muted/10">
+                  <Truck className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                  <p className="text-sm font-medium mb-1">No items added yet</p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Click "Add Item" above to start adding items to this purchase order
+                  </p>
+                  <Button variant="outline" size="sm" onClick={addItemToForm}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Your First Item
+                  </Button>
+                </div>
               )}
             </div>
 
-            <div className="p-3 rounded-lg bg-muted/30 border border-muted/40">
-              <p className="text-sm text-muted-foreground">Total</p>
-              <p className="text-xl font-display font-bold">
-                {formatCurrency(form.items.reduce((sum, item) => sum + item.total, 0))}
-              </p>
+            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Total Purchase Order Amount</p>
+                  <p className="text-2xl font-display font-bold gradient-text">
+                    {formatCurrency(form.items.reduce((sum, item) => sum + item.total, 0))}
+                  </p>
+                </div>
+                <Calculator className="w-8 h-8 text-primary opacity-50" />
+              </div>
+              {form.items.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {form.items.length} item{form.items.length !== 1 ? "s" : ""} • Total calculated automatically
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNew(false)}>
               Cancel
             </Button>
-            <Button variant="glow" onClick={handleCreate} disabled={creating || form.items.length === 0}>
-              {creating ? "Creating..." : "Create PO"}
+            <Button 
+              variant="glow" 
+              onClick={handleCreate} 
+              disabled={creating || form.items.length === 0 || !form.supplierId}
+              className="min-w-[120px]"
+            >
+              {creating ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Create Purchase Order
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

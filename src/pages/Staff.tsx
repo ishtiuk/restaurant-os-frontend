@@ -35,6 +35,18 @@ import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
+// Convert English digits to Bengali numerals
+const toBengaliNumeral = (num: number | string): string => {
+  const bengaliDigits = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+  return String(num)
+    .split("")
+    .map((digit) => {
+      const parsed = parseInt(digit, 10);
+      return !isNaN(parsed) && parsed >= 0 && parsed <= 9 ? bengaliDigits[parsed] : digit;
+    })
+    .join("");
+};
+
 const getRoleIcon = (role: Staff["role"]) => {
   switch (role) {
     case "chef":
@@ -66,7 +78,11 @@ const getRoleBadge = (role: Staff["role"]) => {
 };
 
 export default function StaffPage() {
-  const { staff, staffPayments, attendance, createStaffPayment, createStaff } = useAppData();
+  // TODO: Re-enable attendance when backend is implemented
+  // const { staff, staffPayments, attendance, createStaffPayment, createStaff } = useAppData();
+  const { staff, staffPayments, createStaffPayment, createStaff } = useAppData();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const attendance: never[] = []; // Placeholder - attendance not implemented yet
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
@@ -101,7 +117,10 @@ export default function StaffPage() {
   const totalAdvances = staffPayments.filter((p) => p.type === "advance").reduce((sum, p) => sum + p.amount, 0);
 
   const getStaffPayments = (staffId: string) => staffPayments.filter((p) => p.staffId === staffId);
-  const getStaffAttendance = (staffId: string) => attendance.filter((a) => a.staffId === staffId);
+  
+  // TODO: Re-enable when attendance backend is implemented
+  // const getStaffAttendance = (staffId: string) => attendance.filter((a) => a.staffId === staffId);
+  const getStaffAttendance = (_staffId: string) => [] as never[]; // Placeholder - returns empty array
 
   const calculateBalance = (staff: Staff) => {
     const payments = getStaffPayments(staff.id);
@@ -182,7 +201,7 @@ export default function StaffPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 animate-fade-in stagger-1">
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">Total Staff</p>
-          <p className="text-2xl font-display font-bold">{staff.length}</p>
+          <p className="text-2xl font-display font-bold">{toBengaliNumeral(staff.length)}</p>
         </GlassCard>
         <GlassCard className="p-4" glow="primary">
           <p className="text-sm text-muted-foreground">Monthly Salary</p>
@@ -215,8 +234,10 @@ export default function StaffPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in stagger-3">
         {filteredStaff.map((staff) => {
           const balance = calculateBalance(staff);
-          const attendance = getStaffAttendance(staff.id);
-          const presentDays = attendance.filter((a) => a.status === "present").length;
+          // TODO: Re-enable when attendance backend is implemented
+          // const attendance = getStaffAttendance(staff.id);
+          // const presentDays = attendance.filter((a) => a.status === "present").length;
+          const presentDays = 0; // Placeholder - attendance not implemented yet
 
           return (
             <GlassCard key={staff.id} hover className="p-5">
@@ -261,10 +282,11 @@ export default function StaffPage() {
                     {balance > 0 ? `Due: ${formatCurrency(balance)}` : "Paid"}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                {/* TODO: Re-enable when attendance backend is implemented */}
+                {/* <div className="flex justify-between">
                   <span className="text-muted-foreground">Attendance</span>
                   <span className="font-semibold">{presentDays} days</span>
-                </div>
+                </div> */}
               </div>
 
               <div className="flex gap-2 mt-4">
@@ -292,9 +314,10 @@ export default function StaffPage() {
 
           {selectedStaff && (
             <Tabs defaultValue="payments" className="mt-4">
-              <TabsList className="grid w-full grid-cols-2">
+              {/* TODO: Re-enable attendance tab when backend is implemented - change grid-cols-2 to grid-cols-1 */}
+              <TabsList className="grid w-full grid-cols-1">
                 <TabsTrigger value="payments">Payment History</TabsTrigger>
-                <TabsTrigger value="attendance">Attendance</TabsTrigger>
+                {/* <TabsTrigger value="attendance">Attendance</TabsTrigger> */}
               </TabsList>
 
               <TabsContent value="payments" className="mt-4">
@@ -343,7 +366,8 @@ export default function StaffPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="attendance" className="mt-4">
+              {/* TODO: Re-enable when attendance backend is implemented */}
+              {/* <TabsContent value="attendance" className="mt-4">
                 <div className="space-y-2 max-h-[400px] overflow-auto custom-scrollbar">
                   {getStaffAttendance(selectedStaff.id).length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
@@ -374,7 +398,7 @@ export default function StaffPage() {
                     ))
                   )}
                 </div>
-              </TabsContent>
+              </TabsContent> */}
             </Tabs>
           )}
         </DialogContent>

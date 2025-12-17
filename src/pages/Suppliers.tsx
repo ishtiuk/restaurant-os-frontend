@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Phone, Mail, MapPin, Truck, Clock, Check, X, Eye, DollarSign, Receipt } from "lucide-react";
+import { Plus, Search, Phone, Mail, MapPin, Truck, Clock, Check, X, Eye, DollarSign, Receipt, HelpCircle, Info } from "lucide-react";
 import {
   suppliersApi,
   type SupplierDto,
@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 const formatDate = (dateString: string) => {
@@ -89,26 +90,55 @@ export default function Suppliers() {
 
   // Load suppliers and purchase orders
   useEffect(() => {
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout;
+    
     const load = async () => {
       try {
         setLoading(true);
+        
+        // Set a timeout to ensure loading state is cleared even if API hangs
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            setLoading(false);
+          }
+        }, 30000); // 30 second timeout
+        
         const [suppliersData, posData] = await Promise.all([
           suppliersApi.list(),
           purchasesApi.list({ limit: 1000 }),
         ]);
-        setSuppliers(suppliersData);
-        setPurchaseOrders(posData);
+        
+        clearTimeout(timeoutId);
+        
+        if (mounted) {
+          setSuppliers(suppliersData || []);
+          setPurchaseOrders(posData || []);
+        }
       } catch (error: any) {
-        toast({
-          title: "Failed to load suppliers",
-          description: error.message,
-          variant: "destructive",
-        });
+        clearTimeout(timeoutId);
+        if (mounted) {
+          toast({
+            title: "Failed to load suppliers",
+            description: error?.message || "An unexpected error occurred",
+            variant: "destructive",
+          });
+          setSuppliers([]);
+          setPurchaseOrders([]);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
+    
     load();
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   const filtered = useMemo(
@@ -332,6 +362,7 @@ export default function Suppliers() {
                 className="flex-1"
                 onClick={() => openLedger(supplier.id)}
               >
+                <Eye className="w-4 h-4 mr-1" />
                 View History
               </Button>
               <Button
@@ -340,6 +371,7 @@ export default function Suppliers() {
                 className="flex-1"
                 onClick={() => handleNewOrder(supplier.id)}
               >
+                <Truck className="w-4 h-4 mr-1" />
                 New Order
               </Button>
             </div>
@@ -347,9 +379,24 @@ export default function Suppliers() {
         ))}
       </div>
 
-      {filtered.length === 0 && (
+      {filtered.length === 0 && search && (
         <GlassCard className="p-8 text-center">
-          <p className="text-muted-foreground">No suppliers found. Add your first supplier to get started.</p>
+          <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <p className="text-muted-foreground mb-2">No suppliers found matching "{search}"</p>
+          <p className="text-sm text-muted-foreground">Try a different search term or clear the search</p>
+        </GlassCard>
+      )}
+      {filtered.length === 0 && !search && (
+        <GlassCard className="p-8 text-center">
+          <Truck className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <h3 className="text-lg font-semibold mb-2">No suppliers yet</h3>
+          <p className="text-muted-foreground mb-4">
+            Start by adding your first supplier. You'll be able to create purchase orders and track payments.
+          </p>
+          <Button variant="glow" onClick={() => setShowAddSupplier(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Your First Supplier
+          </Button>
         </GlassCard>
       )}
 
@@ -551,85 +598,121 @@ export default function Suppliers() {
             <DialogTitle className="font-display gradient-text">Record Payment</DialogTitle>
             <DialogDescription>Record a payment to {selectedSupplier?.name}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Amount *</Label>
-              <Input
-                type="number"
-                value={paymentForm.amount || ""}
-                onChange={(e) =>
-                  setPaymentForm((f) => ({ ...f, amount: parseFloat(e.target.value) || 0 }))
-                }
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-                className="bg-muted/50"
-              />
+          <div className="space-y-4">
+            {selectedSupplier && selectedSupplier.balance > 0 && (
+              <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                <p className="text-sm font-medium mb-1">Outstanding Balance</p>
+                <p className="text-xl font-display font-bold text-warning">
+                  {formatCurrency(selectedSupplier.balance)}
+                </p>
+              </div>
+            )}
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-start gap-2">
+              <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                Record a payment to reduce the supplier's balance. You can link it to a specific purchase order or record it as a general payment.
+              </p>
             </div>
-            <div className="space-y-1">
-              <Label>Payment Date *</Label>
-              <Input
-                type="date"
-                value={paymentForm.payment_date}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, payment_date: e.target.value }))}
-                className="bg-muted/50"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Payment Method</Label>
-              <select
-                value={paymentForm.payment_method || "cash"}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, payment_method: e.target.value }))}
-                className="w-full px-3 py-2 rounded-md border border-border bg-muted/50 text-sm"
-              >
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="check">Check</option>
-                <option value="mobile_banking">Mobile Banking</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Against Purchase Order (Optional)</Label>
-              <select
-                value={paymentForm.purchase_order_id || ""}
-                onChange={(e) =>
-                  setPaymentForm((f) => ({
-                    ...f,
-                    purchase_order_id: e.target.value || null,
-                  }))
-                }
-                className="w-full px-3 py-2 rounded-md border border-border bg-muted/50 text-sm"
-              >
-                <option value="">General Payment</option>
-                {supplierPOs
-                  .filter((po) => getPORemainingBalance(po.id) > 0)
-                  .map((po) => (
-                    <option key={po.id} value={po.id}>
-                      PO-{po.id.slice(-8).toUpperCase()} - {formatCurrency(po.total_amount)} (Due:{" "}
-                      {formatCurrency(getPORemainingBalance(po.id))})
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label>Reference No. (Optional)</Label>
-              <Input
-                value={paymentForm.reference_no || ""}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, reference_no: e.target.value }))}
-                placeholder="Check number, transaction ID, etc."
-                className="bg-muted/50"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Notes (Optional)</Label>
-              <Textarea
-                value={paymentForm.notes || ""}
-                onChange={(e) => setPaymentForm((f) => ({ ...f, notes: e.target.value }))}
-                placeholder="Additional notes..."
-                rows={2}
-                className="bg-muted/50"
-              />
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Label>Amount *</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Enter the payment amount in ৳ (Taka)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <Input
+                  type="number"
+                  value={paymentForm.amount || ""}
+                  onChange={(e) =>
+                    setPaymentForm((f) => ({ ...f, amount: parseFloat(e.target.value) || 0 }))
+                  }
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Payment Date *</Label>
+                <Input
+                  type="date"
+                  value={paymentForm.payment_date}
+                  onChange={(e) => setPaymentForm((f) => ({ ...f, payment_date: e.target.value }))}
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Payment Method</Label>
+                <select
+                  value={paymentForm.payment_method || "cash"}
+                  onChange={(e) => setPaymentForm((f) => ({ ...f, payment_method: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-md border border-border bg-muted/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="check">Check</option>
+                  <option value="mobile_banking">Mobile Banking</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Label>Against Purchase Order (Optional)</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Link this payment to a specific purchase order, or leave as "General Payment"</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <select
+                  value={paymentForm.purchase_order_id || ""}
+                  onChange={(e) =>
+                    setPaymentForm((f) => ({
+                      ...f,
+                      purchase_order_id: e.target.value || null,
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-md border border-border bg-muted/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">General Payment</option>
+                  {supplierPOs
+                    .filter((po) => getPORemainingBalance(po.id) > 0)
+                    .map((po) => (
+                      <option key={po.id} value={po.id}>
+                        PO-{po.id.slice(-8).toUpperCase()} - {formatCurrency(po.total_amount)} (Due:{" "}
+                        {formatCurrency(getPORemainingBalance(po.id))})
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Reference No. (Optional)</Label>
+                <Input
+                  value={paymentForm.reference_no || ""}
+                  onChange={(e) => setPaymentForm((f) => ({ ...f, reference_no: e.target.value }))}
+                  placeholder="e.g., Check #1234, Transaction ID, etc."
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Notes (Optional)</Label>
+                <Textarea
+                  value={paymentForm.notes || ""}
+                  onChange={(e) => setPaymentForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Any additional notes about this payment..."
+                  rows={2}
+                  className="bg-muted/50"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -715,56 +798,90 @@ export default function Suppliers() {
             <DialogTitle className="font-display gradient-text">Add Supplier</DialogTitle>
             <DialogDescription>Create a new supplier record</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Name *</Label>
-              <Input
-                value={supplierForm.name}
-                onChange={(e) => setSupplierForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Supplier name"
-              />
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-start gap-2">
+              <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                Fill in the required fields (marked with *) to add a new supplier. You can add more details later.
+              </p>
             </div>
-            <div className="space-y-1">
-              <Label>Phone *</Label>
-              <Input
-                value={supplierForm.phone}
-                onChange={(e) => setSupplierForm((f) => ({ ...f, phone: e.target.value }))}
-                placeholder="+880 1712-345678"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={supplierForm.email}
-                onChange={(e) => setSupplierForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="supplier@example.com"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Address</Label>
-              <Input
-                value={supplierForm.address}
-                onChange={(e) => setSupplierForm((f) => ({ ...f, address: e.target.value }))}
-                placeholder="123 Street, City"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Contact Person</Label>
-              <Input
-                value={supplierForm.contact_person}
-                onChange={(e) => setSupplierForm((f) => ({ ...f, contact_person: e.target.value }))}
-                placeholder="John Doe"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea
-                value={supplierForm.notes}
-                onChange={(e) => setSupplierForm((f) => ({ ...f, notes: e.target.value }))}
-                placeholder="Additional notes..."
-                rows={3}
-              />
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Label>Name *</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Enter the supplier's business or company name</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <Input
+                  value={supplierForm.name}
+                  onChange={(e) => setSupplierForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g., ABC Trading Company"
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Label>Phone *</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Primary contact number for this supplier</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <Input
+                  value={supplierForm.phone}
+                  onChange={(e) => setSupplierForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="+880 1712-345678 or 01712-345678"
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Email (Optional)</Label>
+                <Input
+                  type="email"
+                  value={supplierForm.email}
+                  onChange={(e) => setSupplierForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="supplier@example.com"
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Address (Optional)</Label>
+                <Input
+                  value={supplierForm.address}
+                  onChange={(e) => setSupplierForm((f) => ({ ...f, address: e.target.value }))}
+                  placeholder="123 Street, City, Country"
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Contact Person (Optional)</Label>
+                <Input
+                  value={supplierForm.contact_person}
+                  onChange={(e) => setSupplierForm((f) => ({ ...f, contact_person: e.target.value }))}
+                  placeholder="Name of the person to contact"
+                  className="bg-muted/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Notes (Optional)</Label>
+                <Textarea
+                  value={supplierForm.notes}
+                  onChange={(e) => setSupplierForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Any additional information about this supplier..."
+                  rows={3}
+                  className="bg-muted/50"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
