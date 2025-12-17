@@ -56,6 +56,40 @@ export function Sidebar({ className, onClose }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Define allowed pages for non-superadmin users
+  const allowedPagesForNonSuperadmin = [
+    "/dashboard",
+    "/sales",
+    "/tables",
+    "/items",
+    "/purchases",
+    "/suppliers",
+    "/staff",
+    "/reports",
+    "/settings",
+  ];
+
+  // Filter navigation based on user role
+  const isSuperadmin = user?.role === "superadmin";
+  
+  const filteredMainNavigation = mainNavigation.filter((item) => {
+    if (!canAccess(item.path)) return false;
+    if (isSuperadmin) return true;
+    return allowedPagesForNonSuperadmin.includes(item.path);
+  });
+
+  const filteredOperationsNavigation = operationsNavigation.filter((item) => {
+    if (!canAccess(item.path)) return false;
+    if (isSuperadmin) return true;
+    return allowedPagesForNonSuperadmin.includes(item.path);
+  });
+
+  const filteredAnalyticsNavigation = analyticsNavigation.filter((item) => {
+    if (!canAccess(item.path)) return false;
+    if (isSuperadmin) return true;
+    return allowedPagesForNonSuperadmin.includes(item.path);
+  });
+
   return (
     <aside
       className={cn(
@@ -91,37 +125,34 @@ export function Sidebar({ className, onClose }: SidebarProps) {
         <div>
           <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Main</p>
           <ul className="space-y-1">
-            {mainNavigation
-              .filter((item) => canAccess(item.path))
-              .map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <li key={item.path}>
-                    <NavLink
-                      to={item.path}
-                      onClick={onClose}
-                      className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
-                      <span>{item.label}</span>
-                    </NavLink>
-                  </li>
-                );
-              })}
+            {filteredMainNavigation.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    onClick={onClose}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <item.icon className={cn("w-5 h-5", isActive && "text-sidebar-primary")} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                </li>
+              );
+            })}
           </ul>
         </div>
 
-        <div>
-          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Operations</p>
-          <ul className="space-y-1">
-            {operationsNavigation
-              .filter((item) => canAccess(item.path))
-              .map((item) => {
+        {filteredOperationsNavigation.length > 0 && (
+          <div>
+            <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Operations</p>
+            <ul className="space-y-1">
+              {filteredOperationsNavigation.map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
                   <li key={item.path}>
@@ -141,15 +172,15 @@ export function Sidebar({ className, onClose }: SidebarProps) {
                   </li>
                 );
               })}
-          </ul>
-        </div>
+            </ul>
+          </div>
+        )}
 
-        <div>
-          <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Analytics & Settings</p>
-          <ul className="space-y-1">
-            {analyticsNavigation
-              .filter((item) => canAccess(item.path))
-              .map((item) => {
+        {filteredAnalyticsNavigation.length > 0 && (
+          <div>
+            <p className="px-3 text-[11px] uppercase tracking-wide text-muted-foreground/70 mb-1">Analytics & Settings</p>
+            <ul className="space-y-1">
+              {filteredAnalyticsNavigation.map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
                   <li key={item.path}>
@@ -169,8 +200,9 @@ export function Sidebar({ className, onClose }: SidebarProps) {
                   </li>
                 );
               })}
-          </ul>
-        </div>
+            </ul>
+          </div>
+        )}
 
         {user?.role === "superadmin" && (
           <div>
