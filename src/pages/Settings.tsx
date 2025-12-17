@@ -44,7 +44,7 @@ import { tenantApi, type TenantSettingsDto } from "@/lib/api/tenant";
 import { savePrintSettings } from "@/utils/printUtils";
 
 export default function Settings() {
-  const { staff, categories, addCategory, removeCategory, tables } = useAppData();
+  const { staff, categories, addCategory, removeCategory, tables, refreshTables } = useAppData();
   const { license, refreshFromStorage } = useLicense();
   const { user } = useAuth();
   const [language, setLanguage] = useState("en");
@@ -233,16 +233,9 @@ export default function Settings() {
         description: `Successfully created ${needed} table${needed !== 1 ? "s" : ""}. Refreshing...`,
       });
 
-      // Refresh tables by fetching from API
-      const updatedTables = await tablesApi.list();
-      // Update the numberOfTables to reflect the new total
-      setNumberOfTables(updatedTables.length);
-      
-      // Trigger a re-render by updating a dummy state or reloading
-      // Since we don't have direct access to setTables, we'll use a small delay and reload
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Refresh tables from API
+      await refreshTables();
+      // Update the numberOfTables to reflect the new total (will be updated by useEffect when tables change)
     } catch (err: any) {
       toast({
         title: "Failed to create tables",

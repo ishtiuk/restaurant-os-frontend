@@ -66,6 +66,7 @@ export function Sidebar({ className, onClose }: SidebarProps) {
     "/suppliers",
     "/staff",
     "/reports",
+    "/sales-history",
     "/settings",
   ];
 

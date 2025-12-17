@@ -46,6 +46,43 @@ import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
+// Helper function to map API SaleDto to frontend Sale type
+const mapSaleDtoToSale = (s: SaleDto): Sale => ({
+  id: s.id,
+  createdAt: s.created_at,
+  items: s.items.map((i) => ({
+    itemId: i.item_id,
+    itemName: i.item_name,
+    quantity: i.quantity,
+    unitPrice: i.unit_price,
+    discount: i.discount,
+    total: i.total,
+    notes: i.notes ?? undefined,
+  })),
+  subtotal: s.subtotal,
+  vatAmount: s.vat_amount,
+  serviceCharge: s.service_charge,
+  discount: s.discount,
+  total: s.total,
+  paymentMethod: s.payment_method as Sale["paymentMethod"],
+  customerId: undefined,
+  customerName: s.customer_name ?? undefined,
+  customerPhone: s.customer_phone ?? undefined,
+  deliveryAddress: s.delivery_address ?? undefined,
+  deliveryNotes: s.delivery_notes ?? undefined,
+  tableNo: s.table_no ?? undefined,
+  orderType: s.order_type,
+  status: s.status as Sale["status"],
+  editHistory: s.edit_history?.map((edit) => ({
+    id: edit.id,
+    editedAt: edit.edited_at,
+    editedBy: edit.edited_by,
+    previousTotal: edit.previous_total,
+    newTotal: edit.new_total,
+    reason: edit.reason,
+  })),
+});
+
 const formatSaleId = (id: string) => {
   // Show first 8 characters of UUID for readability
   return id.substring(0, 8).toUpperCase();
@@ -76,43 +113,17 @@ export default function SalesHistoryPage() {
       setLoading(true);
       try {
         const offset = (salesPage - 1) * salesPageSize;
-        const salesData = await salesApi.list(salesPageSize, offset);
-        const mappedSales: Sale[] = salesData.map((s) => ({
-          id: s.id,
-          createdAt: s.created_at,
-          items: s.items.map((i) => ({
-            itemId: i.item_id,
-            itemName: i.item_name,
-            quantity: i.quantity,
-            unitPrice: i.unit_price,
-            discount: i.discount,
-            total: i.total,
-            notes: i.notes ?? undefined,
-          })),
-          subtotal: s.subtotal,
-          vatAmount: s.vat_amount,
-          serviceCharge: s.service_charge,
-          discount: s.discount,
-          total: s.total,
-          paymentMethod: s.payment_method,
-          customerId: undefined,
-          customerName: s.customer_name ?? undefined,
-          customerPhone: s.customer_phone ?? undefined,
-          deliveryAddress: s.delivery_address ?? undefined,
-          deliveryNotes: s.delivery_notes ?? undefined,
-          tableNo: s.table_no ?? undefined,
-          orderType: s.order_type,
-          status: s.status,
-        }));
+        const response = await salesApi.list(salesPageSize, offset);
+        const mappedSales: Sale[] = response.data.map(mapSaleDtoToSale);
         setSales(mappedSales);
-        // Estimate total - if we got a full page, there might be more
-        if (salesData.length === salesPageSize) {
-          setSalesTotal((salesPage + 1) * salesPageSize);
-        } else {
-          setSalesTotal((salesPage - 1) * salesPageSize + salesData.length);
-        }
+        setSalesTotal(response.total);
       } catch (error: any) {
         console.error("Failed to load sales", error);
+        toast({
+          title: "Failed to load sales",
+          description: error?.message || "Please try again later.",
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
@@ -144,7 +155,7 @@ export default function SalesHistoryPage() {
     setShowEditDialog(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editReason.trim()) {
       toast({ title: "Please provide a reason", variant: "destructive" });
       return;
@@ -160,20 +171,43 @@ export default function SalesHistoryPage() {
       setRedoStack((prev) => ({ ...prev, [current.id]: [] }));
     }
 
-    updateSaleTotalWithAudit(selectedSale.id, {
-      newTotal: parseFloat(editAmount),
-      editedBy: user?.name || "Admin",
-      reason: editReason,
-    }).then(() => {
+    try {
+      await updateSaleTotalWithAudit(selectedSale.id, {
+        newTotal: parseFloat(editAmount),
+        editedBy: user?.name || "Admin",
+        reason: editReason,
+      });
+
+      // Refresh sales list to get updated data
+      const offset = (salesPage - 1) * salesPageSize;
+      const response = await salesApi.list(salesPageSize, offset);
+      const convertedSales: Sale[] = response.data.map(mapSaleDtoToSale);
+      setSales(convertedSales);
+      setSalesTotal(response.total);
+
+      // Update selected sale if detail dialog is open
+      if (selectedSale) {
+        const updatedSale = convertedSales.find((s) => s.id === selectedSale.id);
+        if (updatedSale) {
+          setSelectedSale(updatedSale);
+        }
+      }
+
       toast({
         title: "Sale Updated",
-        description: `Sale ${selectedSale.id} has been modified. Audit log created.`,
+        description: `Sale ${formatSaleId(selectedSale.id)} has been modified. Audit log created.`,
       });
-    });
 
-    setShowEditDialog(false);
-    setEditReason("");
-    setEditAmount("");
+      setShowEditDialog(false);
+      setEditReason("");
+      setEditAmount("");
+    } catch (error: any) {
+      toast({
+        title: "Update Failed",
+        description: error?.message || "Failed to update sale. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleUndo = (sale: Sale) => {
@@ -225,6 +259,84 @@ export default function SalesHistoryPage() {
     );
   };
 
+  const handleExport = () => {
+    if (filteredSales.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "There are no sales to export with the current filters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // CSV Headers
+    const headers = [
+      "Sale ID",
+      "Date & Time",
+      "Customer Name",
+      "Customer Phone",
+      "Order Type",
+      "Payment Method",
+      "Subtotal",
+      "VAT Amount",
+      "Service Charge",
+      "Discount",
+      "Total",
+      "Status",
+      "Table No",
+      "Delivery Address",
+      "Edit Count",
+      "Items Count",
+    ];
+
+    // Convert sales to CSV rows
+    const rows = filteredSales.map((sale) => {
+      const date = new Date(sale.createdAt).toLocaleString();
+      const editCount = sale.editHistory?.length || 0;
+      const itemsCount = sale.items?.length || 0;
+
+      return [
+        sale.id,
+        date,
+        sale.customerName || "Walk-in",
+        sale.customerPhone || "",
+        sale.orderType || "",
+        sale.paymentMethod || "",
+        sale.subtotal.toFixed(2),
+        sale.vatAmount.toFixed(2),
+        sale.serviceCharge.toFixed(2),
+        sale.discount.toFixed(2),
+        sale.total.toFixed(2),
+        sale.status || "",
+        sale.tableNo || "",
+        sale.deliveryAddress || "",
+        editCount.toString(),
+        itemsCount.toString(),
+      ];
+    });
+
+    // Combine headers and rows
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `sales_history_${new Date().toISOString().split("T")[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Export Successful",
+      description: `Exported ${filteredSales.length} sales to CSV file.`,
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -234,7 +346,7 @@ export default function SalesHistoryPage() {
           <p className="text-muted-foreground">বিক্রয় ইতিহাস • Transaction Records</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport} disabled={filteredSales.length === 0}>
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
@@ -374,7 +486,7 @@ export default function SalesHistoryPage() {
             </tbody>
           </table>
         </div>
-        {salesTotal > salesPageSize && (
+        {salesTotal > 0 && (
           <Pagination className="mt-4">
             <PaginationContent>
               <PaginationItem>

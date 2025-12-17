@@ -102,6 +102,7 @@ type AppData = {
   removeCategory: (categoryId: string) => Promise<void>;
   
   completeSale: (input: Omit<Sale, "id">) => Promise<Sale>;
+  refreshTables: () => Promise<void>;
 };
 
 const AppDataContext = createContext<AppData | undefined>(undefined);
@@ -152,10 +153,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const load = async () => {
       try {
-        const [cats, prods, salesData, tablesData, activeOrdersData, staffData, paymentsData] = await Promise.all([
+        const [cats, prods, salesResponse, tablesData, activeOrdersData, staffData, paymentsData] = await Promise.all([
           categoriesApi.list(),
           productsApi.list(),
-          salesApi.list(100, 0).catch(() => []), // Load sales, but don't fail if endpoint doesn't exist yet
+          salesApi.list(100, 0).catch(() => ({ data: [], total: 0 })), // Load sales, but don't fail if endpoint doesn't exist yet
           tablesApi.list().catch(() => []), // Load tables, but don't fail if endpoint doesn't exist yet
           tablesApi.listActiveOrders().catch(() => []), // Load active table orders
           staffApi.list().catch(() => []), // Load staff, but don't fail if endpoint doesn't exist yet
@@ -194,6 +195,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           }))
         );
         // Map sales from API to frontend format
+        const salesData = salesResponse.data || [];
         setSales(
           salesData.map((s) => ({
             id: s.id,
@@ -325,6 +327,28 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   // Refresh items when sales complete (to update stock)
   // This is handled in completeSale function
+
+  // Function to refresh tables from API
+  const refreshTables = async () => {
+    if (!user?.token) return;
+    try {
+      const tablesData = await tablesApi.list();
+      setTables(
+        tablesData.map((t) => ({
+          id: t.id,
+          tableNo: t.table_no,
+          capacity: t.capacity,
+          status: t.status as RestaurantTable["status"],
+          location: t.location ?? undefined,
+          isActive: t.is_active,
+          createdAt: t.created_at,
+          updatedAt: t.updated_at,
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to refresh tables", err);
+    }
+  };
 
   const value = useMemo<AppData>(
     () => ({
@@ -1053,25 +1077,56 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       },
 
       updateSaleTotalWithAudit: async (saleId, { newTotal, editedBy, reason }) => {
-        await delay(250);
-        setSales((prev) =>
-          prev.map((s) => {
-            if (s.id !== saleId) return s;
-            const edit = {
-              id: newId("E"),
-              editedAt: new Date().toISOString(),
-              editedBy,
-              previousTotal: s.total,
-              newTotal,
-              reason,
-            };
-            return {
-              ...s,
-              total: newTotal,
-              editHistory: [edit, ...(s.editHistory ?? [])],
-            };
-          })
-        );
+        try {
+          // Call the real API
+          const updatedSale = await salesApi.updateTotal(saleId, {
+            new_total: newTotal,
+            reason,
+          });
+
+          // Convert API response to frontend Sale type
+          const sale: Sale = {
+            id: updatedSale.id,
+            createdAt: updatedSale.created_at,
+            items: updatedSale.items.map((item) => ({
+              itemId: item.item_id,
+              itemName: item.item_name,
+              quantity: item.quantity,
+              unitPrice: item.unit_price,
+              discount: item.discount,
+              total: item.total,
+              notes: item.notes || undefined,
+            })),
+            subtotal: updatedSale.subtotal,
+            vatAmount: updatedSale.vat_amount,
+            serviceCharge: updatedSale.service_charge,
+            discount: updatedSale.discount,
+            total: updatedSale.total,
+            paymentMethod: updatedSale.payment_method as Sale["paymentMethod"],
+            customerId: updatedSale.customer_name || undefined,
+            customerName: updatedSale.customer_name || undefined,
+            customerPhone: updatedSale.customer_phone || undefined,
+            deliveryAddress: updatedSale.delivery_address || undefined,
+            deliveryNotes: updatedSale.delivery_notes || undefined,
+            tableNo: updatedSale.table_no || undefined,
+            orderType: updatedSale.order_type as Sale["orderType"],
+            status: updatedSale.status as Sale["status"],
+            editHistory: updatedSale.edit_history?.map((edit) => ({
+              id: edit.id,
+              editedAt: edit.edited_at,
+              editedBy: edit.edited_by,
+              previousTotal: edit.previous_total,
+              newTotal: edit.new_total,
+              reason: edit.reason,
+            })),
+          };
+
+          // Update local state
+          setSales((prev) => prev.map((s) => (s.id === saleId ? sale : s)));
+        } catch (error: any) {
+          console.error("Failed to update sale total:", error);
+          throw new Error(error?.message || "Failed to update sale total");
+        }
       },
 
       replaceSale: (sale) => {
@@ -1420,6 +1475,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         setSales(prev => [sale, ...prev]);
         return sale;
       },
+
+      refreshTables,
     }),
     [
       attendance,

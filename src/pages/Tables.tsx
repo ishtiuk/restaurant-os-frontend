@@ -118,6 +118,7 @@ export default function Tables() {
     finalizeTableBill,
     ensureTableSession,
     markTableBilling,
+    refreshTables,
   } = useAppData();
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(null);
   const [showOrderDialog, setShowOrderDialog] = useState(false);
@@ -430,8 +431,8 @@ export default function Tables() {
       setNewTable({ tableNo: "", capacity: 4, location: "" });
       setShowAddTableDialog(false);
       
-      // Refresh tables
-      window.location.reload();
+      // Refresh tables from API
+      await refreshTables();
     } catch (err: any) {
       toast({
         title: "Failed to create table",
