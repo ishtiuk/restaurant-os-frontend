@@ -1,8 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { dashboardStats, items, purchaseOrders } from "@/data/mockData";
+import { useAppData } from "@/contexts/AppDataContext";
+import { reportsApi, type SalesSummaryResponse, type SalesTrendResponse, type TopProductsResponse, type LowStockResponse } from "@/lib/api/reports";
+import { salesApi, type SaleDto } from "@/lib/api/sales";
+import { purchasesApi, type PurchaseOrderDto } from "@/lib/api/purchases";
+import { suppliersApi, type SupplierDto } from "@/lib/api/suppliers";
 import {
   TrendingUp,
   TrendingDown,
@@ -14,6 +18,7 @@ import {
   Package,
   ArrowRight,
   Clock,
+  Loader2,
 } from "lucide-react";
 import {
   AreaChart,
@@ -27,14 +32,135 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
+
+// Convert English digits to Bengali numerals
+const toBengaliNumeral = (num: number | string): string => {
+  const bengaliDigits = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+  return String(num)
+    .split("")
+    .map((digit) => {
+      const parsed = parseInt(digit, 10);
+      return !isNaN(parsed) && parsed >= 0 && parsed <= 9 ? bengaliDigits[parsed] : digit;
+    })
+    .join("");
+};
 
 const CHART_COLORS = ["hsl(38, 95%, 55%)", "hsl(18, 75%, 45%)", "hsl(158, 65%, 45%)", "hsl(220, 15%, 40%)"];
 
 export default function Dashboard() {
-  const lowStockItems = items.filter((item) => item.stockQty <= 10);
-  const pendingOrders = purchaseOrders.filter((po) => po.status === "pending");
+  const { items } = useAppData();
+  const [loading, setLoading] = useState(true);
+  const [todaySummary, setTodaySummary] = useState<SalesSummaryResponse | null>(null);
+  const [yesterdaySummary, setYesterdaySummary] = useState<SalesSummaryResponse | null>(null);
+  const [salesTrend, setSalesTrend] = useState<SalesTrendResponse | null>(null);
+  const [topProducts, setTopProducts] = useState<TopProductsResponse | null>(null);
+  const [lowStock, setLowStock] = useState<LowStockResponse | null>(null);
+  const [pendingOrders, setPendingOrders] = useState<PurchaseOrderDto[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
+  const [paymentMethodBreakdown, setPaymentMethodBreakdown] = useState<Array<{ method: string; amount: number }>>([]);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setLoading(true);
+      try {
+        const today = new Date();
+        const yesterday = subDays(today, 1);
+        const last7Days = subDays(today, 7);
+        
+        const todayStr = format(startOfDay(today), "yyyy-MM-dd");
+        const yesterdayStr = format(startOfDay(yesterday), "yyyy-MM-dd");
+        const last7DaysStr = format(startOfDay(last7Days), "yyyy-MM-dd");
+        const todayEndStr = format(endOfDay(today), "yyyy-MM-dd");
+
+        // Load all data in parallel
+        const [
+          todayData,
+          yesterdayData,
+          trendData,
+          topProductsData,
+          lowStockData,
+          pendingOrdersData,
+          suppliersData,
+          todaySalesData,
+        ] = await Promise.all([
+          reportsApi.getSalesSummary(todayStr, todayEndStr).catch(() => null),
+          reportsApi.getSalesSummary(yesterdayStr, format(endOfDay(yesterday), "yyyy-MM-dd")).catch(() => null),
+          reportsApi.getSalesTrend(last7DaysStr, todayEndStr, "day").catch(() => null),
+          reportsApi.getTopProducts(last7DaysStr, todayEndStr, 5).catch(() => null),
+          reportsApi.getLowStock(10).catch(() => null),
+          purchasesApi.list({ status: "pending", limit: 10 }).catch(() => []),
+          suppliersApi.list().catch(() => []),
+          salesApi.list(1000, 0).catch(() => ({ data: [], total: 0 })),
+        ]);
+
+        if (todayData) setTodaySummary(todayData);
+        if (yesterdayData) setYesterdaySummary(yesterdayData);
+        if (trendData) setSalesTrend(trendData);
+        if (topProductsData) setTopProducts(topProductsData);
+        if (lowStockData) setLowStock(lowStockData);
+        if (Array.isArray(pendingOrdersData)) setPendingOrders(pendingOrdersData);
+        if (Array.isArray(suppliersData)) setSuppliers(suppliersData);
+
+        // Calculate payment method breakdown from today's sales
+        if (todaySalesData.data) {
+          const todaySales = todaySalesData.data.filter((sale: SaleDto) => {
+            const saleDate = format(new Date(sale.created_at), "yyyy-MM-dd");
+            return saleDate === todayStr && sale.status === "completed";
+          });
+
+          const paymentGroups: Record<string, number> = {};
+          todaySales.forEach((sale: SaleDto) => {
+            const method = sale.payment_method === "card" ? "Card" : 
+                          sale.payment_method === "online" ? "Online" : 
+                          sale.payment_method === "rocket" ? "Rocket" : "Cash";
+            paymentGroups[method] = (paymentGroups[method] || 0) + sale.total;
+          });
+
+          setPaymentMethodBreakdown(
+            Object.entries(paymentGroups).map(([method, amount]) => ({ method, amount }))
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+        toast({
+          title: "Failed to load dashboard",
+          description: "Please refresh the page",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, []);
+
+  // Calculate trends
+  const todaySales = todaySummary?.period.total_sales || 0;
+  const yesterdaySales = yesterdaySummary?.period.total_sales || 0;
+  const salesChange = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : 0;
+  const todayOrders = todaySummary?.period.total_orders || 0;
+  const yesterdayOrders = yesterdaySummary?.period.total_orders || 0;
+  const ordersChange = yesterdayOrders > 0 ? todayOrders - yesterdayOrders : 0;
+
+  // Calculate cash vs digital sales
+  const cashSales = paymentMethodBreakdown.find(p => p.method === "Cash")?.amount || 0;
+  const digitalSales = paymentMethodBreakdown.filter(p => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
+  const totalSalesForBreakdown = cashSales + digitalSales;
+  const cashPercentage = totalSalesForBreakdown > 0 ? (cashSales / totalSalesForBreakdown) * 100 : 0;
+  const digitalPercentage = totalSalesForBreakdown > 0 ? (digitalSales / totalSalesForBreakdown) * 100 : 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -53,9 +179,13 @@ export default function Dashboard() {
               <TrendingUp className="w-5 h-5 text-primary" />
             </div>
           </div>
-          <p className="kpi-value gradient-text-gold">{formatCurrency(dashboardStats.todaySales)}</p>
+          <p className="kpi-value gradient-text-gold">{formatCurrency(todaySales)}</p>
           <div className="flex items-center gap-2 text-sm">
-            <Badge variant="success">+12.5%</Badge>
+            {salesChange !== 0 && (
+              <Badge variant={salesChange > 0 ? "success" : "danger"}>
+                {salesChange > 0 ? "+" : ""}{salesChange.toFixed(1)}%
+              </Badge>
+            )}
             <span className="text-muted-foreground">vs yesterday</span>
           </div>
         </GlassCard>
@@ -67,9 +197,13 @@ export default function Dashboard() {
               <ShoppingCart className="w-5 h-5 text-accent" />
             </div>
           </div>
-          <p className="kpi-value text-accent">{dashboardStats.todayOrders}</p>
+          <p className="kpi-value text-accent">{toBengaliNumeral(todayOrders)}</p>
           <div className="flex items-center gap-2 text-sm">
-            <Badge variant="success">+8</Badge>
+            {ordersChange !== 0 && (
+              <Badge variant={ordersChange > 0 ? "success" : "danger"}>
+                {ordersChange > 0 ? "+" : ""}{ordersChange}
+              </Badge>
+            )}
             <span className="text-muted-foreground">vs yesterday</span>
           </div>
         </GlassCard>
@@ -81,8 +215,10 @@ export default function Dashboard() {
               <Wallet className="w-5 h-5 text-foreground" />
             </div>
           </div>
-          <p className="kpi-value">{formatCurrency(dashboardStats.cashSales)}</p>
-          <p className="text-sm text-muted-foreground">55% of total</p>
+          <p className="kpi-value">{formatCurrency(cashSales)}</p>
+          <p className="text-sm text-muted-foreground">
+            {totalSalesForBreakdown > 0 ? `${cashPercentage.toFixed(0)}% of total` : "No sales today"}
+          </p>
         </GlassCard>
 
         <GlassCard hover className="kpi-card animate-fade-in stagger-4">
@@ -92,8 +228,10 @@ export default function Dashboard() {
               <Smartphone className="w-5 h-5 text-secondary" />
             </div>
           </div>
-          <p className="kpi-value">{formatCurrency(dashboardStats.cardSales + dashboardStats.mobileSales)}</p>
-          <p className="text-sm text-muted-foreground">45% of total</p>
+          <p className="kpi-value">{formatCurrency(digitalSales)}</p>
+          <p className="text-sm text-muted-foreground">
+            {totalSalesForBreakdown > 0 ? `${digitalPercentage.toFixed(0)}% of total` : "No sales today"}
+          </p>
         </GlassCard>
       </div>
 
@@ -109,35 +247,46 @@ export default function Dashboard() {
             <Badge variant="glass">Last 7 days</Badge>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dashboardStats.revenueByDay}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(38, 95%, 55%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(38, 95%, 55%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 20%)" />
-                <XAxis dataKey="date" stroke="hsl(220, 10%, 55%)" fontSize={12} />
-                <YAxis stroke="hsl(220, 10%, 55%)" fontSize={12} tickFormatter={(v) => `৳${v / 1000}k`} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(220, 15%, 12%)",
-                    border: "1px solid hsl(220, 15%, 25%)",
-                    borderRadius: "8px",
-                  }}
-                  formatter={(value: number) => [formatCurrency(value), "Revenue"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="hsl(38, 95%, 55%)"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorRevenue)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {salesTrend && salesTrend.data.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={salesTrend.data.map((point) => ({
+                    date: format(new Date(point.period), "MMM dd"),
+                    revenue: point.total_sales,
+                  }))}
+                >
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(38, 95%, 55%)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(38, 95%, 55%)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 20%)" />
+                  <XAxis dataKey="date" stroke="hsl(220, 10%, 55%)" fontSize={12} />
+                  <YAxis stroke="hsl(220, 10%, 55%)" fontSize={12} tickFormatter={(v) => `৳${v / 1000}k`} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(220, 15%, 12%)",
+                      border: "1px solid hsl(220, 15%, 25%)",
+                      borderRadius: "8px",
+                    }}
+                    formatter={(value: number) => [formatCurrency(value), "Revenue"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="hsl(38, 95%, 55%)"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorRevenue)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No sales data for the last 7 days
+              </div>
+            )}
           </div>
         </GlassCard>
 
@@ -147,44 +296,52 @@ export default function Dashboard() {
             <h3 className="font-display font-semibold text-lg">Payment Methods</h3>
             <p className="text-sm text-muted-foreground">পেমেন্ট মাধ্যম</p>
           </div>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={dashboardStats.salesByPayment}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={4}
-                  dataKey="amount"
-                >
-                  {dashboardStats.salesByPayment.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(220, 15%, 12%)",
-                    border: "1px solid hsl(220, 15%, 25%)",
-                    borderRadius: "8px",
-                  }}
-                  formatter={(value: number) => formatCurrency(value)}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-4">
-            {dashboardStats.salesByPayment.map((item, index) => (
-              <div key={item.method} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: CHART_COLORS[index] }}
-                />
-                <span className="text-sm text-muted-foreground">{item.method}</span>
+          {paymentMethodBreakdown.length > 0 ? (
+            <>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={paymentMethodBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={70}
+                      paddingAngle={4}
+                      dataKey="amount"
+                    >
+                      {paymentMethodBreakdown.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(220, 15%, 12%)",
+                        border: "1px solid hsl(220, 15%, 25%)",
+                        borderRadius: "8px",
+                      }}
+                      formatter={(value: number) => formatCurrency(value)}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            ))}
-          </div>
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                {paymentMethodBreakdown.map((item, index) => (
+                  <div key={item.method} className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                    />
+                    <span className="text-sm text-muted-foreground">{item.method}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-48 text-muted-foreground">
+              No payment data for today
+            </div>
+          )}
         </GlassCard>
       </div>
 
@@ -197,39 +354,51 @@ export default function Dashboard() {
               <h3 className="font-display font-semibold text-lg">Alerts</h3>
               <p className="text-sm text-muted-foreground">সতর্কতা</p>
             </div>
-            <Badge variant="danger">{lowStockItems.length + pendingOrders.length}</Badge>
+            <Badge variant="danger">{(lowStock?.data.length || 0) + pendingOrders.length}</Badge>
           </div>
           <div className="space-y-3">
-            {lowStockItems.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20"
-              >
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-destructive" />
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">Stock: {item.stockQty} {item.unit}</p>
+            {lowStock && lowStock.data.length > 0 ? (
+              lowStock.data.slice(0, 5).map((item) => (
+                <div
+                  key={item.product_id}
+                  className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20"
+                >
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle className="w-5 h-5 text-destructive" />
+                    <div>
+                      <p className="font-medium">{item.product_name}</p>
+                      <p className="text-sm text-muted-foreground">Stock: {item.current_stock} {item.unit}</p>
+                    </div>
                   </div>
+                  <Badge variant="danger">{item.is_critical ? "Critical" : "Low Stock"}</Badge>
                 </div>
-                <Badge variant="danger">Low Stock</Badge>
-              </div>
-            ))}
-            {pendingOrders.map((po) => (
-              <div
-                key={po.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20"
-              >
-                <div className="flex items-center gap-3">
-                  <Package className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="font-medium">{po.supplierName}</p>
-                    <p className="text-sm text-muted-foreground">{formatCurrency(po.total)}</p>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No low stock items</p>
+            )}
+            {pendingOrders.length > 0 ? (
+              pendingOrders.slice(0, 5).map((po) => {
+                const supplier = suppliers.find((s) => s.id === po.supplier_id);
+                const supplierName = supplier?.name || `PO #${po.id.substring(0, 8).toUpperCase()}`;
+                return (
+                  <div
+                    key={po.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Package className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="font-medium">{supplierName}</p>
+                        <p className="text-sm text-muted-foreground">{formatCurrency(po.total_amount)}</p>
+                      </div>
+                    </div>
+                    <Badge variant="warning">Pending</Badge>
                   </div>
-                </div>
-                <Badge variant="warning">Pending</Badge>
-              </div>
-            ))}
+                );
+              })
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No pending orders</p>
+            )}
           </div>
         </GlassCard>
 
@@ -240,28 +409,34 @@ export default function Dashboard() {
               <h3 className="font-display font-semibold text-lg">Top Selling Items</h3>
               <p className="text-sm text-muted-foreground">সেরা বিক্রিত আইটেম</p>
             </div>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" onClick={() => window.location.href = "/reports"}>
               View All <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
           <div className="space-y-3">
-            {dashboardStats.topItems.map((item, index) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-hero flex items-center justify-center font-display font-bold text-primary-foreground">
-                    {index + 1}
+            {topProducts && topProducts.data.length > 0 ? (
+              topProducts.data.map((item, index) => (
+                <div
+                  key={item.product_id}
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-hero flex items-center justify-center font-display font-bold text-primary-foreground">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="font-medium">{item.product_name}</p>
+                      <p className="text-sm text-muted-foreground">{item.quantity_sold} sold</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.quantity} sold</p>
-                  </div>
+                  <p className="font-display font-semibold text-primary">{formatCurrency(item.total_revenue)}</p>
                 </div>
-                <p className="font-display font-semibold text-primary">{formatCurrency(item.revenue)}</p>
+              ))
+            ) : (
+              <div className="flex items-center justify-center h-48 text-muted-foreground">
+                No sales data for the last 7 days
               </div>
-            ))}
+            )}
           </div>
         </GlassCard>
       </div>
