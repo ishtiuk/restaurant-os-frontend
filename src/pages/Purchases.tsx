@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppData } from "@/contexts/AppDataContext";
-import { suppliersApi, type SupplierDto } from "@/lib/api/suppliers";
+import { suppliersApi, type SupplierDto, type SupplierPaymentDto } from "@/lib/api/suppliers";
 import { purchasesApi, type PurchaseOrderDto, type PurchaseOrderItemCreateInput } from "@/lib/api/purchases";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -96,6 +96,7 @@ export default function Purchases() {
 
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderDto[]>([]);
+  const [supplierPayments, setSupplierPayments] = useState<SupplierPaymentDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [showView, setShowView] = useState(false);
@@ -151,9 +152,10 @@ export default function Purchases() {
         }, 30000); // 30 second timeout
         
         const offset = (poPage - 1) * poPageSize;
-        const [suppliersData, posData] = await Promise.all([
+        const [suppliersData, posData, paymentsData] = await Promise.all([
           suppliersApi.list(),
           purchasesApi.list({ limit: poPageSize, offset: offset }),
+          suppliersApi.listPayments(),
         ]);
         
         clearTimeout(timeoutId);
@@ -161,6 +163,7 @@ export default function Purchases() {
         if (mounted) {
           setSuppliers(suppliersData || []);
           setPurchaseOrders(posData || []);
+          setSupplierPayments(paymentsData || []);
           // Estimate total - if we got a full page, there might be more
           if (posData.length === poPageSize) {
             setPoTotal((poPage + 1) * poPageSize);
@@ -335,6 +338,14 @@ export default function Purchases() {
     return suppliers.find((s) => s.id === supplierId)?.name || "Unknown";
   };
 
+  // Calculate due amount for a purchase order
+  const getPODueAmount = (poId: string, totalAmount: number): number => {
+    const paidForPO = supplierPayments
+      .filter((p) => p.purchase_order_id === poId)
+      .reduce((sum, p) => sum + p.amount, 0);
+    return Math.max(0, totalAmount - paidForPO);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -383,52 +394,59 @@ export default function Purchases() {
               <tr className="border-b border-border bg-muted/30">
                 <th className="text-left p-4 font-medium">PO #</th>
                 <th className="text-left p-4 font-medium">Supplier</th>
-                <th className="text-left p-4 font-medium">Invoice No.</th>
                 <th className="text-left p-4 font-medium">Date</th>
+                <th className="text-right p-4 font-medium">Due</th>
                 <th className="text-right p-4 font-medium">Total</th>
                 <th className="text-center p-4 font-medium">Status</th>
                 <th className="text-right p-4 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {purchaseOrders.map((po) => (
-                <tr key={po.id} className="border-b border-border/50 table-row-hover">
-                  <td className="p-4 font-medium">PO-{po.id.slice(-8).toUpperCase()}</td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center">
-                        <Truck className="w-4 h-4 text-secondary" />
+              {purchaseOrders.map((po) => {
+                const dueAmount = getPODueAmount(po.id, po.total_amount);
+                return (
+                  <tr key={po.id} className="border-b border-border/50 table-row-hover">
+                    <td className="p-4 font-medium">PO-{po.id.slice(-8).toUpperCase()}</td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center">
+                          <Truck className="w-4 h-4 text-secondary" />
+                        </div>
+                        {getSupplierName(po.supplier_id)}
                       </div>
-                      {getSupplierName(po.supplier_id)}
-                    </div>
-                  </td>
-                  <td className="p-4 text-muted-foreground">{po.invoice_no || "-"}</td>
-                  <td className="p-4 text-muted-foreground">{formatDate(po.order_date)}</td>
-                  <td className="p-4 text-right font-medium">{formatCurrency(po.total_amount)}</td>
-                  <td className="p-4 text-center">{getStatusBadge(po.status)}</td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedPO(po);
-                          setShowView(true);
-                        }}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </Button>
-                      {po.status === "pending" && (
-                        <Button variant="outline" size="sm" onClick={() => handleReceive(po.id)}>
-                          <Check className="w-4 h-4 mr-1" />
-                          Mark Received
+                    </td>
+                    <td className="p-4 text-muted-foreground">{formatDate(po.order_date)}</td>
+                    <td className="p-4 text-right">
+                      <span className={dueAmount > 0 ? "font-medium text-warning" : "text-muted-foreground"}>
+                        {formatCurrency(dueAmount)}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right font-medium">{formatCurrency(po.total_amount)}</td>
+                    <td className="p-4 text-center">{getStatusBadge(po.status)}</td>
+                    <td className="p-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedPO(po);
+                            setShowView(true);
+                          }}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
                         </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {po.status === "pending" && (
+                          <Button variant="outline" size="sm" onClick={() => handleReceive(po.id)}>
+                            <Check className="w-4 h-4 mr-1" />
+                            Mark Received
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {purchaseOrders.length === 0 && (
                 <tr>
                   <td colSpan={7} className="p-8 text-center">

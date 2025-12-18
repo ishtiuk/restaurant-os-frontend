@@ -226,30 +226,74 @@ export default function Tables() {
       const existing = prev.find((c) => c.itemId === item.id);
       // Only check stock for packaged items (ice cream, coke, etc.)
       // Cooked items (biryani, curry) don't need stock tracking
-      if (existing) {
-        if (item.isPackaged && existing.quantity >= item.stockQty) {
-          toast({ title: "Stock limit reached", variant: "destructive" });
+      
+      // Check stock BEFORE adding (for both new and existing items)
+      if (item.isPackaged) {
+        // If stock is 0, prevent adding
+        if (item.stockQty === 0) {
+          toast({
+            title: "Out of stock",
+            description: `${item.name} is currently out of stock`,
+            variant: "destructive",
+          });
           return prev;
         }
-        return prev.map((c) =>
-          c.itemId === item.id
-            ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.unitPrice }
-            : c
-        );
+        
+        if (existing) {
+          // Check if adding 1 more would exceed available stock
+          const newQuantity = existing.quantity + 1;
+          if (newQuantity > item.stockQty) {
+            toast({
+              title: "Stock limit reached",
+              description: `Only ${item.stockQty} available`,
+              variant: "destructive",
+            });
+            return prev;
+          }
+          return prev.map((c) =>
+            c.itemId === item.id
+              ? { ...c, quantity: newQuantity, total: newQuantity * c.unitPrice }
+              : c
+          );
+        } else {
+          // New item: check if stock is available (already checked stock > 0 above)
+          return [
+            ...prev,
+            {
+              itemId: item.id,
+              itemName: item.name,
+              quantity: 1,
+              unitPrice: item.price,
+              discount: 0,
+              total: item.price,
+              available: item.stockQty, // Store current stock
+              vatRate: item.vatRate, // Store VAT rate from product
+            },
+          ];
+        }
+      } else {
+        // Cooked items: no stock check needed
+        if (existing) {
+          return prev.map((c) =>
+            c.itemId === item.id
+              ? { ...c, quantity: c.quantity + 1, total: (c.quantity + 1) * c.unitPrice }
+              : c
+          );
+        }
+        return [
+          ...prev,
+          {
+            itemId: item.id,
+            itemName: item.name,
+            quantity: 1,
+            unitPrice: item.price,
+            discount: 0,
+            total: item.price,
+            available: 9999, // Unlimited for cooked items
+            vatRate: item.vatRate, // Store VAT rate from product
+          },
+        ];
       }
-      return [
-        ...prev,
-        {
-          itemId: item.id,
-          itemName: item.name,
-          quantity: 1,
-          unitPrice: item.price,
-          discount: 0,
-          total: item.price,
-          available: item.isPackaged ? item.stockQty : 9999, // Unlimited for cooked items
-          vatRate: item.vatRate, // Store VAT rate from product
-        },
-      ];
     });
   };
 
@@ -265,6 +309,15 @@ export default function Tables() {
               return c;
             }
             if (newQty <= 0) return null;
+            // Check stock limit for packaged items when increasing quantity
+            if (delta > 0 && c.available < 9999 && newQty > c.available) {
+              toast({
+                title: "Stock limit reached",
+                description: `Only ${c.available} available`,
+                variant: "destructive",
+              });
+              return c;
+            }
             return { ...c, quantity: newQty, total: newQty * c.unitPrice };
           }
           return c;

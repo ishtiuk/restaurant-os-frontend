@@ -30,6 +30,18 @@ import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
+// Convert English digits to Bengali numerals
+const toBengaliNumeral = (num: number | string): string => {
+  const bengaliDigits = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+  return String(num)
+    .split("")
+    .map((digit) => {
+      const parsed = parseInt(digit, 10);
+      return !isNaN(parsed) && parsed >= 0 && parsed <= 9 ? bengaliDigits[parsed] : digit;
+    })
+    .join("");
+};
+
 type DateRangePreset = "today" | "last7days" | "last30days" | "last90days" | "thisMonth" | "lastMonth" | "thisYear" | "custom";
 
 export default function Reports() {
@@ -275,7 +287,7 @@ export default function Reports() {
               <Package className="w-5 h-5 text-foreground" />
             </div>
             <p className="text-2xl font-display font-bold">
-              {salesSummary.period.total_orders}
+              {toBengaliNumeral(salesSummary.period.total_orders)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               in selected period
