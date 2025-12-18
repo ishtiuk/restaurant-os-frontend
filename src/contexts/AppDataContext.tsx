@@ -458,7 +458,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             // Calculate VAT from each item's VAT rate
             // In Bangladesh, prices are VAT-inclusive, so extract VAT: vat = (price * qty) * (vatRate / (100 + vatRate))
             const vatAmount = orderItems.reduce((sum, item) => {
-              const cartItem = items.find((ci) => ci.itemId === item.itemId);
+              const cartItem = items.find((ci) => ci.id === item.itemId);
               const vatRate = (cartItem as any)?.vatRate;
               if (!vatRate || vatRate === 0) return sum;
               const itemVat = (item.total * vatRate) / (100 + vatRate);
@@ -581,7 +581,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             // Calculate VAT from each item's VAT rate
             // Extract VAT from VAT-inclusive prices: vat = (price * qty) * (vatRate / (100 + vatRate))
             const vatAmount = orderItems.reduce((sum, item) => {
-              const cartItem = items.find((ci) => ci.itemId === item.itemId);
+              const cartItem = items.find((ci) => ci.id === item.itemId);
               const vatRate = (cartItem as any)?.vatRate;
               if (!vatRate || vatRate === 0) return sum;
               const itemVat = (item.total * vatRate) / (100 + vatRate);
