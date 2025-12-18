@@ -231,7 +231,7 @@ export default function Finance() {
         <div className="flex flex-wrap gap-2">
           <Select value={dateRange} onValueChange={setDateRange}>
             <SelectTrigger className="w-[160px] bg-muted/50">
-              <Calendar className="w-4 h-4 mr-2" />
+            <Calendar className="w-4 h-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -261,29 +261,29 @@ export default function Finance() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in stagger-1">
-          <GlassCard hover glow="accent" className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Total Income</p>
-              <ArrowUpRight className="w-5 h-5 text-accent" />
-            </div>
+        <GlassCard hover glow="accent" className="p-6">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-muted-foreground">Total Income</p>
+            <ArrowUpRight className="w-5 h-5 text-accent" />
+          </div>
             <p className="text-3xl font-display font-bold text-accent">{formatCurrency(summary?.total_income || 0)}</p>
             <p className="text-xs text-muted-foreground mt-1">মোট আয়</p>
-          </GlassCard>
+        </GlassCard>
 
-          <GlassCard hover glow="secondary" className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Total Expenses</p>
-              <ArrowDownRight className="w-5 h-5 text-secondary" />
-            </div>
+        <GlassCard hover glow="secondary" className="p-6">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-muted-foreground">Total Expenses</p>
+            <ArrowDownRight className="w-5 h-5 text-secondary" />
+          </div>
             <p className="text-3xl font-display font-bold text-secondary">{formatCurrency(summary?.total_expense || 0)}</p>
             <p className="text-xs text-muted-foreground mt-1">মোট খরচ</p>
-          </GlassCard>
+        </GlassCard>
 
-          <GlassCard hover glow="primary" className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Net Profit</p>
-              <TrendingUp className="w-5 h-5 text-primary" />
-            </div>
+        <GlassCard hover glow="primary" className="p-6">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-muted-foreground">Net Profit</p>
+            <TrendingUp className="w-5 h-5 text-primary" />
+          </div>
             <p className="text-3xl font-display font-bold gradient-text-gold">{formatCurrency(summary?.net_profit || 0)}</p>
             <p className="text-xs text-muted-foreground mt-1">নিট লাভ</p>
           </GlassCard>
@@ -313,7 +313,7 @@ export default function Finance() {
             </div>
             <p className="text-3xl font-display font-bold text-orange-400">{formatCurrency(summary?.pending_transfers || 0)}</p>
             <p className="text-xs text-muted-foreground mt-1">বকেয়া স্থানান্তর</p>
-          </GlassCard>
+        </GlassCard>
         </div>
       )}
 
@@ -352,23 +352,23 @@ export default function Finance() {
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : incomeExpenseData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={incomeExpenseData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 20%)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 20%)" />
                   <XAxis dataKey="day" stroke="hsl(220, 10%, 55%)" fontSize={12} />
                   <YAxis stroke="hsl(220, 10%, 55%)" fontSize={12} tickFormatter={(v) => `৳${v / 1000}k`} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(220, 15%, 12%)",
-                      border: "1px solid hsl(220, 15%, 25%)",
-                      borderRadius: "8px",
-                    }}
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(220, 15%, 12%)",
+                    border: "1px solid hsl(220, 15%, 25%)",
+                    borderRadius: "8px",
+                  }}
                     formatter={(value: number) => formatCurrency(value)}
                   />
                   <Bar dataKey="income" name="Income" fill="hsl(158, 65%, 45%)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expense" name="Expense" fill="hsl(18, 75%, 45%)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              </BarChart>
+            </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 No data available
@@ -383,7 +383,7 @@ export default function Finance() {
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
+                  </div>
           ) : paymentBreakdown.length > 0 ? (
             <>
               <div className="h-64 mb-4">
@@ -433,12 +433,12 @@ export default function Finance() {
                     <span className="font-medium">{formatCurrency(item.value)}</span>
                   </div>
                 ))}
-              </div>
+                </div>
             </>
           ) : (
             <div className="flex items-center justify-center h-64 text-muted-foreground">
               No payment data available
-            </div>
+          </div>
           )}
         </GlassCard>
       </div>
@@ -457,7 +457,7 @@ export default function Finance() {
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
+                </div>
         ) : recentTransactions.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -485,7 +485,7 @@ export default function Finance() {
                       <span className="flex items-center gap-2 text-muted-foreground">
                         {getPaymentIcon(txn.paymentMethod)}
                         <span className="capitalize">{txn.paymentMethod.replace("_", " ")}</span>
-                      </span>
+              </span>
                     </td>
                     <td className="py-3 px-2 text-muted-foreground">{txn.date}</td>
                     <td className={`py-3 px-2 text-right font-display font-semibold ${txn.type === "income" ? "text-accent" : "text-secondary"}`}>
@@ -496,11 +496,11 @@ export default function Finance() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
         ) : (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             No transactions found
-          </div>
+        </div>
         )}
       </GlassCard>
 
