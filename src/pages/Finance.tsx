@@ -380,13 +380,13 @@ export default function Finance() {
         {/* Payment Method Breakdown */}
         <GlassCard className="p-6 animate-fade-in stagger-4">
           <h3 className="font-display font-semibold text-lg mb-6">Payment Method Breakdown</h3>
-          <div className="h-64">
-            {loading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : paymentBreakdown.length > 0 ? (
-              <>
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : paymentBreakdown.length > 0 ? (
+            <>
+              <div className="h-64 mb-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -424,22 +424,22 @@ export default function Finance() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  {paymentBreakdown.map((item) => (
-                    <div key={item.name} className="flex items-center gap-2 text-sm">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="text-muted-foreground">{item.name}:</span>
-                      <span className="font-medium">{formatCurrency(item.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                No payment data available
               </div>
-            )}
-          </div>
+              <div className="grid grid-cols-2 gap-2">
+                {paymentBreakdown.map((item) => (
+                  <div key={item.name} className="flex items-center gap-2 text-sm">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="text-muted-foreground">{item.name}:</span>
+                    <span className="font-medium">{formatCurrency(item.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              No payment data available
+            </div>
+          )}
         </GlassCard>
       </div>
 
