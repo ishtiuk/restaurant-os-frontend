@@ -277,7 +277,8 @@ export default function BankAccounts() {
           <p className="font-medium text-muted-foreground">Add New Bank Account</p>
           <p className="text-sm text-muted-foreground mt-1">নতুন ব্যাংক যোগ করুন</p>
         </GlassCard>
-      </div>
+        </div>
+      )}
 
       {/* Bank Transactions Modal */}
       <Dialog open={transactionsOpen} onOpenChange={setTransactionsOpen}>
