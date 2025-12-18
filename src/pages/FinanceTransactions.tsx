@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
@@ -27,42 +27,14 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { AddExpense } from "@/components/finance/AddExpense";
+import { financeApi, type TransactionResponse, type BankAccountResponse } from "@/lib/api/finance";
+import { format } from "date-fns";
+import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
-
-// Placeholder API data - Extended transactions list
-const allTransactions = [
-  { id: "1", date: "2024-01-20", type: "income", description: "Sales - Table 5", amount: 2500, paymentMethod: "cash", status: "completed" },
-  { id: "2", date: "2024-01-20", type: "expense", description: "Supplier Payment - Dhaka Meat", amount: -15000, paymentMethod: "bank_transfer", status: "completed" },
-  { id: "3", date: "2024-01-20", type: "income", description: "Sales - POS Counter", amount: 4200, paymentMethod: "card", status: "completed" },
-  { id: "4", date: "2024-01-20", type: "expense", description: "Utility Bill - DESCO", amount: -8500, paymentMethod: "bank_transfer", status: "pending" },
-  { id: "5", date: "2024-01-19", type: "income", description: "Sales - Delivery Order", amount: 1800, paymentMethod: "online", status: "completed" },
-  { id: "6", date: "2024-01-19", type: "expense", description: "Staff Salary - January", amount: -45000, paymentMethod: "bank_transfer", status: "completed" },
-  { id: "7", date: "2024-01-19", type: "income", description: "Sales - Table 12", amount: 3200, paymentMethod: "cash", status: "completed" },
-  { id: "8", date: "2024-01-19", type: "expense", description: "Marketing - Social Media Ads", amount: -5000, paymentMethod: "card", status: "completed" },
-  { id: "9", date: "2024-01-18", type: "income", description: "Catering Order", amount: 25000, paymentMethod: "bank_transfer", status: "completed" },
-  { id: "10", date: "2024-01-18", type: "expense", description: "Rent - January", amount: -35000, paymentMethod: "bank_transfer", status: "pending" },
-  { id: "11", date: "2024-01-18", type: "income", description: "Sales - Table 8", amount: 1850, paymentMethod: "cash", status: "completed" },
-  { id: "12", date: "2024-01-18", type: "expense", description: "Kitchen Supplies", amount: -12000, paymentMethod: "cash", status: "completed" },
-  { id: "13", date: "2024-01-17", type: "income", description: "Sales - Takeaway", amount: 980, paymentMethod: "online", status: "completed" },
-  { id: "14", date: "2024-01-17", type: "expense", description: "Equipment Repair", amount: -8000, paymentMethod: "cash", status: "reconciled" },
-  { id: "15", date: "2024-01-17", type: "income", description: "Sales - Table 3", amount: 4500, paymentMethod: "card", status: "completed" },
-  { id: "16", date: "2024-01-16", type: "expense", description: "Cleaning Supplies", amount: -2500, paymentMethod: "cash", status: "completed" },
-  { id: "17", date: "2024-01-16", type: "income", description: "Sales - POS Counter", amount: 3800, paymentMethod: "cash", status: "completed" },
-  { id: "18", date: "2024-01-16", type: "expense", description: "Internet Bill", amount: -1500, paymentMethod: "bank_transfer", status: "completed" },
-  { id: "19", date: "2024-01-15", type: "income", description: "Private Event", amount: 45000, paymentMethod: "bank_transfer", status: "completed" },
-  { id: "20", date: "2024-01-15", type: "expense", description: "Staff Training", amount: -10000, paymentMethod: "bank_transfer", status: "completed" },
-  { id: "21", date: "2024-01-15", type: "income", description: "Sales - Delivery", amount: 2200, paymentMethod: "online", status: "completed" },
-  { id: "22", date: "2024-01-14", type: "expense", description: "Supplier - Vegetables", amount: -18000, paymentMethod: "cash", status: "completed" },
-  { id: "23", date: "2024-01-14", type: "income", description: "Sales - Table 15", amount: 5600, paymentMethod: "card", status: "completed" },
-  { id: "24", date: "2024-01-14", type: "expense", description: "Gas Bill", amount: -4500, paymentMethod: "bank_transfer", status: "pending" },
-];
-
-const banks = [
-  { id: "2", name: "Brac Bank", balance: 200000 },
-];
 
 const ITEMS_PER_PAGE = 20;
 
@@ -99,9 +71,58 @@ export default function FinanceTransactions() {
   const [sortField, setSortField] = useState<"date" | "amount">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
+  const [banks, setBanks] = useState<BankAccountResponse[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Fetch transactions
+  useEffect(() => {
+    const loadTransactions = async () => {
+      setLoading(true);
+      try {
+        const params: any = {
+          limit: 1000, // Get all for filtering
+          offset: 0,
+        };
+        if (startDate) params.start_date = startDate;
+        if (endDate) params.end_date = endDate;
+        if (typeFilter !== "all") params.transaction_type = typeFilter;
+        if (paymentFilter !== "all") params.payment_method = paymentFilter;
+        if (statusFilter !== "all") params.status = statusFilter;
+
+        const [transactionsData, banksData] = await Promise.all([
+          financeApi.getTransactions(params).catch(() => []),
+          financeApi.listBankAccounts(true).catch(() => []),
+        ]);
+
+        setTransactions(transactionsData);
+        setTotalCount(transactionsData.length);
+        setBanks(banksData);
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load transactions",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTransactions();
+  }, [startDate, endDate, typeFilter, paymentFilter, statusFilter]);
 
   const filteredTransactions = useMemo(() => {
-    let filtered = [...allTransactions];
+    let filtered = transactions.map((t) => ({
+      id: t.id,
+      date: format(new Date(t.date), "yyyy-MM-dd"),
+      type: t.type,
+      description: t.description,
+      amount: t.amount,
+      paymentMethod: t.payment_method,
+      status: t.status,
+    }));
 
     // Type filter
     if (typeFilter !== "all") {
@@ -140,7 +161,7 @@ export default function FinanceTransactions() {
     });
 
     return filtered;
-  }, [typeFilter, paymentFilter, statusFilter, startDate, endDate, sortField, sortOrder]);
+  }, [transactions, sortField, sortOrder]);
 
   const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
   const paginatedTransactions = filteredTransactions.slice(
@@ -164,17 +185,17 @@ export default function FinanceTransactions() {
       t.date,
       t.type,
       t.description,
-      t.paymentMethod,
-      t.amount,
+      t.paymentMethod.replace("_", " "),
+      t.type === "expense" ? -Math.abs(t.amount) : t.amount,
       t.status,
     ]);
     
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const csv = [headers.join(","), ...rows.map((r) => r.map((cell) => `"${cell}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "transactions.csv";
+    a.download = `transactions-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -320,54 +341,64 @@ export default function FinanceTransactions() {
             Showing {paginatedTransactions.length} of {filteredTransactions.length} transactions
           </p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th 
-                  className="text-left py-3 px-2 text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground"
-                  onClick={() => handleSort("date")}
-                >
-                  Date {sortField === "date" && (sortOrder === "desc" ? "↓" : "↑")}
-                </th>
-                <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Type</th>
-                <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Description</th>
-                <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Payment</th>
-                <th 
-                  className="text-right py-3 px-2 text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground"
-                  onClick={() => handleSort("amount")}
-                >
-                  Amount {sortField === "amount" && (sortOrder === "desc" ? "↓" : "↑")}
-                </th>
-                <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedTransactions.map((txn) => (
-                <tr key={txn.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-2 text-muted-foreground">{txn.date}</td>
-                  <td className="py-3 px-2">
-                    <Badge className={txn.type === "income" ? "bg-accent/20 text-accent border-accent/30" : "bg-secondary/20 text-secondary border-secondary/30"}>
-                      {txn.type === "income" ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
-                      {txn.type === "income" ? "Income" : "Expense"}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-2 font-medium">{txn.description}</td>
-                  <td className="py-3 px-2">
-                    <span className="flex items-center gap-2 text-muted-foreground">
-                      {getPaymentIcon(txn.paymentMethod)}
-                      <span className="capitalize">{txn.paymentMethod.replace("_", " ")}</span>
-                    </span>
-                  </td>
-                  <td className={`py-3 px-2 text-right font-display font-semibold ${txn.type === "income" ? "text-accent" : "text-secondary"}`}>
-                    {txn.type === "income" ? "+" : "-"}{formatCurrency(txn.amount)}
-                  </td>
-                  <td className="py-3 px-2 text-right">{getStatusBadge(txn.status)}</td>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : paginatedTransactions.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th 
+                    className="text-left py-3 px-2 text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                    onClick={() => handleSort("date")}
+                  >
+                    Date {sortField === "date" && (sortOrder === "desc" ? "↓" : "↑")}
+                  </th>
+                  <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Type</th>
+                  <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Description</th>
+                  <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Payment</th>
+                  <th 
+                    className="text-right py-3 px-2 text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                    onClick={() => handleSort("amount")}
+                  >
+                    Amount {sortField === "amount" && (sortOrder === "desc" ? "↓" : "↑")}
+                  </th>
+                  <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {paginatedTransactions.map((txn) => (
+                  <tr key={txn.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-2 text-muted-foreground">{txn.date}</td>
+                    <td className="py-3 px-2">
+                      <Badge className={txn.type === "income" ? "bg-accent/20 text-accent border-accent/30" : "bg-secondary/20 text-secondary border-secondary/30"}>
+                        {txn.type === "income" ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                        {txn.type === "income" ? "Income" : "Expense"}
+                      </Badge>
+                    </td>
+                    <td className="py-3 px-2 font-medium">{txn.description}</td>
+                    <td className="py-3 px-2">
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        {getPaymentIcon(txn.paymentMethod)}
+                        <span className="capitalize">{txn.paymentMethod.replace("_", " ")}</span>
+                      </span>
+                    </td>
+                    <td className={`py-3 px-2 text-right font-display font-semibold ${txn.type === "income" ? "text-accent" : "text-secondary"}`}>
+                      {txn.type === "income" ? "+" : "-"}{formatCurrency(txn.amount)}
+                    </td>
+                    <td className="py-3 px-2 text-right">{getStatusBadge(txn.status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            No transactions found
+          </div>
+        )}
 
         {/* Pagination */}
         {totalPages > 1 && (
@@ -400,7 +431,34 @@ export default function FinanceTransactions() {
       </GlassCard>
 
       {/* Modal */}
-      <AddExpense open={expenseOpen} onOpenChange={setExpenseOpen} banks={banks} />
+      <AddExpense 
+        open={expenseOpen} 
+        onOpenChange={setExpenseOpen} 
+        banks={banks.map((b) => ({ id: b.id, name: b.name, balance: 0 }))}
+        onSuccess={() => {
+          // Reload transactions
+          const loadTransactions = async () => {
+            try {
+              const params: any = {
+                limit: 1000,
+                offset: 0,
+              };
+              if (startDate) params.start_date = startDate;
+              if (endDate) params.end_date = endDate;
+              if (typeFilter !== "all") params.transaction_type = typeFilter;
+              if (paymentFilter !== "all") params.payment_method = paymentFilter;
+              if (statusFilter !== "all") params.status = statusFilter;
+
+              const transactionsData = await financeApi.getTransactions(params);
+              setTransactions(transactionsData);
+              setTotalCount(transactionsData.length);
+            } catch (error) {
+              // Silent fail on refresh
+            }
+          };
+          loadTransactions();
+        }}
+      />
     </div>
   );
 }

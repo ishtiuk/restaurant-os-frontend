@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Wallet, Building2, ArrowRight } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { financeApi } from "@/lib/api/finance";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -27,6 +28,7 @@ interface TransferCashToBankProps {
   onOpenChange: (open: boolean) => void;
   cashBalance: number;
   banks: Array<{ id: string; name: string; balance: number }>;
+  onSuccess?: () => void;
 }
 
 export function TransferCashToBank({
@@ -34,6 +36,7 @@ export function TransferCashToBank({
   onOpenChange,
   cashBalance,
   banks,
+  onSuccess,
 }: TransferCashToBankProps) {
   const [selectedBank, setSelectedBank] = useState("");
   const [amount, setAmount] = useState("");
@@ -76,20 +79,15 @@ export function TransferCashToBank({
 
     setIsSubmitting(true);
 
-    // Placeholder API call
     try {
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
       const transferData = {
-        from: "cash",
-        toBankId: selectedBank,
+        to_bank_id: selectedBank,
         amount: transferAmount,
         reference: reference || undefined,
         notes: notes || undefined,
       };
 
-      console.log("Transfer initiated:", transferData);
+      await financeApi.createCashTransfer(transferData);
 
       toast({
         title: "Transfer Initiated",
@@ -102,10 +100,11 @@ export function TransferCashToBank({
       setReference("");
       setNotes("");
       onOpenChange(false);
-    } catch (error) {
+      onSuccess?.();
+    } catch (error: any) {
       toast({
         title: "Transfer Failed",
-        description: "Failed to initiate transfer. Please try again.",
+        description: error?.message || "Failed to initiate transfer. Please try again.",
         variant: "destructive",
       });
     } finally {

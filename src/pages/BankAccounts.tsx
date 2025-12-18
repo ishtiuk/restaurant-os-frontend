@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
@@ -20,62 +20,142 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Wallet,
+  Loader2,
 } from "lucide-react";
 import { AddBankAccount } from "@/components/finance/AddBankAccount";
+import { financeApi, type BankAccountResponse, type BankTransactionResponse } from "@/lib/api/finance";
+import { format } from "date-fns";
+import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
 
-// Placeholder API data
-const banksData = [
-  { id: "2", name: "Brac Bank", accountNumber: "9876543210", accountType: "savings", balance: 125000.00, status: "active", branch: "Gulshan" },
-];
-
-const bankTransactions: Record<string, Array<{
-  id: string;
-  date: string;
-  description: string;
-  type: "deposit" | "withdrawal";
-  amount: number;
-  balance: number;
-  referenceNo: string;
-}>> = {
-  "1": [
-    { id: "1", date: "2024-01-20", description: "Supplier Payment - Dhaka Meat", type: "withdrawal", amount: -15000, balance: 250000, referenceNo: "TXN-001" },
-    { id: "2", date: "2024-01-19", description: "Cash Deposit", type: "deposit", amount: 50000, balance: 265000, referenceNo: "DEP-001" },
-    { id: "3", date: "2024-01-18", description: "Rent Payment", type: "withdrawal", amount: -35000, balance: 215000, referenceNo: "TXN-002" },
-    { id: "4", date: "2024-01-17", description: "Sales Deposit", type: "deposit", amount: 85000, balance: 250000, referenceNo: "DEP-002" },
-    { id: "5", date: "2024-01-16", description: "Utility Bill - DESCO", type: "withdrawal", amount: -8500, balance: 165000, referenceNo: "TXN-003" },
-  ],
-  "2": [
-    { id: "1", date: "2024-01-20", description: "Staff Salary Transfer", type: "withdrawal", amount: -45000, balance: 125000, referenceNo: "SAL-001" },
-    { id: "2", date: "2024-01-18", description: "Online Sales Collection", type: "deposit", amount: 32000, balance: 170000, referenceNo: "ONL-001" },
-    { id: "3", date: "2024-01-15", description: "Card Payment Settlement", type: "deposit", amount: 68000, balance: 138000, referenceNo: "CRD-001" },
-  ],
-  "3": [
-    { id: "1", date: "2024-01-10", description: "Marketing Payment", type: "withdrawal", amount: -25000, balance: 75000, referenceNo: "MKT-001" },
-    { id: "2", date: "2024-01-05", description: "Initial Deposit", type: "deposit", amount: 100000, balance: 100000, referenceNo: "INI-001" },
-  ],
-};
-
 export default function BankAccounts() {
-  const [banks, setBanks] = useState(banksData);
+  const [banks, setBanks] = useState<BankAccountResponse[]>([]);
+  const [bankBalances, setBankBalances] = useState<Record<string, number>>({});
   const [addBankOpen, setAddBankOpen] = useState(false);
-  const [selectedBank, setSelectedBank] = useState<typeof banksData[0] | null>(null);
+  const [selectedBank, setSelectedBank] = useState<BankAccountResponse | null>(null);
   const [transactionsOpen, setTransactionsOpen] = useState(false);
+  const [bankTransactions, setBankTransactions] = useState<BankTransactionResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
 
-  const totalBalance = banks.filter((b) => b.status === "active").reduce((sum, b) => sum + b.balance, 0);
+  // Fetch banks and balances
+  useEffect(() => {
+    const loadBanks = async () => {
+      setLoading(true);
+      try {
+        const banksData = await financeApi.listBankAccounts();
+        setBanks(banksData);
 
-  const handleToggleStatus = (bankId: string) => {
-    setBanks((prev) =>
-      prev.map((b) =>
-        b.id === bankId ? { ...b, status: b.status === "active" ? "inactive" : "active" } : b
-      )
-    );
+        // Fetch balances for all banks
+        const balancePromises = banksData.map(async (bank) => {
+          try {
+            const balance = await financeApi.getBankBalance(bank.id);
+            return { id: bank.id, balance: balance.balance };
+          } catch {
+            return { id: bank.id, balance: 0 };
+          }
+        });
+        const balances = await Promise.all(balancePromises);
+        const balanceMap: Record<string, number> = {};
+        balances.forEach((b) => {
+          balanceMap[b.id] = b.balance;
+        });
+        setBankBalances(balanceMap);
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load bank accounts",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBanks();
+  }, []);
+
+  const totalBalance = banks
+    .filter((b) => b.is_active)
+    .reduce((sum, b) => sum + (bankBalances[b.id] || 0), 0);
+
+  const handleToggleStatus = async (bankId: string) => {
+    try {
+      const bank = banks.find((b) => b.id === bankId);
+      if (!bank) return;
+
+      await financeApi.updateBankAccount(bankId, {
+        is_active: !bank.is_active,
+      });
+
+      setBanks((prev) =>
+        prev.map((b) => (b.id === bankId ? { ...b, is_active: !b.is_active } : b))
+      );
+
+      toast({
+        title: "Status Updated",
+        description: `Bank account ${!bank.is_active ? "activated" : "deactivated"}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update bank status",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleViewTransactions = (bank: typeof banksData[0]) => {
+  const handleViewTransactions = async (bank: BankAccountResponse) => {
     setSelectedBank(bank);
     setTransactionsOpen(true);
+    setLoadingTransactions(true);
+
+    try {
+      const transactions = await financeApi.getBankTransactions(bank.id, 100);
+      setBankTransactions(transactions);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load transactions",
+        variant: "destructive",
+      });
+      setBankTransactions([]);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    const loadBanks = async () => {
+      try {
+        const banksData = await financeApi.listBankAccounts();
+        setBanks(banksData);
+
+        const balancePromises = banksData.map(async (bank) => {
+          try {
+            const balance = await financeApi.getBankBalance(bank.id);
+            return { id: bank.id, balance: balance.balance };
+          } catch {
+            return { id: bank.id, balance: 0 };
+          }
+        });
+        const balances = await Promise.all(balancePromises);
+        const balanceMap: Record<string, number> = {};
+        balances.forEach((b) => {
+          balanceMap[b.id] = b.balance;
+        });
+        setBankBalances(balanceMap);
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to refresh bank accounts",
+          variant: "destructive",
+        });
+      }
+    };
+
+    loadBanks();
   };
 
   return (
@@ -114,65 +194,76 @@ export default function BankAccounts() {
       </GlassCard>
 
       {/* Bank Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in stagger-2">
-        {banks.map((bank) => (
-          <GlassCard key={bank.id} hover className={`p-6 ${bank.status === "inactive" ? "opacity-60" : ""}`}>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                  bank.status === "active" ? "bg-purple-500/20" : "bg-muted"
-                }`}>
-                  <Building2 className={`w-6 h-6 ${bank.status === "active" ? "text-purple-400" : "text-muted-foreground"}`} />
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
+            <GlassCard key={i} className="p-6">
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            </GlassCard>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in stagger-2">
+          {banks.map((bank) => (
+            <GlassCard key={bank.id} hover className={`p-6 ${!bank.is_active ? "opacity-60" : ""}`}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    bank.is_active ? "bg-purple-500/20" : "bg-muted"
+                  }`}>
+                    <Building2 className={`w-6 h-6 ${bank.is_active ? "text-purple-400" : "text-muted-foreground"}`} />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{bank.name}</h3>
+                    <p className="text-sm text-muted-foreground">{bank.branch || "N/A"}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold">{bank.name}</h3>
-                  <p className="text-sm text-muted-foreground">{bank.branch}</p>
+                <Badge className={bank.is_active ? "bg-accent/20 text-accent border-accent/30" : "bg-muted text-muted-foreground"}>
+                  {bank.is_active ? <CheckCircle className="w-3 h-3 mr-1" /> : <Ban className="w-3 h-3 mr-1" />}
+                  {bank.is_active ? "active" : "inactive"}
+                </Badge>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Account No:</span>
+                  <span className="font-mono">{bank.account_number}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Type:</span>
+                  <span className="capitalize">{bank.account_type}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-sm">Balance:</span>
+                  <span className="text-xl font-display font-bold text-purple-400">{formatCurrency(bankBalances[bank.id] || 0)}</span>
                 </div>
               </div>
-              <Badge className={bank.status === "active" ? "bg-accent/20 text-accent border-accent/30" : "bg-muted text-muted-foreground"}>
-                {bank.status === "active" ? <CheckCircle className="w-3 h-3 mr-1" /> : <Ban className="w-3 h-3 mr-1" />}
-                {bank.status}
-              </Badge>
-            </div>
 
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Account No:</span>
-                <span className="font-mono">{bank.accountNumber}</span>
+              <div className="flex gap-2 pt-4 border-t border-border">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => handleViewTransactions(bank)}
+                >
+                  <Eye className="w-4 h-4 mr-1" />
+                  Transactions
+                </Button>
+                <Button variant="ghost" size="sm">
+                  <Edit className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleToggleStatus(bank.id)}
+                >
+                  {bank.is_active ? <Ban className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                </Button>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Type:</span>
-                <span className="capitalize">{bank.accountType}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">Balance:</span>
-                <span className="text-xl font-display font-bold text-purple-400">{formatCurrency(bank.balance)}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-4 border-t border-border">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => handleViewTransactions(bank)}
-              >
-                <Eye className="w-4 h-4 mr-1" />
-                Transactions
-              </Button>
-              <Button variant="ghost" size="sm">
-                <Edit className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleToggleStatus(bank.id)}
-              >
-                {bank.status === "active" ? <Ban className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
-              </Button>
-            </div>
-          </GlassCard>
-        ))}
+            </GlassCard>
+          ))}
 
         {/* Add Bank Card */}
         <GlassCard
@@ -204,55 +295,68 @@ export default function BankAccounts() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg bg-muted/30">
                   <p className="text-sm text-muted-foreground">Account Number</p>
-                  <p className="font-mono font-medium">{selectedBank.accountNumber}</p>
+                  <p className="font-mono font-medium">{selectedBank.account_number}</p>
                 </div>
                 <div className="p-4 rounded-lg bg-muted/30">
                   <p className="text-sm text-muted-foreground">Current Balance</p>
-                  <p className="text-xl font-display font-bold text-purple-400">{formatCurrency(selectedBank.balance)}</p>
+                  <p className="text-xl font-display font-bold text-purple-400">{formatCurrency(bankBalances[selectedBank.id] || 0)}</p>
                 </div>
               </div>
 
               {/* Transactions Table */}
-              <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                <table className="w-full">
-                  <thead className="sticky top-0 bg-background">
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Date</th>
-                      <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Description</th>
-                      <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Type</th>
-                      <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Amount</th>
-                      <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Balance</th>
-                      <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Ref No</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(bankTransactions[selectedBank.id] || []).map((txn) => (
-                      <tr key={txn.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                        <td className="py-3 px-2 text-muted-foreground">{txn.date}</td>
-                        <td className="py-3 px-2 font-medium">{txn.description}</td>
-                        <td className="py-3 px-2">
-                          <Badge className={txn.type === "deposit" ? "bg-accent/20 text-accent border-accent/30" : "bg-secondary/20 text-secondary border-secondary/30"}>
-                            {txn.type === "deposit" ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
-                            {txn.type}
-                          </Badge>
-                        </td>
-                        <td className={`py-3 px-2 text-right font-display font-semibold ${txn.type === "deposit" ? "text-accent" : "text-secondary"}`}>
-                          {txn.type === "deposit" ? "+" : "-"}{formatCurrency(txn.amount)}
-                        </td>
-                        <td className="py-3 px-2 text-right font-medium">{formatCurrency(txn.balance)}</td>
-                        <td className="py-3 px-2 text-right text-muted-foreground font-mono text-sm">{txn.referenceNo}</td>
+              {loadingTransactions ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : bankTransactions.length > 0 ? (
+                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-background">
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Date</th>
+                        <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Description</th>
+                        <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Type</th>
+                        <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Amount</th>
+                        <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Balance</th>
+                        <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Ref No</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {bankTransactions.map((txn) => (
+                        <tr key={txn.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                          <td className="py-3 px-2 text-muted-foreground">{format(new Date(txn.date), "yyyy-MM-dd")}</td>
+                          <td className="py-3 px-2 font-medium">{txn.description || "N/A"}</td>
+                          <td className="py-3 px-2">
+                            <Badge className={txn.type === "deposit" ? "bg-accent/20 text-accent border-accent/30" : "bg-secondary/20 text-secondary border-secondary/30"}>
+                              {txn.type === "deposit" ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                              {txn.type}
+                            </Badge>
+                          </td>
+                          <td className={`py-3 px-2 text-right font-display font-semibold ${txn.type === "deposit" ? "text-accent" : "text-secondary"}`}>
+                            {txn.type === "deposit" ? "+" : "-"}{formatCurrency(Math.abs(txn.amount))}
+                          </td>
+                          <td className="py-3 px-2 text-right font-medium">{formatCurrency(txn.balance_after)}</td>
+                          <td className="py-3 px-2 text-right text-muted-foreground font-mono text-sm">{txn.reference_no || "N/A"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-12 text-muted-foreground">
+                  No transactions found
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
 
       {/* Add Bank Modal */}
-      <AddBankAccount open={addBankOpen} onOpenChange={setAddBankOpen} />
+      <AddBankAccount open={addBankOpen} onOpenChange={(open) => {
+        setAddBankOpen(open);
+        if (!open) handleRefresh();
+      }} />
     </div>
   );
 }

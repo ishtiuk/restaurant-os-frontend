@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Receipt, Wallet, CreditCard, Building2, Smartphone } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { financeApi } from "@/lib/api/finance";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -43,9 +44,10 @@ interface AddExpenseProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   banks: Array<{ id: string; name: string; balance: number }>;
+  onSuccess?: () => void;
 }
 
-export function AddExpense({ open, onOpenChange, banks }: AddExpenseProps) {
+export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseProps) {
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -107,21 +109,17 @@ export function AddExpense({ open, onOpenChange, banks }: AddExpenseProps) {
 
     setIsSubmitting(true);
 
-    // Placeholder API call
     try {
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
       const expenseData = {
         category,
         amount: expenseAmount,
-        paymentMethod,
-        bankAccountId: paymentMethod === "bank_transfer" ? bankAccountId : undefined,
-        date,
+        payment_method: paymentMethod,
+        bank_account_id: paymentMethod === "bank_transfer" ? bankAccountId : undefined,
+        date: date ? `${date}T00:00:00` : undefined,
         description: description || undefined,
       };
 
-      console.log("Expense created:", expenseData);
+      await financeApi.createExpense(expenseData);
 
       toast({
         title: "Expense Added",
@@ -136,10 +134,11 @@ export function AddExpense({ open, onOpenChange, banks }: AddExpenseProps) {
       setDate(new Date().toISOString().split("T")[0]);
       setDescription("");
       onOpenChange(false);
-    } catch (error) {
+      onSuccess?.();
+    } catch (error: any) {
       toast({
         title: "Failed to Add Expense",
-        description: "An error occurred. Please try again.",
+        description: error?.message || "An error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {

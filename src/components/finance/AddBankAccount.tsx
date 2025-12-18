@@ -18,15 +18,17 @@ import {
 } from "@/components/ui/select";
 import { Building2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { financeApi } from "@/lib/api/finance";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
 interface AddBankAccountProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
-export function AddBankAccount({ open, onOpenChange }: AddBankAccountProps) {
+export function AddBankAccount({ open, onOpenChange, onSuccess }: AddBankAccountProps) {
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountType, setAccountType] = useState("");
@@ -67,20 +69,16 @@ export function AddBankAccount({ open, onOpenChange }: AddBankAccountProps) {
 
     setIsSubmitting(true);
 
-    // Placeholder API call
     try {
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
       const bankData = {
         name: bankName.trim(),
-        accountNumber: accountNumber.trim(),
-        accountType,
+        account_number: accountNumber.trim(),
+        account_type: accountType as "current" | "savings",
         branch: branch.trim() || undefined,
-        openingBalance: parseFloat(openingBalance) || 0,
+        opening_balance: parseFloat(openingBalance) || 0,
       };
 
-      console.log("Bank account created:", bankData);
+      await financeApi.createBankAccount(bankData);
 
       toast({
         title: "Bank Account Added",
@@ -94,10 +92,11 @@ export function AddBankAccount({ open, onOpenChange }: AddBankAccountProps) {
       setBranch("");
       setOpeningBalance("");
       onOpenChange(false);
-    } catch (error) {
+      onSuccess?.();
+    } catch (error: any) {
       toast({
         title: "Failed to Add Bank Account",
-        description: "An error occurred. Please try again.",
+        description: error?.message || "An error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {
