@@ -27,9 +27,7 @@ const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString
 
 // Placeholder API data
 const banksData = [
-  { id: "1", name: "Sonali Bank", accountNumber: "1234567890", accountType: "current", balance: 250000.00, status: "active", branch: "Dhanmondi" },
   { id: "2", name: "Brac Bank", accountNumber: "9876543210", accountType: "savings", balance: 125000.00, status: "active", branch: "Gulshan" },
-  { id: "3", name: "Dutch Bangla Bank", accountNumber: "5555666677", accountType: "current", balance: 75000.00, status: "inactive", branch: "Banani" },
 ];
 
 const bankTransactions: Record<string, Array<{

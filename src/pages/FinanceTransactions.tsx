@@ -61,7 +61,6 @@ const allTransactions = [
 ];
 
 const banks = [
-  { id: "1", name: "Sonali Bank", balance: 250000 },
   { id: "2", name: "Brac Bank", balance: 200000 },
 ];
 

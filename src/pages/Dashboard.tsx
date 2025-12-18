@@ -316,11 +316,21 @@ export default function Dashboard() {
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "hsl(220, 15%, 12%)",
-                        border: "1px solid hsl(220, 15%, 25%)",
+                        backgroundColor: "hsl(220, 15%, 18%)",
+                        border: "1px solid hsl(220, 15%, 30%)",
                         borderRadius: "8px",
+                        color: "hsl(220, 10%, 90%)",
+                        padding: "8px 12px",
+                        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.3)",
                       }}
-                      formatter={(value: number) => formatCurrency(value)}
+                      itemStyle={{
+                        color: "hsl(220, 10%, 90%)",
+                      }}
+                      labelStyle={{
+                        color: "hsl(220, 10%, 90%)",
+                        fontWeight: 600,
+                      }}
+                      formatter={(value: number) => [formatCurrency(value), "Amount"]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
