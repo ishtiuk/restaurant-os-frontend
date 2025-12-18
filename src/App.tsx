@@ -19,6 +19,8 @@ import Purchases from "@/pages/Purchases";
 import Suppliers from "@/pages/Suppliers";
 import Customers from "@/pages/Customers";
 import Finance from "@/pages/Finance";
+import FinanceTransactions from "@/pages/FinanceTransactions";
+import BankAccounts from "@/pages/BankAccounts";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
@@ -59,6 +61,8 @@ const App = () => (
                         <Route path="/staff" element={<Staff />} />
                         <Route path="/attendance" element={<Attendance />} />
                         <Route path="/finance" element={<Finance />} />
+                        <Route path="/finance/transactions" element={<FinanceTransactions />} />
+                        <Route path="/finance/banks" element={<BankAccounts />} />
                         <Route path="/expenses" element={<Expenses />} />
                         <Route path="/vat" element={<Vat />} />
                         <Route path="/reports" element={<Reports />} />
