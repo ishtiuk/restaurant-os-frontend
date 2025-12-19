@@ -5,10 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { customers } from "@/data/mockData";
 import { Plus, Search, Phone, Mail, Star, ShoppingBag } from "lucide-react";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
 export default function Customers() {
+  const { timezone } = useTimezone();
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -54,7 +57,7 @@ export default function Customers() {
                       </div>
                       <div>
                         <p className="font-medium">{customer.name}</p>
-                        <p className="text-sm text-muted-foreground">Since {customer.createdAt}</p>
+                        <p className="text-sm text-muted-foreground">Since {formatDate(customer.createdAt, timezone)}</p>
                       </div>
                     </div>
                   </td>

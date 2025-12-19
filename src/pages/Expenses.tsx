@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate } from "@/utils/date";
 import {
   PieChart,
   Pie,
@@ -60,6 +62,7 @@ const COLORS = [
 ];
 
 export default function ExpensesPage() {
+  const { timezone } = useTimezone();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>("all");
 
@@ -292,7 +295,7 @@ export default function ExpensesPage() {
             <tbody>
               {filteredExpenses.map((expense) => (
                 <tr key={expense.id} className="border-b border-border/50 table-row-hover">
-                  <td className="p-4 text-muted-foreground">{expense.date}</td>
+                  <td className="p-4 text-muted-foreground">{formatDate(expense.date, timezone)}</td>
                   <td className="p-4">
                     <Badge variant="glass">
                       {expenseCategories.find((c) => c.id === expense.categoryId)?.icon} {expense.categoryName}

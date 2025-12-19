@@ -1,6 +1,8 @@
 import React from "react";
 import { TableOrder } from "@/types";
 import { getPrintSettingsSync } from "@/utils/printUtils";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate, formatTime } from "@/utils/date";
 
 interface TableBillReceiptProps {
   order: TableOrder;
@@ -18,17 +20,11 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
   extraDiscount = 0,
 }) => {
   const settings = getPrintSettingsSync();
+  const { timezone } = useTimezone();
   const orderDate = new Date(order.createdAt);
-  const formattedDate = orderDate.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-  const formattedTime = orderDate.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  // Format date as "19 Dec 2025" in user's timezone
+  const formattedDate = formatDate(orderDate, timezone);
+  const formattedTime = formatTime(orderDate, timezone);
 
   // Calculate correct total: Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
   const calculatedVat = order.vatAmount > 0 

@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate } from "@/utils/date";
 import { adminApi, type AdminTenant, type AdminUser, type TenantCreateInput } from "@/lib/api/admin";
 import {
   Users,
@@ -68,6 +70,7 @@ const planOptions: TenantPlan[] = ["starter", "professional", "enterprise"];
 
 export default function Admin() {
   const { user } = useAuth();
+  const { timezone } = useTimezone();
   const [activeTab, setActiveTab] = useState<"tenants" | "users">("tenants");
   const [tenants, setTenants] = useState<UITenant[]>([]);
   const [users, setUsers] = useState<UIAdminUser[]>([]);
@@ -402,7 +405,7 @@ export default function Admin() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold">{t.name}</h3>
-                    <p className="text-xs text-muted-foreground">Created {t.created_at}</p>
+                    <p className="text-xs text-muted-foreground">Created {formatDate(t.created_at, timezone)}</p>
                   </div>
                   <Badge variant={t.is_active ? "success" : "outline"}>{t.is_active ? "Active" : "Inactive"}</Badge>
                 </div>

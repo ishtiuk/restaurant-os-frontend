@@ -20,6 +20,9 @@ import {
 import { Receipt, Wallet, CreditCard, Building2, Smartphone } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { financeApi } from "@/lib/api/finance";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { getDateOnly, getStartOfDay } from "@/utils/date";
+import { format } from "date-fns";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -48,11 +51,12 @@ interface AddExpenseProps {
 }
 
 export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseProps) {
+  const { timezone } = useTimezone();
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [bankAccountId, setBankAccountId] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(getDateOnly(new Date(), timezone));
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -110,12 +114,20 @@ export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseP
     setIsSubmitting(true);
 
     try {
+      // Convert user's selected date to UTC for API
+      let dateForApi: string | undefined;
+      if (date) {
+        const userDate = new Date(date + "T12:00:00"); // Use noon to avoid DST issues
+        const utcDate = getStartOfDay(userDate, timezone);
+        dateForApi = format(utcDate, "yyyy-MM-dd");
+      }
+
       const expenseData = {
         category,
         amount: expenseAmount,
         payment_method: paymentMethod,
         bank_account_id: paymentMethod === "bank_transfer" ? bankAccountId : undefined,
-        date: date ? `${date}T00:00:00` : undefined,
+        date: dateForApi,
         description: description || undefined,
       };
 
@@ -131,7 +143,7 @@ export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseP
       setAmount("");
       setPaymentMethod("");
       setBankAccountId("");
-      setDate(new Date().toISOString().split("T")[0]);
+      setDate(getDateOnly(new Date(), timezone));
       setDescription("");
       onOpenChange(false);
       onSuccess?.();

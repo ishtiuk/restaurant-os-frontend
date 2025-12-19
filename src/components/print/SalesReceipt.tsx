@@ -1,6 +1,8 @@
 import React from "react";
 import { Sale } from "@/types";
 import { getPrintSettingsSync } from "@/utils/printUtils";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate, formatTime } from "@/utils/date";
 
 interface SalesReceiptProps {
   sale: Sale;
@@ -22,17 +24,11 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
   deliveryNotes,
 }) => {
   const settings = getPrintSettingsSync();
+  const { timezone } = useTimezone();
   const saleDate = new Date(sale.createdAt);
-  const formattedDate = saleDate.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-  const formattedTime = saleDate.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  // Format date as "19 Dec 2025" in user's timezone
+  const formattedDate = formatDate(saleDate, timezone);
+  const formattedTime = formatTime(saleDate, timezone);
 
   const orderTypeLabel = orderType === "delivery" ? "🚚 DELIVERY" : "🛍️ TAKEAWAY";
 

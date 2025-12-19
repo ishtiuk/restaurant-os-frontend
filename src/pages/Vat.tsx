@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate } from "@/utils/date";
 import {
   BarChart,
   Bar,
@@ -60,6 +62,7 @@ const getTypeBadge = (type: VatEntry["type"]) => {
 };
 
 export default function VatPage() {
+  const { timezone } = useTimezone();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
 
@@ -239,7 +242,7 @@ export default function VatPage() {
             <tbody>
               {filteredEntries.map((entry) => (
                 <tr key={entry.id} className="border-b border-border/50 table-row-hover">
-                  <td className="p-4 text-muted-foreground">{entry.date}</td>
+                  <td className="p-4 text-muted-foreground">{formatDate(entry.date, timezone)}</td>
                   <td className="p-4">{getTypeBadge(entry.type)}</td>
                   <td className="p-4">{entry.description}</td>
                   <td className="p-4 text-muted-foreground">{entry.invoiceNo || "-"}</td>
