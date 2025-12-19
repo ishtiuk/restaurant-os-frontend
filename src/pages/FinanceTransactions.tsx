@@ -33,6 +33,8 @@ import { AddExpense } from "@/components/finance/AddExpense";
 import { financeApi, type TransactionResponse, type BankAccountResponse } from "@/lib/api/finance";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
 
@@ -62,6 +64,7 @@ const getStatusBadge = (status: string) => {
 };
 
 export default function FinanceTransactions() {
+  const { timezone } = useTimezone();
   const [typeFilter, setTypeFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -116,7 +119,7 @@ export default function FinanceTransactions() {
   const filteredTransactions = useMemo(() => {
     let filtered = transactions.map((t) => ({
       id: t.id,
-      date: format(new Date(t.date), "yyyy-MM-dd"),
+      date: t.date, // Keep original date for proper formatting
       type: t.type,
       description: t.description,
       amount: t.amount,
@@ -371,7 +374,7 @@ export default function FinanceTransactions() {
               <tbody>
                 {paginatedTransactions.map((txn) => (
                   <tr key={txn.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-2 text-muted-foreground">{txn.date}</td>
+                    <td className="py-3 px-2 text-muted-foreground">{formatDate(txn.date, timezone)}</td>
                     <td className="py-3 px-2">
                       <Badge className={txn.type === "income" ? "bg-accent/20 text-accent border-accent/30" : "bg-secondary/20 text-secondary border-secondary/30"}>
                         {txn.type === "income" ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}

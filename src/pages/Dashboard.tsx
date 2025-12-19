@@ -32,8 +32,10 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, subDays } from "date-fns";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { getStartOfDay, getEndOfDay, getDateOnly } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -53,6 +55,7 @@ const CHART_COLORS = ["hsl(38, 95%, 55%)", "hsl(18, 75%, 45%)", "hsl(158, 65%, 4
 
 export default function Dashboard() {
   const { items } = useAppData();
+  const { timezone } = useTimezone();
   const [loading, setLoading] = useState(true);
   const [todaySummary, setTodaySummary] = useState<SalesSummaryResponse | null>(null);
   const [yesterdaySummary, setYesterdaySummary] = useState<SalesSummaryResponse | null>(null);
@@ -71,10 +74,18 @@ export default function Dashboard() {
         const yesterday = subDays(today, 1);
         const last7Days = subDays(today, 7);
         
-        const todayStr = format(startOfDay(today), "yyyy-MM-dd");
-        const yesterdayStr = format(startOfDay(yesterday), "yyyy-MM-dd");
-        const last7DaysStr = format(startOfDay(last7Days), "yyyy-MM-dd");
-        const todayEndStr = format(endOfDay(today), "yyyy-MM-dd");
+        // Use timezone-aware date calculations
+        const todayStart = getStartOfDay(today, timezone);
+        const todayEnd = getEndOfDay(today, timezone);
+        const yesterdayStart = getStartOfDay(yesterday, timezone);
+        const yesterdayEnd = getEndOfDay(yesterday, timezone);
+        const last7DaysStart = getStartOfDay(last7Days, timezone);
+        
+        const todayStr = format(todayStart, "yyyy-MM-dd");
+        const todayEndStr = format(todayEnd, "yyyy-MM-dd");
+        const yesterdayStr = format(yesterdayStart, "yyyy-MM-dd");
+        const yesterdayEndStr = format(yesterdayEnd, "yyyy-MM-dd");
+        const last7DaysStr = format(last7DaysStart, "yyyy-MM-dd");
 
         // Load all data in parallel
         const [
@@ -88,7 +99,7 @@ export default function Dashboard() {
           todaySalesData,
         ] = await Promise.all([
           reportsApi.getSalesSummary(todayStr, todayEndStr).catch(() => null),
-          reportsApi.getSalesSummary(yesterdayStr, format(endOfDay(yesterday), "yyyy-MM-dd")).catch(() => null),
+          reportsApi.getSalesSummary(yesterdayStr, yesterdayEndStr).catch(() => null),
           reportsApi.getSalesTrend(last7DaysStr, todayEndStr, "day").catch(() => null),
           reportsApi.getTopProducts(last7DaysStr, todayEndStr, 5).catch(() => null),
           reportsApi.getLowStock(10).catch(() => null),
@@ -107,9 +118,10 @@ export default function Dashboard() {
 
         // Calculate payment method breakdown from today's sales
         if (todaySalesData.data) {
+          const todayDateStr = getDateOnly(today, timezone);
           const todaySales = todaySalesData.data.filter((sale: SaleDto) => {
-            const saleDate = format(new Date(sale.created_at), "yyyy-MM-dd");
-            return saleDate === todayStr && sale.status === "completed";
+            const saleDate = getDateOnly(sale.created_at, timezone);
+            return saleDate === todayDateStr && sale.status === "completed";
           });
 
           const paymentGroups: Record<string, number> = {};
@@ -137,7 +149,7 @@ export default function Dashboard() {
     };
 
     loadDashboardData();
-  }, []);
+  }, [timezone]);
 
   // Calculate trends
   const todaySales = todaySummary?.period.total_sales || 0;
