@@ -14,7 +14,7 @@ import {
   TrendingUp,
   TrendingDown,
   Download,
-  Calendar,
+  Calendar as CalendarIcon,
   Wallet,
   CreditCard,
   Building2,
@@ -28,6 +28,9 @@ import {
   Filter,
   Loader2,
 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -77,6 +80,10 @@ const getStatusBadge = (status: string) => {
 export default function Finance() {
   const { timezone } = useTimezone();
   const [dateRange, setDateRange] = useState("this_month");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [startDateOpen, setStartDateOpen] = useState(false);
+  const [endDateOpen, setEndDateOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -111,6 +118,15 @@ export default function Finance() {
           startDate: format(monthStart, "yyyy-MM-dd"),
           endDate: format(monthEnd, "yyyy-MM-dd"),
         };
+      case "custom":
+        // Use custom dates if available, otherwise fall back to this month
+        if (customStartDate && customEndDate) {
+          return {
+            startDate: customStartDate,
+            endDate: customEndDate,
+          };
+        }
+        // Fall through to default
       default:
         const defaultStart = getStartOfDay(startOfMonth(now), timezone);
         const defaultEnd = getEndOfDay(now, timezone);
@@ -126,7 +142,19 @@ export default function Finance() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const { startDate, endDate } = getDateRange();
+        let { startDate, endDate } = getDateRange();
+        
+        // Convert dates for API (fix end date to exclude next day)
+        if (startDate) {
+          const utcStart = getStartOfDay(new Date(startDate + "T12:00:00"), timezone);
+          startDate = format(utcStart, "yyyy-MM-dd");
+        }
+        if (endDate) {
+          const utcEnd = getEndOfDay(new Date(endDate + "T12:00:00"), timezone);
+          const utcEndDate = new Date(utcEnd);
+          utcEndDate.setUTCDate(utcEndDate.getUTCDate() - 1);
+          endDate = format(utcEndDate, "yyyy-MM-dd");
+        }
         
         // Recent transactions: Always fetch latest 10 from all time (independent of date filter)
         // Summary, chart, and payment breakdown: Use date filter
@@ -153,7 +181,7 @@ export default function Finance() {
     };
 
     loadData();
-  }, [dateRange, timezone]);
+  }, [dateRange, customStartDate, customEndDate, timezone]);
 
   const handleExport = () => {
     if (transactions.length === 0) {
@@ -211,7 +239,19 @@ export default function Finance() {
   };
 
   const handleRefresh = () => {
-    const { startDate, endDate } = getDateRange();
+    let { startDate, endDate } = getDateRange();
+    
+    // Convert dates for API (fix end date to exclude next day)
+    if (startDate) {
+      const utcStart = getStartOfDay(new Date(startDate + "T12:00:00"), timezone);
+      startDate = format(utcStart, "yyyy-MM-dd");
+    }
+    if (endDate) {
+      const utcEnd = getEndOfDay(new Date(endDate + "T12:00:00"), timezone);
+      const utcEndDate = new Date(utcEnd);
+      utcEndDate.setUTCDate(utcEndDate.getUTCDate() - 1);
+      endDate = format(utcEndDate, "yyyy-MM-dd");
+    }
     
     Promise.all([
       financeApi.getSummary(startDate, endDate).then(setSummary).catch(() => null),
@@ -276,7 +316,7 @@ export default function Finance() {
         expense,
       };
     });
-  }, [chartTransactions, timezone, dateRange]);
+  }, [chartTransactions, timezone, dateRange, customStartDate, customEndDate]);
 
   // Payment method breakdown (use all transactions in date range, not just recent 10)
   const paymentBreakdown = useMemo(() => {
@@ -339,7 +379,7 @@ export default function Finance() {
         <div className="flex flex-wrap gap-2">
           <Select value={dateRange} onValueChange={setDateRange}>
             <SelectTrigger className="w-[160px] bg-muted/50">
-            <Calendar className="w-4 h-4 mr-2" />
+            <CalendarIcon className="w-4 h-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -355,6 +395,84 @@ export default function Finance() {
           </Button>
         </div>
       </div>
+
+      {/* Custom Date Range Selection */}
+      {dateRange === "custom" && (
+        <GlassCard className="p-4 mb-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+            <div className="flex-1">
+              <label className="text-sm text-muted-foreground mb-1 block">Start Date</label>
+              <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                      !customStartDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {customStartDate ? format(new Date(customStartDate), "dd/MM/yyyy") : <span>Select start date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customStartDate ? new Date(customStartDate) : undefined}
+                    onSelect={(date) => {
+                      setCustomStartDate(date ? format(date, "yyyy-MM-dd") : "");
+                      setStartDateOpen(false);
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="flex-1">
+              <label className="text-sm text-muted-foreground mb-1 block">End Date</label>
+              <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                      !customEndDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {customEndDate ? format(new Date(customEndDate), "dd/MM/yyyy") : <span>Select end date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customEndDate ? new Date(customEndDate) : undefined}
+                    onSelect={(date) => {
+                      setCustomEndDate(date ? format(date, "yyyy-MM-dd") : "");
+                      setEndDateOpen(false);
+                    }}
+                    disabled={(date) => {
+                      // Disable dates before start date
+                      if (customStartDate) {
+                        return date < new Date(customStartDate);
+                      }
+                      return false;
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <Button
+              variant="glow"
+              onClick={handleRefresh}
+              disabled={!customStartDate || !customEndDate}
+            >
+              Apply
+            </Button>
+          </div>
+        </GlassCard>
+      )}
 
       {/* Summary Cards - 6 tiles */}
       {loading ? (
