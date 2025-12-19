@@ -838,7 +838,7 @@ export default function Tables() {
                     size="sm"
                     onClick={() => setBillServiceCharge(!billServiceCharge)}
                   >
-                    {billServiceCharge ? "Applied" : "Add"}
+                    {billServiceCharge ? "Applied" : "Apply"}
                   </Button>
                 </div>
                 

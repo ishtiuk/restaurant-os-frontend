@@ -65,6 +65,7 @@ export default function Settings() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [businessProfile, setBusinessProfile] = useState({
     name: "",
+    nameBn: "",
     phone: "",
     address: "",
     vatRegistrationNo: "",
@@ -120,6 +121,7 @@ export default function Settings() {
         setTenantSettings(settings);
         setBusinessProfile({
           name: settings.name || "",
+          nameBn: settings.name_bn || "",
           phone: settings.phone || "",
           address: settings.address || "",
           vatRegistrationNo: settings.vat_registration_no || "",
@@ -163,6 +165,7 @@ export default function Settings() {
     try {
       await tenantApi.updateSettings({
         name: businessProfile.name || undefined,
+        name_bn: businessProfile.nameBn || undefined,
         phone: businessProfile.phone || undefined,
         address: businessProfile.address || undefined,
         vat_registration_no: businessProfile.vatRegistrationNo || undefined,
@@ -193,6 +196,7 @@ export default function Settings() {
       // Also update business profile state
       setBusinessProfile({
         name: updated.name || "",
+        nameBn: updated.name_bn || "",
         phone: updated.phone || "",
         address: updated.address || "",
         vatRegistrationNo: updated.vat_registration_no || "",
@@ -529,6 +533,16 @@ export default function Settings() {
               onChange={(e) => setBusinessProfile((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Enter restaurant name"
               className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Restaurant Name (Bengali)</Label>
+            <Input
+              value={businessProfile.nameBn}
+              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, nameBn: e.target.value }))}
+              placeholder="রেস্টুরেন্টের নাম"
+              className="bg-muted/50 font-bengali"
               disabled={isLoadingSettings}
             />
           </div>

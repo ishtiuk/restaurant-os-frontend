@@ -6,8 +6,13 @@ export const formatWithTimezone = (
   timezone: string,
   options?: Intl.DateTimeFormatOptions
 ): string => {
-  const date = typeof utcDate === "string" ? new Date(utcDate) : utcDate;
-  return date.toLocaleString("en-US", {
+  // Parse UTC ISO string from backend (ensure 'Z' suffix for correct UTC parsing)
+  const date = typeof utcDate === "string"
+    ? new Date(utcDate.endsWith('Z') ? utcDate : utcDate + 'Z')
+    : utcDate;
+  
+  // Use Intl.DateTimeFormat directly for explicit timezone conversion
+  const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     year: "numeric",
     month: "short",
@@ -17,6 +22,8 @@ export const formatWithTimezone = (
     hour12: true,
     ...options,
   });
+  
+  return formatter.format(date);
 };
 
 /**
