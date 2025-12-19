@@ -43,6 +43,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatWithTimezone } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -91,6 +93,7 @@ const formatSaleId = (id: string) => {
 export default function SalesHistoryPage() {
   const { updateSaleTotalWithAudit, replaceSale } = useAppData();
   const { user } = useAuth();
+  const { timezone } = useTimezone();
   const canEditSales = user?.role === "owner" || user?.role === "superadmin";
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -422,7 +425,7 @@ export default function SalesHistoryPage() {
                     {formatSaleId(sale.id)}
                   </td>
                   <td className="p-4 text-muted-foreground text-sm">
-                    {new Date(sale.createdAt).toLocaleString()}
+                    {formatWithTimezone(sale.createdAt, timezone)}
                   </td>
                   <td className="p-4 text-sm">
                     {sale.customerName || (

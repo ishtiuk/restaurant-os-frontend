@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { LicenseProvider } from "@/contexts/LicenseContext";
 import { PermissionsProvider } from "@/contexts/PermissionsContext";
 import { TenantProvider } from "./contexts/TenantContext";
+import { TimezoneProvider } from "@/contexts/TimezoneContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { RequireAuth, RequireRole } from "@/components/auth/RequireAuth";
 import Index from "@/pages/Index";
@@ -37,13 +38,14 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TenantProvider>
-        <AppDataProvider>
-          <LicenseProvider>
-            <PermissionsProvider>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner />
+      <TimezoneProvider>
+        <TenantProvider>
+          <AppDataProvider>
+            <LicenseProvider>
+              <PermissionsProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Sonner />
                 <BrowserRouter>
                   <Routes>
                     <Route path="/" element={<Login />} />
@@ -79,14 +81,15 @@ const App = () => (
                       </Route>
                     </Route>
 
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </BrowserRouter>
-              </TooltipProvider>
-            </PermissionsProvider>
-          </LicenseProvider>
-        </AppDataProvider>
-      </TenantProvider>
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </BrowserRouter>
+                </TooltipProvider>
+              </PermissionsProvider>
+            </LicenseProvider>
+          </AppDataProvider>
+        </TenantProvider>
+      </TimezoneProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

@@ -44,8 +44,10 @@ import {
 import { TransferCashToBank } from "@/components/finance/TransferCashToBank";
 import { AddExpense } from "@/components/finance/AddExpense";
 import { financeApi, type FinanceSummaryResponse, type TransactionResponse, type BankAccountResponse } from "@/lib/api/finance";
-import { format, subDays, startOfDay, endOfDay, startOfWeek, startOfMonth, endOfMonth } from "date-fns";
+import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate, getStartOfDay, getEndOfDay } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
 
@@ -73,6 +75,7 @@ const getStatusBadge = (status: string) => {
 };
 
 export default function Finance() {
+  const { timezone } = useTimezone();
   const [dateRange, setDateRange] = useState("this_month");
   const [transferOpen, setTransferOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
@@ -81,29 +84,38 @@ export default function Finance() {
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
 
-  // Calculate date range based on selection
+  // Calculate date range based on selection with timezone awareness
   const getDateRange = () => {
     const now = new Date();
     switch (dateRange) {
       case "today":
+        // Use timezone-aware start/end of day
+        const todayStart = getStartOfDay(now, timezone);
+        const todayEnd = getEndOfDay(now, timezone);
         return {
-          startDate: format(startOfDay(now), "yyyy-MM-dd"),
-          endDate: format(endOfDay(now), "yyyy-MM-dd"),
+          startDate: format(todayStart, "yyyy-MM-dd"),
+          endDate: format(todayEnd, "yyyy-MM-dd"),
         };
       case "this_week":
+        const weekStart = getStartOfDay(startOfWeek(now), timezone);
+        const weekEnd = getEndOfDay(now, timezone);
         return {
-          startDate: format(startOfWeek(now), "yyyy-MM-dd"),
-          endDate: format(endOfDay(now), "yyyy-MM-dd"),
+          startDate: format(weekStart, "yyyy-MM-dd"),
+          endDate: format(weekEnd, "yyyy-MM-dd"),
         };
       case "this_month":
+        const monthStart = getStartOfDay(startOfMonth(now), timezone);
+        const monthEnd = getEndOfDay(now, timezone);
         return {
-          startDate: format(startOfMonth(now), "yyyy-MM-dd"),
-          endDate: format(endOfDay(now), "yyyy-MM-dd"),
+          startDate: format(monthStart, "yyyy-MM-dd"),
+          endDate: format(monthEnd, "yyyy-MM-dd"),
         };
       default:
+        const defaultStart = getStartOfDay(startOfMonth(now), timezone);
+        const defaultEnd = getEndOfDay(now, timezone);
         return {
-          startDate: format(startOfMonth(now), "yyyy-MM-dd"),
-          endDate: format(endOfDay(now), "yyyy-MM-dd"),
+          startDate: format(defaultStart, "yyyy-MM-dd"),
+          endDate: format(defaultEnd, "yyyy-MM-dd"),
         };
     }
   };
@@ -135,7 +147,7 @@ export default function Finance() {
     };
 
     loadData();
-  }, [dateRange]);
+  }, [dateRange, timezone]);
 
   const handleExport = () => {
     // Placeholder for CSV export
@@ -205,7 +217,7 @@ export default function Finance() {
         type: t.type,
         description: t.description,
         amount: Math.abs(t.amount),
-        date: format(new Date(t.date), "yyyy-MM-dd"),
+        date: t.date, // Keep original date for formatting
         status: t.status,
         paymentMethod: t.payment_method,
       }));
@@ -487,7 +499,7 @@ export default function Finance() {
                         <span className="capitalize">{txn.paymentMethod.replace("_", " ")}</span>
               </span>
                     </td>
-                    <td className="py-3 px-2 text-muted-foreground">{txn.date}</td>
+                    <td className="py-3 px-2 text-muted-foreground">{formatDate(txn.date, timezone)}</td>
                     <td className={`py-3 px-2 text-right font-display font-semibold ${txn.type === "income" ? "text-accent" : "text-secondary"}`}>
                       {txn.type === "income" ? "+" : "-"}{formatCurrency(txn.amount)}
                     </td>

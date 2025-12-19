@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
+import { useTimezone } from "@/contexts/TimezoneContext";
 import { useLicense, LICENSE_STORAGE_KEY, parseLicenseToken } from "@/contexts/LicenseContext";
 import { usersApi, type StaffUser, type StaffRole } from "@/lib/api/users";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +48,7 @@ export default function Settings() {
   const { staff, categories, addCategory, removeCategory, tables, refreshTables } = useAppData();
   const { license, refreshFromStorage } = useLicense();
   const { user } = useAuth();
+  const { timezone, setTimezone } = useTimezone();
   const [language, setLanguage] = useState("en");
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [users, setUsers] = useState<StaffUser[]>([]);
@@ -72,6 +74,18 @@ export default function Settings() {
     paperSize: "thermal" as "thermal" | "thermal58",
     footerText: "",
   });
+
+  const TIMEZONES = [
+    { value: "Asia/Dhaka", label: "Asia/Dhaka (Bangladesh)" },
+    { value: "Asia/Kolkata", label: "Asia/Kolkata (India)" },
+    { value: "Asia/Dubai", label: "Asia/Dubai (UAE)" },
+    { value: "Asia/Singapore", label: "Asia/Singapore" },
+    { value: "Asia/Tokyo", label: "Asia/Tokyo (Japan)" },
+    { value: "Europe/London", label: "Europe/London (UK)" },
+    { value: "America/New_York", label: "America/New_York (US Eastern)" },
+    { value: "America/Los_Angeles", label: "America/Los_Angeles (US Pacific)" },
+    { value: "UTC", label: "UTC" },
+  ];
 
   useEffect(() => {
     // Load staff users from backend when authenticated
@@ -768,8 +782,43 @@ export default function Settings() {
         </div>
       </GlassCard>
 
-      {/* Localization */}
+      {/* Timezone Settings */}
       <GlassCard className="p-6 animate-fade-in stagger-3">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+            <Clock className="w-5 h-5 text-blue-500" />
+          </div>
+          <div>
+            <h3 className="font-semibold">Timezone Settings</h3>
+            <p className="text-sm text-muted-foreground">সময় অঞ্চল • Configure timezone for date/time display</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Select Timezone</Label>
+            <Select value={timezone} onValueChange={setTimezone}>
+              <SelectTrigger className="bg-muted/50 w-full md:w-[300px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              All dates and times throughout the application will be displayed in the selected timezone. 
+              This does not affect data storage - all data remains in UTC.
+            </p>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* Localization */}
+      <GlassCard className="p-6 animate-fade-in stagger-4">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
             <Globe className="w-5 h-5 text-accent" />
