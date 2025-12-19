@@ -357,9 +357,15 @@ export default function Finance() {
         <GlassCard hover glow="primary" className="p-6">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm text-muted-foreground">Net Profit</p>
-            <TrendingUp className="w-5 h-5 text-primary" />
+            {(summary?.net_profit || 0) >= 0 ? (
+              <TrendingUp className="w-5 h-5 text-primary" />
+            ) : (
+              <TrendingDown className="w-5 h-5 text-destructive" />
+            )}
           </div>
-            <p className="text-3xl font-display font-bold gradient-text-gold">{formatCurrency(summary?.net_profit || 0)}</p>
+            <p className={`text-3xl font-display font-bold ${(summary?.net_profit || 0) >= 0 ? 'gradient-text-gold' : 'text-destructive'}`}>
+              {(summary?.net_profit || 0) < 0 ? '-' : ''}৳{Math.abs(summary?.net_profit || 0).toLocaleString("bn-BD")}
+            </p>
             <p className="text-xs text-muted-foreground mt-1">নিট লাভ</p>
           </GlassCard>
 

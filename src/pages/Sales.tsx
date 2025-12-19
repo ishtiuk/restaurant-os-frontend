@@ -605,6 +605,12 @@ export default function Sales() {
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
+            {vatAmount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">VAT</span>
+                <span>{formatCurrency(vatAmount)}</span>
+              </div>
+            )}
             {includeServiceCharge && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Service (5%)</span>
