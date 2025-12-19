@@ -25,6 +25,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { getStartOfDay, getEndOfDay } from "@/utils/date";
 import { reportsApi, type SalesSummaryResponse, type SalesTrendResponse, type TopProductsResponse, type LowStockResponse } from "@/lib/api/reports";
 import { toast } from "@/hooks/use-toast";
 
@@ -45,6 +47,7 @@ const toBengaliNumeral = (num: number | string): string => {
 type DateRangePreset = "today" | "last7days" | "last30days" | "last90days" | "thisMonth" | "lastMonth" | "thisYear" | "custom";
 
 export default function Reports() {
+  const { timezone } = useTimezone();
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("last7days");
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
   const [endDate, setEndDate] = useState<Date>(new Date());
@@ -61,29 +64,29 @@ export default function Reports() {
   const [loadingTopProducts, setLoadingTopProducts] = useState(false);
   const [loadingLowStock, setLoadingLowStock] = useState(false);
 
-  // Get date range based on preset
+  // Get date range based on preset (timezone-aware)
   const getDateRange = (preset: DateRangePreset): { start: Date; end: Date } => {
     const today = new Date();
     switch (preset) {
       case "today":
-        return { start: today, end: today };
+        return { start: getStartOfDay(today, timezone), end: getEndOfDay(today, timezone) };
       case "last7days":
-        return { start: subDays(today, 7), end: today };
+        return { start: getStartOfDay(subDays(today, 7), timezone), end: getEndOfDay(today, timezone) };
       case "last30days":
-        return { start: subDays(today, 30), end: today };
+        return { start: getStartOfDay(subDays(today, 30), timezone), end: getEndOfDay(today, timezone) };
       case "last90days":
-        return { start: subDays(today, 90), end: today };
+        return { start: getStartOfDay(subDays(today, 90), timezone), end: getEndOfDay(today, timezone) };
       case "thisMonth":
-        return { start: startOfMonth(today), end: endOfMonth(today) };
+        return { start: getStartOfDay(startOfMonth(today), timezone), end: getEndOfDay(endOfMonth(today), timezone) };
       case "lastMonth":
         const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        return { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) };
+        return { start: getStartOfDay(startOfMonth(lastMonth), timezone), end: getEndOfDay(endOfMonth(lastMonth), timezone) };
       case "thisYear":
-        return { start: startOfYear(today), end: endOfYear(today) };
+        return { start: getStartOfDay(startOfYear(today), timezone), end: getEndOfDay(endOfYear(today), timezone) };
       case "custom":
-        return { start: startDate, end: endDate };
+        return { start: getStartOfDay(startDate, timezone), end: getEndOfDay(endDate, timezone) };
       default:
-        return { start: subDays(today, 7), end: today };
+        return { start: getStartOfDay(subDays(today, 7), timezone), end: getEndOfDay(today, timezone) };
     }
   };
 

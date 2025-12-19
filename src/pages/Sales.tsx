@@ -39,6 +39,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatWithTimezone } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -55,6 +57,7 @@ const paymentMethods: { id: PaymentMethod; label: string; icon: React.ReactNode 
 export default function Sales() {
   const navigate = useNavigate();
   const { items, categories, completeSale } = useAppData();
+  const { timezone } = useTimezone();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -678,7 +681,7 @@ export default function Sales() {
                   <h3 className="font-display font-bold text-lg">RestaurantOS</h3>
                   <p className="text-muted-foreground text-xs">রেস্টুরেন্ট ওএস</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(lastSale.createdAt).toLocaleString()}
+                    {formatWithTimezone(lastSale.createdAt, timezone)}
                   </p>
                   <Badge variant="outline" className="mt-2">
                     {lastSale.orderType === 'takeaway' ? '🛍️ Takeaway' : '🚚 Delivery'}

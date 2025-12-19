@@ -9,6 +9,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate as formatDateWithTimezone } from "@/utils/date";
 import { Plus, Search, Phone, Mail, MapPin, Truck, Clock, Check, X, Eye, DollarSign, Receipt, HelpCircle, Info, Calendar as CalendarIcon } from "lucide-react";
 import {
   suppliersApi,
@@ -50,10 +52,6 @@ import {
 } from "@/components/ui/pagination";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-};
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -70,6 +68,7 @@ const getStatusBadge = (status: string) => {
 
 export default function Suppliers() {
   const navigate = useNavigate();
+  const { timezone } = useTimezone();
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderDto[]>([]);
   const [payments, setPayments] = useState<SupplierPaymentDto[]>([]);
@@ -413,7 +412,7 @@ export default function Suppliers() {
               <div>
                 <h3 className="font-semibold text-lg">{supplier.name}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Since {formatDate(supplier.created_at)}
+                  Since {formatDateWithTimezone(supplier.created_at, timezone)}
                 </p>
               </div>
               {supplier.balance > 0 ? (
@@ -554,7 +553,7 @@ export default function Suppliers() {
                           return (
                             <tr key={po.id} className="border-t border-border/50">
                               <td className="p-3 font-medium">PO-{po.id.slice(-8).toUpperCase()}</td>
-                              <td className="p-3 text-muted-foreground">{formatDate(po.order_date)}</td>
+                              <td className="p-3 text-muted-foreground">{formatDateWithTimezone(po.order_date, timezone)}</td>
                               <td className="p-3 text-muted-foreground">{po.invoice_no || "-"}</td>
                               <td className="p-3">
                                 <div className="flex flex-col gap-1">
@@ -716,7 +715,7 @@ export default function Suppliers() {
                   <tbody>
                         {payments.map((payment) => (
                           <tr key={payment.id} className="border-t border-border/50">
-                            <td className="p-3 text-muted-foreground">{formatDate(payment.payment_date)}</td>
+                            <td className="p-3 text-muted-foreground">{formatDateWithTimezone(payment.payment_date, timezone)}</td>
                             <td className="p-3 text-muted-foreground">
                               {payment.purchase_order_id
                                 ? `PO-${payment.purchase_order_id.slice(-8).toUpperCase()}`
@@ -1045,7 +1044,7 @@ export default function Suppliers() {
                   </div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-muted-foreground">Date:</span>
-                    <span>{formatDate(paymentToDelete.payment_date)}</span>
+                    <span>{formatDateWithTimezone(paymentToDelete.payment_date, timezone)}</span>
                   </div>
                   {paymentToDelete.payment_method && (
                     <div className="flex justify-between text-sm">

@@ -1,12 +1,14 @@
 import React from "react";
 import { CartItem } from "@/types";
 import { getPrintSettingsSync } from "@/utils/printUtils";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate, formatTime } from "@/utils/date";
 
 interface KotSlipProps {
   kotNumber: number;
   tableNo: string;
   items: CartItem[];
-  time: string;
+  time: Date | string;
 }
 
 export const KotSlip: React.FC<KotSlipProps> = ({
@@ -16,17 +18,18 @@ export const KotSlip: React.FC<KotSlipProps> = ({
   time,
 }) => {
   const settings = getPrintSettingsSync();
+  const { timezone } = useTimezone();
   const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
-  const kotDate = new Date(time);
+  const kotDate = typeof time === 'string' ? new Date(time) : time;
+  
+  // Format date as "19 Dec 2025"
   const formattedDate = kotDate.toLocaleDateString('en-GB', {
-    day: '2-digit',
+    timeZone: timezone,
+    day: 'numeric',
     month: 'short',
+    year: 'numeric',
   });
-  const formattedTime = kotDate.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  const formattedTime = formatTime(kotDate, timezone);
 
   return (
     <div id="kot-slip-print">

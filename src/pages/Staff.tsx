@@ -41,6 +41,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -90,6 +92,7 @@ export default function StaffPage() {
   // TODO: Re-enable attendance when backend is implemented
   // const { staff, staffPayments, attendance, createStaffPayment, createStaff } = useAppData();
   const { staff, staffPayments, createStaffPayment, createStaff } = useAppData();
+  const { timezone } = useTimezone();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const attendance: never[] = []; // Placeholder - attendance not implemented yet
   const [searchQuery, setSearchQuery] = useState("");
@@ -372,7 +375,7 @@ export default function StaffPage() {
                 )}
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar className="w-4 h-4" />
-                  <span>Joined {staff.joiningDate}</span>
+                  <span>Joined {formatDate(staff.joiningDate, timezone)}</span>
                 </div>
               </div>
 
@@ -458,7 +461,7 @@ export default function StaffPage() {
                               <div>
                                 <p className="font-medium capitalize">{payment.type}</p>
                                 <p className="text-sm text-muted-foreground">{payment.description}</p>
-                                <p className="text-xs text-muted-foreground">{payment.date}</p>
+                                <p className="text-xs text-muted-foreground">{formatDate(payment.date, timezone)}</p>
                               </div>
                             </div>
                             <span
@@ -549,7 +552,7 @@ export default function StaffPage() {
                     getStaffAttendance(selectedStaff.id).map((record) => (
                       <div key={record.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                         <div className="flex items-center gap-3">
-                          <div className="text-sm text-muted-foreground">{record.date}</div>
+                          <div className="text-sm text-muted-foreground">{formatDate(record.date, timezone)}</div>
                           <Badge
                             variant={
                               record.status === "present"

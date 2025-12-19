@@ -33,12 +33,10 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate as formatDateWithTimezone, getStartOfDay } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-};
 
 // Convert English digits to Bengali numerals
 const toBengaliNumeral = (num: number | string): string => {
@@ -93,6 +91,7 @@ export default function Purchases() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { items } = useAppData(); // Use items from context for product selection
+  const { timezone } = useTimezone();
 
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderDto[]>([]);
@@ -207,11 +206,14 @@ export default function Purchases() {
 
   const totalThisMonth = useMemo(() => {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfMonth = getStartOfDay(new Date(now.getFullYear(), now.getMonth(), 1), timezone);
     return purchaseOrders
-      .filter((po) => new Date(po.order_date) >= startOfMonth)
+      .filter((po) => {
+        const poDate = new Date(po.order_date);
+        return poDate >= startOfMonth;
+      })
       .reduce((sum, po) => sum + po.total_amount, 0);
-  }, [purchaseOrders]);
+  }, [purchaseOrders, timezone]);
 
   const addItemToForm = () => {
     setForm((f) => ({
@@ -415,7 +417,7 @@ export default function Purchases() {
                         {getSupplierName(po.supplier_id)}
                       </div>
                     </td>
-                    <td className="p-4 text-muted-foreground">{formatDate(po.order_date)}</td>
+                    <td className="p-4 text-muted-foreground">{formatDateWithTimezone(po.order_date, timezone)}</td>
                     <td className="p-4 text-right">
                       <span className={dueAmount > 0 ? "font-medium text-warning" : "text-muted-foreground"}>
                         {formatCurrency(dueAmount)}
@@ -820,7 +822,7 @@ export default function Purchases() {
               Purchase Order: PO-{selectedPO?.id.slice(-8).toUpperCase()}
             </DialogTitle>
             <DialogDescription>
-              {selectedPO && getSupplierName(selectedPO.supplier_id)} • {selectedPO && formatDate(selectedPO.order_date)}
+              {selectedPO && getSupplierName(selectedPO.supplier_id)} • {selectedPO && formatDateWithTimezone(selectedPO.order_date, timezone)}
             </DialogDescription>
           </DialogHeader>
           {selectedPO && (
@@ -845,7 +847,7 @@ export default function Purchases() {
                 {selectedPO.expected_delivery_date && (
                   <div>
                     <Label className="text-xs text-muted-foreground">Expected Delivery</Label>
-                    <div className="mt-1">{formatDate(selectedPO.expected_delivery_date)}</div>
+                    <div className="mt-1">{formatDateWithTimezone(selectedPO.expected_delivery_date, timezone)}</div>
                   </div>
                 )}
               </div>

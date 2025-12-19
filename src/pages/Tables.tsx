@@ -8,6 +8,8 @@ import { useAppData } from "@/contexts/AppDataContext";
 import { KotSlip } from "@/components/print/KotSlip";
 import { TableBillReceipt } from "@/components/print/TableBillReceipt";
 import { printContent } from "@/utils/printUtils";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatWithTimezone, formatDate, formatTime } from "@/utils/date";
 import {
   Users,
   Plus,
@@ -109,6 +111,7 @@ const getStatusBadge = (status: RestaurantTable["status"]) => {
 };
 
 export default function Tables() {
+  const { timezone } = useTimezone();
   const {
     items,
     categories,
@@ -132,7 +135,7 @@ export default function Tables() {
   const [billServiceCharge, setBillServiceCharge] = useState(false);
   const [billDiscount, setBillDiscount] = useState(0);
   const [baselineItems, setBaselineItems] = useState<CartItem[]>([]);
-  const [lastKot, setLastKot] = useState<{ kotNumber: number; items: CartItem[]; time: string } | null>(null);
+  const [lastKot, setLastKot] = useState<{ kotNumber: number; items: CartItem[]; time: Date } | null>(null);
   const [showAddTableDialog, setShowAddTableDialog] = useState(false);
   const [newTable, setNewTable] = useState({ tableNo: "", capacity: 4, location: "" });
   const [isCreatingTable, setIsCreatingTable] = useState(false);
@@ -391,7 +394,7 @@ export default function Tables() {
     setLastKot({
       kotNumber: kotCount,
       items: deltaItems,
-      time: new Date().toLocaleString(),
+      time: new Date(),
     });
     setShowKotDialog(true);
 
@@ -730,7 +733,7 @@ export default function Tables() {
                   <h3 className="font-display font-bold text-xl">RestaurantOS</h3>
                   <p className="text-sm text-muted-foreground mt-1">রেস্টুরেন্ট ওএস</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {new Date().toLocaleString()}
+                    {formatWithTimezone(new Date(), timezone)}
                   </p>
                   <p className="font-bold mt-2">Table: {selectedTable.tableNo}</p>
                 </div>
@@ -969,7 +972,12 @@ export default function Tables() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Time:</span>
-                    <span>{new Date(lastKot.time).toLocaleString()}</span>
+                    <span>{(typeof lastKot.time === 'string' ? new Date(lastKot.time) : lastKot.time).toLocaleDateString('en-GB', {
+                      timeZone: timezone,
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}</span>
                   </div>
                 </div>
 
