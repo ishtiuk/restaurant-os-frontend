@@ -294,7 +294,7 @@ export default function SalesHistoryPage() {
 
     // Convert sales to CSV rows
     const rows = filteredSales.map((sale) => {
-      const date = new Date(sale.createdAt).toLocaleString();
+      const date = formatWithTimezone(sale.createdAt, timezone);
       const editCount = sale.editHistory?.length || 0;
       const itemsCount = sale.items?.length || 0;
 
@@ -562,7 +562,7 @@ export default function SalesHistoryPage() {
               </span>
             </DialogTitle>
             <DialogDescription>
-              {selectedSale && new Date(selectedSale.createdAt).toLocaleString()}
+              {selectedSale && formatWithTimezone(selectedSale.createdAt, timezone)}
             </DialogDescription>
           </DialogHeader>
 
@@ -611,7 +611,7 @@ export default function SalesHistoryPage() {
                       <div className="flex justify-between mb-1">
                         <span className="text-muted-foreground">By: {edit.editedBy}</span>
                         <span className="text-muted-foreground">
-                          {new Date(edit.editedAt).toLocaleString()}
+                          {formatWithTimezone(edit.editedAt, timezone)}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">

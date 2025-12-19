@@ -37,6 +37,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatWithTimezone, formatDate } from "@/utils/date";
 import { useLicense, LICENSE_STORAGE_KEY, parseLicenseToken } from "@/contexts/LicenseContext";
 import { usersApi, type StaffUser, type StaffRole } from "@/lib/api/users";
 import { useAuth } from "@/contexts/AuthContext";
@@ -307,7 +308,7 @@ export default function Settings() {
     toast({
       title: "Subscription activated",
       description: parsed.validUntil
-        ? `Valid until ${new Date(parsed.validUntil).toLocaleString()}`
+        ? `Valid until ${formatWithTimezone(parsed.validUntil, timezone)}`
         : "Activation successful.",
     });
     setLicenseInput("");
@@ -1024,14 +1025,14 @@ export default function Settings() {
                 {license.status === "active" && (
                   <Badge variant="success">
                     Active{license.validUntil && (
-                      <> • until {new Date(license.validUntil).toLocaleDateString()}</>
+                      <> • until {formatDate(license.validUntil, timezone)}</>
                     )}
                   </Badge>
                 )}
                 {license.status === "expired" && (
                   <Badge variant="destructive">
                     Expired{license.validUntil && (
-                      <> • {new Date(license.validUntil).toLocaleDateString()}</>
+                      <> • {formatDate(license.validUntil, timezone)}</>
                     )}
                   </Badge>
                 )}
