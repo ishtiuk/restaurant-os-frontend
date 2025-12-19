@@ -150,8 +150,58 @@ export default function Finance() {
   }, [dateRange, timezone]);
 
   const handleExport = () => {
-    // Placeholder for CSV export
-    console.log("Exporting to CSV...");
+    if (transactions.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "There are no transactions to export with the current filters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // CSV Headers
+    const headers = [
+      "Date",
+      "Type",
+      "Description",
+      "Payment Method",
+      "Amount",
+      "Status",
+    ];
+
+    // Convert transactions to CSV rows (use all transactions, not just recent)
+    const rows = transactions.map((t) => [
+      formatDate(t.date, timezone), // Format date in user's timezone for CSV
+      t.type,
+      t.description || "",
+      t.payment_method.replace("_", " "),
+      t.type === "expense" ? -Math.abs(t.amount) : t.amount,
+      t.status,
+    ]);
+
+    // Combine headers and rows
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    // Use timezone-aware date for filename
+    const todayDate = getDateOnly(new Date(), timezone);
+    link.setAttribute("download", `finance_export_${todayDate}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Export Successful",
+      description: `Exported ${transactions.length} transactions to CSV file.`,
+    });
   };
 
   const handleRefresh = () => {
