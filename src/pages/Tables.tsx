@@ -437,7 +437,10 @@ export default function Tables() {
     setBillLoading(true);
     
     // Calculate service charge if enabled
-    const serviceChargeAmount = billServiceCharge ? currentOrder.subtotal * 0.05 : 0;
+    // Service charge must be calculated on VAT-inclusive amount (itemsTotal), not VAT-exclusive subtotal
+    // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
+    const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+    const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
     
     finalizeTableBill(selectedTable.id, billPayment, {
       discount: billDiscount,
@@ -722,7 +725,7 @@ export default function Tables() {
                 <TableBillReceipt
                   order={currentOrder}
                   tableNo={selectedTable.tableNo}
-                  serviceCharge={billServiceCharge ? currentOrder.subtotal * 0.05 : 0}
+                  serviceCharge={billServiceCharge ? currentOrder.items.reduce((sum, item) => sum + item.total, 0) * 0.05 : 0}
                   extraDiscount={billDiscount}
                 />
               </div>
@@ -869,12 +872,18 @@ export default function Tables() {
                       <span className="text-muted-foreground">Original Total:</span>
                       <span>{formatCurrency(currentOrder.total)}</span>
                     </div>
-                    {billServiceCharge && (
-                      <div className="flex justify-between text-primary">
-                        <span>+ Service Charge:</span>
-                        <span>+{formatCurrency(currentOrder.subtotal * 0.05)}</span>
-                      </div>
-                    )}
+                    {billServiceCharge && (() => {
+                      // Service charge must be calculated on VAT-inclusive amount (itemsTotal), not VAT-exclusive subtotal
+                      // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
+                      const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+                      const serviceChargeAmount = itemsTotal * 0.05;
+                      return (
+                        <div className="flex justify-between text-primary">
+                          <span>+ Service Charge:</span>
+                          <span>+{formatCurrency(serviceChargeAmount)}</span>
+                        </div>
+                      );
+                    })()}
                     {billDiscount > 0 && (
                       <div className="flex justify-between text-accent">
                         <span>- Discount:</span>
@@ -884,10 +893,25 @@ export default function Tables() {
                     <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
                       <span>New Total:</span>
                       <span className="text-primary">
-                        {formatCurrency(
-                          currentOrder.total + 
-                          (billServiceCharge ? currentOrder.subtotal * 0.05 : 0) - 
-                          billDiscount
+                          {formatCurrency(
+                          (() => {
+                            // Calculate correct total: Subtotal (VAT-exclusive) + VAT + Service Charge - Discount
+                            const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+                            // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
+                            const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
+                            // Calculate VAT-exclusive subtotal and VAT
+                            const calculatedVat = currentOrder.vatAmount > 0 
+                              ? currentOrder.vatAmount 
+                              : currentOrder.items.reduce((sum, item) => {
+                                  if (!item.vatRate || item.vatRate === 0) return sum;
+                                  const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                                  return sum + itemVat;
+                                }, 0);
+                            const displayVat = Math.round(calculatedVat);
+                            const displaySubtotal = Math.round(itemsTotal - calculatedVat);
+                            // Total = Subtotal (VAT-exclusive) + VAT + Service Charge - Discount
+                            return displaySubtotal + displayVat + serviceChargeAmount - billDiscount;
+                          })()
                         )}
                       </span>
                     </div>
@@ -1120,7 +1144,8 @@ export default function Tables() {
                   const displaySubtotal = Math.round(itemsTotal - calculatedVat);
                   
                   // Service charge is calculated on VAT-inclusive amount (itemsTotal)
-                  const serviceChargeAmount = billServiceCharge ? Math.round(itemsTotal * 0.05) : 0;
+                  // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
+                  const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
                   
                   // Total = Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
                   const calculatedTotal = displaySubtotal + displayVat + serviceChargeAmount - billDiscount;

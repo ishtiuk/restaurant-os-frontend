@@ -454,17 +454,23 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         if (user?.token) {
           try {
             const { kotItems } = opts ?? {};
-            const subtotal = orderItems.reduce((s, i) => s + i.total, 0);
+            // In Bangladesh, prices shown to customers are VAT-inclusive
+            // But for backend accounting, we need to separate VAT
+            const subtotalInclusive = orderItems.reduce((s, i) => s + i.total, 0);
             // Calculate VAT from each item's VAT rate
-            // In Bangladesh, prices are VAT-inclusive, so extract VAT: vat = (price * qty) * (vatRate / (100 + vatRate))
-            const vatAmount = orderItems.reduce((sum, item) => {
+            // Extract VAT from VAT-inclusive prices: vat = (price * qty) * (vatRate / (100 + vatRate))
+            const calculatedVat = orderItems.reduce((sum, item) => {
               const cartItem = items.find((ci) => ci.id === item.itemId);
               const vatRate = (cartItem as any)?.vatRate;
               if (!vatRate || vatRate === 0) return sum;
               const itemVat = (item.total * vatRate) / (100 + vatRate);
               return sum + itemVat;
             }, 0);
-            const total = subtotal; // Subtotal already includes VAT
+            const vatAmount = Math.round(calculatedVat);
+            // Subtotal without VAT (for backend accounting) - round after subtracting VAT
+            const subtotal = Math.round(subtotalInclusive - calculatedVat);
+            // Total = Subtotal (VAT-exclusive) + VAT (rounded)
+            const total = subtotal + vatAmount;
 
             // Create/update order via API
             const orderInput = {
