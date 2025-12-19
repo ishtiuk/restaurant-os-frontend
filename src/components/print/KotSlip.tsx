@@ -22,13 +22,9 @@ export const KotSlip: React.FC<KotSlipProps> = ({
   const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
   const kotDate = typeof time === 'string' ? new Date(time) : time;
   
-  // Format date as "19 Dec 2025"
-  const formattedDate = kotDate.toLocaleDateString('en-GB', {
-    timeZone: timezone,
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  // Format date as "19 Dec 2025" using utility function for consistency
+  // formatDate already formats as "MMM dd, yyyy" which is close to what we need
+  const formattedDate = formatDate(kotDate, timezone);
   const formattedTime = formatTime(kotDate, timezone);
 
   return (

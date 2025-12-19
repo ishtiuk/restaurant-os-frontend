@@ -190,11 +190,34 @@ export default function Reports() {
   ];
 
   const getDateRangeLabel = () => {
+    // Format dates in user's timezone for display
     if (dateRangePreset === "custom") {
-      return `${format(startDate, "MMM dd")} - ${format(endDate, "MMM dd, yyyy")}`;
+      const startFormatted = startDate.toLocaleDateString('en-US', {
+        timeZone: timezone,
+        month: 'short',
+        day: 'numeric',
+      });
+      const endFormatted = endDate.toLocaleDateString('en-US', {
+        timeZone: timezone,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      return `${startFormatted} - ${endFormatted}`;
     }
     const range = getDateRange(dateRangePreset);
-    return `${format(range.start, "MMM dd")} - ${format(range.end, "MMM dd, yyyy")}`;
+    const startFormatted = range.start.toLocaleDateString('en-US', {
+      timeZone: timezone,
+      month: 'short',
+      day: 'numeric',
+    });
+    const endFormatted = range.end.toLocaleDateString('en-US', {
+      timeZone: timezone,
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    return `${startFormatted} - ${endFormatted}`;
   };
 
   return (

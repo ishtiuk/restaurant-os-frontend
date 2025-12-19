@@ -202,7 +202,7 @@ export default function FinanceTransactions() {
     // Generate CSV
     const headers = ["Date", "Type", "Description", "Payment Method", "Amount", "Status"];
     const rows = filteredTransactions.map((t) => [
-      t.date,
+      formatDate(t.date, timezone), // Format date in user's timezone for CSV
       t.type,
       t.description,
       t.paymentMethod.replace("_", " "),
