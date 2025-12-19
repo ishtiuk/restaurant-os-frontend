@@ -44,7 +44,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { formatWithTimezone } from "@/utils/date";
+import { formatWithTimezone, getDateOnly } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -328,7 +328,9 @@ export default function SalesHistoryPage() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `sales_history_${new Date().toISOString().split("T")[0]}.csv`);
+    // Use timezone-aware date for filename
+    const todayDate = getDateOnly(new Date(), timezone);
+    link.setAttribute("download", `sales_history_${todayDate}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();

@@ -972,12 +972,7 @@ export default function Tables() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Time:</span>
-                    <span>{(typeof lastKot.time === 'string' ? new Date(lastKot.time) : lastKot.time).toLocaleDateString('en-GB', {
-                      timeZone: timezone,
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}</span>
+                    <span>{formatDate(typeof lastKot.time === 'string' ? new Date(lastKot.time) : lastKot.time, timezone)}</span>
                   </div>
                 </div>
 

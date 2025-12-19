@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { formatDate as formatDateWithTimezone } from "@/utils/date";
+import { formatDate as formatDateWithTimezone, getDateOnly } from "@/utils/date";
 import { Plus, Search, Phone, Mail, MapPin, Truck, Clock, Check, X, Eye, DollarSign, Receipt, HelpCircle, Info, Calendar as CalendarIcon } from "lucide-react";
 import {
   suppliersApi,
@@ -92,7 +92,7 @@ export default function Suppliers() {
     supplier_id: "",
     purchase_order_id: null,
     amount: 0,
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: getDateOnly(new Date(), timezone),
     payment_method: "cash",
     reference_no: "",
     notes: "",
@@ -234,7 +234,7 @@ export default function Suppliers() {
         supplier_id: "",
         purchase_order_id: null,
         amount: 0,
-        payment_date: new Date().toISOString().slice(0, 10),
+        payment_date: getDateOnly(new Date(), timezone),
         payment_method: "cash",
         reference_no: "",
         notes: "",
@@ -691,7 +691,7 @@ export default function Suppliers() {
                         setPaymentForm((prev) => ({
                           ...prev,
                           supplier_id: selectedSupplier.id,
-                          payment_date: new Date().toISOString().slice(0, 10),
+                          payment_date: getDateOnly(new Date(), timezone),
                         }));
                         setShowAddPayment(true);
                       }}
@@ -897,7 +897,7 @@ export default function Suppliers() {
                         (() => {
                           try {
                             const date = new Date(paymentForm.payment_date);
-                            return isNaN(date.getTime()) ? "dd/mm/yyyy" : format(date, "dd/MM/yyyy");
+                            return isNaN(date.getTime()) ? "dd/mm/yyyy" : formatDateWithTimezone(paymentForm.payment_date, timezone);
                           } catch {
                             return "dd/mm/yyyy";
                           }

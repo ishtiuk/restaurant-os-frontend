@@ -585,7 +585,7 @@ export default function Purchases() {
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {form.expectedDeliveryDate ? (
-                        format(new Date(form.expectedDeliveryDate), "dd/MM/yyyy")
+                        formatDateWithTimezone(form.expectedDeliveryDate, timezone)
                       ) : (
                         <span>dd/mm/yyyy</span>
                       )}

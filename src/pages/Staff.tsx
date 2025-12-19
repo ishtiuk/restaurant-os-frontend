@@ -42,7 +42,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { formatDate } from "@/utils/date";
+import { formatDate, getDateOnly } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -220,7 +220,7 @@ export default function StaffPage() {
         amount,
         type: paymentForm.type as StaffPayment["type"],
         description: paymentForm.description || paymentForm.type,
-        date: new Date().toISOString().slice(0, 10),
+        date: getDateOnly(new Date(), timezone),
       });
       setShowPaymentDialog(false);
       setPaymentForm({ amount: "", type: "salary", description: "" });
@@ -251,7 +251,7 @@ export default function StaffPage() {
         phone: staffForm.phone,
         role: staffForm.role as Staff["role"],
         salary,
-        joiningDate: new Date().toISOString().slice(0, 10),
+        joiningDate: getDateOnly(new Date(), timezone),
         isActive: true,
         email: staffForm.email || undefined,
         address: staffForm.address || undefined,

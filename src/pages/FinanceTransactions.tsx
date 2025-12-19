@@ -215,7 +215,9 @@ export default function FinanceTransactions() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `transactions-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    // Use timezone-aware date for filename
+    const todayDate = getDateOnly(new Date(), timezone);
+    a.download = `transactions-${todayDate}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
