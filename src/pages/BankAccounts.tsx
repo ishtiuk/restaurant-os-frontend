@@ -26,10 +26,13 @@ import { AddBankAccount } from "@/components/finance/AddBankAccount";
 import { financeApi, type BankAccountResponse, type BankTransactionResponse } from "@/lib/api/finance";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatDate } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
 
 export default function BankAccounts() {
+  const { timezone } = useTimezone();
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
   const [bankBalances, setBankBalances] = useState<Record<string, number>>({});
   const [addBankOpen, setAddBankOpen] = useState(false);
@@ -325,7 +328,7 @@ export default function BankAccounts() {
                     <tbody>
                       {bankTransactions.map((txn) => (
                         <tr key={txn.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                          <td className="py-3 px-2 text-muted-foreground">{format(new Date(txn.date), "yyyy-MM-dd")}</td>
+                          <td className="py-3 px-2 text-muted-foreground">{formatDate(txn.date, timezone)}</td>
                           <td className="py-3 px-2 font-medium">{txn.description || "N/A"}</td>
                           <td className="py-3 px-2">
                             <Badge className={txn.type === "deposit" ? "bg-accent/20 text-accent border-accent/30" : "bg-secondary/20 text-secondary border-secondary/30"}>

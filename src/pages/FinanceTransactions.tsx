@@ -34,7 +34,7 @@ import { financeApi, type TransactionResponse, type BankAccountResponse } from "
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { formatDate } from "@/utils/date";
+import { formatDate, getStartOfDay, getEndOfDay, getDateOnly } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
 
@@ -88,8 +88,17 @@ export default function FinanceTransactions() {
           limit: 1000, // Get all for filtering
           offset: 0,
         };
-        if (startDate) params.start_date = startDate;
-        if (endDate) params.end_date = endDate;
+        // Convert user's selected dates to UTC dates for API
+        if (startDate) {
+          const userDate = new Date(startDate + "T12:00:00"); // Use noon to avoid DST issues
+          const utcStart = getStartOfDay(userDate, timezone);
+          params.start_date = format(utcStart, "yyyy-MM-dd");
+        }
+        if (endDate) {
+          const userDate = new Date(endDate + "T12:00:00"); // Use noon to avoid DST issues
+          const utcEnd = getEndOfDay(userDate, timezone);
+          params.end_date = format(utcEnd, "yyyy-MM-dd");
+        }
         if (typeFilter !== "all") params.transaction_type = typeFilter;
         if (paymentFilter !== "all") params.payment_method = paymentFilter;
         if (statusFilter !== "all") params.status = statusFilter;
@@ -114,7 +123,7 @@ export default function FinanceTransactions() {
     };
 
     loadTransactions();
-  }, [startDate, endDate, typeFilter, paymentFilter, statusFilter]);
+  }, [startDate, endDate, typeFilter, paymentFilter, statusFilter, timezone]);
 
   const filteredTransactions = useMemo(() => {
     let filtered = transactions.map((t) => ({
@@ -142,12 +151,20 @@ export default function FinanceTransactions() {
       filtered = filtered.filter((t) => t.status === statusFilter);
     }
 
-    // Date range filter
+    // Date range filter (timezone-aware)
     if (startDate) {
-      filtered = filtered.filter((t) => t.date >= startDate);
+      const startDateStr = getDateOnly(new Date(startDate + "T12:00:00"), timezone);
+      filtered = filtered.filter((t) => {
+        const txnDate = getDateOnly(t.date, timezone);
+        return txnDate >= startDateStr;
+      });
     }
     if (endDate) {
-      filtered = filtered.filter((t) => t.date <= endDate);
+      const endDateStr = getDateOnly(new Date(endDate + "T12:00:00"), timezone);
+      filtered = filtered.filter((t) => {
+        const txnDate = getDateOnly(t.date, timezone);
+        return txnDate <= endDateStr;
+      });
     }
 
     // Sort
@@ -164,7 +181,7 @@ export default function FinanceTransactions() {
     });
 
     return filtered;
-  }, [transactions, sortField, sortOrder]);
+  }, [transactions, sortField, sortOrder, typeFilter, paymentFilter, statusFilter, startDate, endDate, timezone]);
 
   const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
   const paginatedTransactions = filteredTransactions.slice(
@@ -446,8 +463,17 @@ export default function FinanceTransactions() {
                 limit: 1000,
                 offset: 0,
               };
-              if (startDate) params.start_date = startDate;
-              if (endDate) params.end_date = endDate;
+              // Convert user's selected dates to UTC dates for API
+              if (startDate) {
+                const userDate = new Date(startDate + "T12:00:00");
+                const utcStart = getStartOfDay(userDate, timezone);
+                params.start_date = format(utcStart, "yyyy-MM-dd");
+              }
+              if (endDate) {
+                const userDate = new Date(endDate + "T12:00:00");
+                const utcEnd = getEndOfDay(userDate, timezone);
+                params.end_date = format(utcEnd, "yyyy-MM-dd");
+              }
               if (typeFilter !== "all") params.transaction_type = typeFilter;
               if (paymentFilter !== "all") params.payment_method = paymentFilter;
               if (statusFilter !== "all") params.status = statusFilter;

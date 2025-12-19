@@ -167,11 +167,20 @@ export default function Reports() {
     }
   };
 
-  // Format sales trend data for chart
-  const chartData = salesTrend?.data.map((point) => ({
-    date: format(new Date(point.period), "MMM dd"),
-    revenue: point.total_sales,
-  })) || [];
+  // Format sales trend data for chart (timezone-aware)
+  const chartData = salesTrend?.data.map((point) => {
+    const pointDate = new Date(point.period);
+    // Format as "MMM dd" in user's timezone
+    const formatted = pointDate.toLocaleDateString('en-US', {
+      timeZone: timezone,
+      month: 'short',
+      day: 'numeric',
+    });
+    return {
+      date: formatted,
+      revenue: point.total_sales,
+    };
+  }) || [];
 
   const reportCards = [
     { title: "Sales Report", icon: TrendingUp, description: "Daily, weekly, monthly sales analysis", color: "primary" },

@@ -47,7 +47,7 @@ import { financeApi, type FinanceSummaryResponse, type TransactionResponse, type
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { formatDate, getStartOfDay, getEndOfDay } from "@/utils/date";
+import { formatDate, getStartOfDay, getEndOfDay, getDateOnly } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
 
@@ -163,24 +163,37 @@ export default function Finance() {
     ]);
   };
 
-  // Process transactions for last 7 days chart
+  // Process transactions for last 7 days chart (timezone-aware)
   const incomeExpenseData = useMemo(() => {
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = subDays(new Date(), 6 - i);
-      return format(date, "yyyy-MM-dd");
+      // Get date string in user's timezone
+      return getDateOnly(date, timezone);
     });
 
     return last7Days.map((dateStr) => {
-      const dayTransactions = transactions.filter((t) => t.date.startsWith(dateStr));
+      // Filter transactions by date in user's timezone
+      const dayTransactions = transactions.filter((t) => {
+        const txnDate = getDateOnly(t.date, timezone);
+        return txnDate === dateStr;
+      });
       const income = dayTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
       const expense = dayTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      
+      // Format day name in user's timezone
+      const dateObj = new Date(dateStr + "T12:00:00"); // Use noon to avoid DST issues
+      const dayName = dateObj.toLocaleDateString('en-US', {
+        timeZone: timezone,
+        weekday: 'short',
+      });
+      
       return {
-        day: format(new Date(dateStr), "EEE").slice(0, 3),
+        day: dayName.slice(0, 3),
         income,
         expense,
       };
     });
-  }, [transactions]);
+  }, [transactions, timezone]);
 
   // Payment method breakdown
   const paymentBreakdown = useMemo(() => {
