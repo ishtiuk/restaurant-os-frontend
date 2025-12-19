@@ -82,6 +82,7 @@ export default function Finance() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<FinanceSummaryResponse | null>(null);
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
+  const [chartTransactions, setChartTransactions] = useState<TransactionResponse[]>([]);
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
 
   // Calculate date range based on selection with timezone awareness
@@ -126,14 +127,19 @@ export default function Finance() {
       setLoading(true);
       try {
         const { startDate, endDate } = getDateRange();
-        const [summaryData, transactionsData, banksData] = await Promise.all([
+        
+        // Recent transactions: Always fetch latest 10 from all time (independent of date filter)
+        // Summary, chart, and payment breakdown: Use date filter
+        const [summaryData, recentTransactionsData, chartTransactionsData, banksData] = await Promise.all([
           financeApi.getSummary(startDate, endDate).catch(() => null),
-          financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 10 }).catch(() => []),
+          financeApi.getTransactions({ limit: 10 }).catch(() => []), // No date filter - always latest
+          financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 1000 }).catch(() => []),
           financeApi.listBankAccounts(true).catch(() => []),
         ]);
 
         if (summaryData) setSummary(summaryData);
-        setTransactions(transactionsData);
+        setTransactions(recentTransactionsData);
+        setChartTransactions(chartTransactionsData);
         setBanks(banksData);
       } catch (error) {
         toast({
@@ -206,49 +212,76 @@ export default function Finance() {
 
   const handleRefresh = () => {
     const { startDate, endDate } = getDateRange();
+    
     Promise.all([
       financeApi.getSummary(startDate, endDate).then(setSummary).catch(() => null),
-      financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 10 }).then(setTransactions).catch(() => []),
+      financeApi.getTransactions({ limit: 10 }).then(setTransactions).catch(() => []), // Always latest, no date filter
+      financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 1000 }).then(setChartTransactions).catch(() => []),
       financeApi.listBankAccounts(true).then(setBanks).catch(() => []),
     ]);
   };
 
-  // Process transactions for last 7 days chart (timezone-aware)
+  // Process transactions for chart based on selected date range (timezone-aware)
   const incomeExpenseData = useMemo(() => {
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const date = subDays(new Date(), 6 - i);
-      // Get date string in user's timezone
+    const { startDate, endDate } = getDateRange();
+    const start = new Date(startDate + "T12:00:00");
+    const end = new Date(endDate + "T12:00:00");
+    
+    // Calculate number of days in the range
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // Generate array of dates in the range
+    const datesInRange = Array.from({ length: daysDiff }, (_, i) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
       return getDateOnly(date, timezone);
     });
 
-    return last7Days.map((dateStr) => {
-      // Filter transactions by date in user's timezone
-      const dayTransactions = transactions.filter((t) => {
+    return datesInRange.map((dateStr) => {
+      // Filter chart transactions by date in user's timezone
+      const dayTransactions = chartTransactions.filter((t) => {
         const txnDate = getDateOnly(t.date, timezone);
         return txnDate === dateStr;
       });
       const income = dayTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
       const expense = dayTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + Math.abs(t.amount), 0);
       
-      // Format day name in user's timezone
-      const dateObj = new Date(dateStr + "T12:00:00"); // Use noon to avoid DST issues
-      const dayName = dateObj.toLocaleDateString('en-US', {
-        timeZone: timezone,
-        weekday: 'short',
-      });
+      // Format label based on date range
+      const dateObj = new Date(dateStr + "T12:00:00");
+      let label: string;
+      if (daysDiff <= 7) {
+        // For short ranges, show day name
+        label = dateObj.toLocaleDateString('en-US', {
+          timeZone: timezone,
+          weekday: 'short',
+        }).slice(0, 3);
+      } else if (daysDiff <= 31) {
+        // For medium ranges, show day number
+        label = dateObj.toLocaleDateString('en-US', {
+          timeZone: timezone,
+          day: 'numeric',
+        });
+      } else {
+        // For long ranges, show month/day
+        label = dateObj.toLocaleDateString('en-US', {
+          timeZone: timezone,
+          month: 'short',
+          day: 'numeric',
+        });
+      }
       
       return {
-        day: dayName.slice(0, 3),
+        day: label,
         income,
         expense,
       };
     });
-  }, [transactions, timezone]);
+  }, [chartTransactions, timezone, dateRange]);
 
-  // Payment method breakdown
+  // Payment method breakdown (use all transactions in date range, not just recent 10)
   const paymentBreakdown = useMemo(() => {
     const methodMap: Record<string, number> = {};
-    transactions.forEach((t) => {
+    chartTransactions.forEach((t) => {
       if (t.type === "income") {
         methodMap[t.payment_method] = (methodMap[t.payment_method] || 0) + t.amount;
       }
@@ -268,7 +301,7 @@ export default function Finance() {
         color: colors[name] || "hsl(220, 15%, 50%)",
       }))
       .filter((item) => item.value > 0);
-  }, [transactions]);
+  }, [chartTransactions]);
 
   // Recent transactions (last 10)
   const recentTransactions = useMemo(() => {
@@ -424,9 +457,11 @@ export default function Finance() {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Income vs Expenses - Last 7 Days */}
+        {/* Income vs Expenses Chart */}
         <GlassCard className="p-6 animate-fade-in stagger-3">
-          <h3 className="font-display font-semibold text-lg mb-6">Income vs Expenses (Last 7 Days)</h3>
+          <h3 className="font-display font-semibold text-lg mb-6">
+            Income vs Expenses {dateRange === "today" ? "(Today)" : dateRange === "this_week" ? "(This Week)" : dateRange === "this_month" ? "(This Month)" : ""}
+          </h3>
           <div className="h-64">
             {loading ? (
               <div className="flex items-center justify-center h-full">
@@ -524,10 +559,13 @@ export default function Finance() {
         </GlassCard>
       </div>
 
-      {/* Recent Transactions */}
+      {/* Latest Transactions */}
       <GlassCard className="p-6 animate-fade-in stagger-5">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-semibold text-lg">Recent Transactions</h3>
+          <div>
+            <h3 className="font-display font-semibold text-lg">Latest Transactions</h3>
+            <p className="text-xs text-muted-foreground mt-1">Most recent activity (independent of date filter)</p>
+          </div>
           <Link to="/finance/transactions">
             <Button variant="ghost" size="sm">
               View All

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import {
   Download,
-  Calendar,
+  Calendar as CalendarIcon,
   Wallet,
   CreditCard,
   Building2,
@@ -29,9 +29,12 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { AddExpense } from "@/components/finance/AddExpense";
 import { financeApi, type TransactionResponse, type BankAccountResponse } from "@/lib/api/finance";
-import { format } from "date-fns";
+import { format, startOfMonth, subDays } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { formatDate, getStartOfDay, getEndOfDay, getDateOnly } from "@/utils/date";
@@ -68,16 +71,35 @@ export default function FinanceTransactions() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  
+  // Default to this month on load
+  const getDefaultDateRange = useMemo(() => {
+    const now = new Date();
+    const monthStart = getStartOfDay(startOfMonth(now), timezone);
+    const today = getEndOfDay(now, timezone);
+    return {
+      start: format(monthStart, "yyyy-MM-dd"),
+      end: format(today, "yyyy-MM-dd"),
+    };
+  }, [timezone]);
+  
+  const [startDate, setStartDate] = useState(getDefaultDateRange.start);
+  const [endDate, setEndDate] = useState(getDefaultDateRange.end);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<"date" | "amount">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [startDateOpen, setStartDateOpen] = useState(false);
+  const [endDateOpen, setEndDateOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [startDate, endDate, typeFilter, paymentFilter, statusFilter]);
 
   // Fetch transactions
   useEffect(() => {
@@ -88,16 +110,32 @@ export default function FinanceTransactions() {
           limit: 1000, // Get all for filtering
           offset: 0,
         };
-        // Convert user's selected dates to UTC dates for API
+        // Convert user's selected dates for API
+        // Backend creates: start_date 00:00:00 UTC to end_date 23:59:59.999 UTC
+        // We need: user's date range in their timezone -> correct UTC date range
         if (startDate) {
-          const userDate = new Date(startDate + "T12:00:00"); // Use noon to avoid DST issues
-          const utcStart = getStartOfDay(userDate, timezone);
+          // User selects Dec 18 -> want Dec 18 00:00:00 in their timezone
+          // Dec 18 00:00:00 UTC+6 = Dec 17 18:00:00 UTC
+          // We send the UTC date that represents the start of user's selected date
+          const utcStart = getStartOfDay(new Date(startDate + "T12:00:00"), timezone);
           params.start_date = format(utcStart, "yyyy-MM-dd");
         }
         if (endDate) {
-          const userDate = new Date(endDate + "T12:00:00"); // Use noon to avoid DST issues
-          const utcEnd = getEndOfDay(userDate, timezone);
-          params.end_date = format(utcEnd, "yyyy-MM-dd");
+          // User selects Dec 18 -> want transactions up to Dec 18 23:59:59 in their timezone (UTC+6)
+          // Dec 18 23:59:59 UTC+6 = Dec 19 05:59:59 UTC
+          // getEndOfDay returns Dec 19 05:59:59.999 UTC (date part: "2025-12-19")
+          // Problem: If we send "2025-12-19", backend creates Dec 19 23:59:59.999 UTC, which includes Dec 20 in user's timezone
+          // If we send "2025-12-18", backend creates Dec 18 23:59:59.999 UTC = Dec 19 05:59:59.999 UTC+6
+          // This correctly represents the end of Dec 18, but includes Dec 19 transactions with UTC timestamps < Dec 18 23:59:59.999
+          // Solution: Get the UTC date of the end time, then subtract 1 day
+          // This ensures backend's 23:59:59.999 doesn't include the next day in user's timezone
+          const utcEnd = getEndOfDay(new Date(endDate + "T12:00:00"), timezone);
+          // utcEnd is Dec 19 05:59:59.999 UTC for Dec 18 in UTC+6
+          // We want to send a date that, when backend adds 23:59:59.999, gives us <= Dec 19 05:59:59 UTC
+          // Since backend always uses 23:59:59.999, we send the date BEFORE the UTC date
+          const utcEndDate = new Date(utcEnd);
+          utcEndDate.setUTCDate(utcEndDate.getUTCDate() - 1);
+          params.end_date = format(utcEndDate, "yyyy-MM-dd");
         }
         if (typeFilter !== "all") params.transaction_type = typeFilter;
         if (paymentFilter !== "all") params.payment_method = paymentFilter;
@@ -125,50 +163,11 @@ export default function FinanceTransactions() {
     loadTransactions();
   }, [startDate, endDate, typeFilter, paymentFilter, statusFilter, timezone]);
 
+  // Transactions are already filtered by API, just need to sort client-side
   const filteredTransactions = useMemo(() => {
-    let filtered = transactions.map((t) => ({
-      id: t.id,
-      date: t.date, // Keep original date for proper formatting
-      type: t.type,
-      description: t.description,
-      amount: t.amount,
-      paymentMethod: t.payment_method,
-      status: t.status,
-    }));
-
-    // Type filter
-    if (typeFilter !== "all") {
-      filtered = filtered.filter((t) => t.type === typeFilter);
-    }
-
-    // Payment method filter
-    if (paymentFilter !== "all") {
-      filtered = filtered.filter((t) => t.paymentMethod === paymentFilter);
-    }
-
-    // Status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((t) => t.status === statusFilter);
-    }
-
-    // Date range filter (timezone-aware)
-    if (startDate) {
-      const startDateStr = getDateOnly(new Date(startDate + "T12:00:00"), timezone);
-      filtered = filtered.filter((t) => {
-        const txnDate = getDateOnly(t.date, timezone);
-        return txnDate >= startDateStr;
-      });
-    }
-    if (endDate) {
-      const endDateStr = getDateOnly(new Date(endDate + "T12:00:00"), timezone);
-      filtered = filtered.filter((t) => {
-        const txnDate = getDateOnly(t.date, timezone);
-        return txnDate <= endDateStr;
-      });
-    }
-
-    // Sort
-    filtered.sort((a, b) => {
+    // API already filtered by date, type, payment method, and status
+    // We only need to sort client-side
+    const sorted = [...transactions].sort((a, b) => {
       if (sortField === "date") {
         return sortOrder === "desc" 
           ? new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -180,8 +179,16 @@ export default function FinanceTransactions() {
       }
     });
 
-    return filtered;
-  }, [transactions, sortField, sortOrder, typeFilter, paymentFilter, statusFilter, startDate, endDate, timezone]);
+    return sorted.map((t) => ({
+      id: t.id,
+      date: t.date,
+      type: t.type,
+      description: t.description,
+      amount: t.amount,
+      paymentMethod: t.payment_method,
+      status: t.status,
+    }));
+  }, [transactions, sortField, sortOrder]);
 
   const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
   const paginatedTransactions = filteredTransactions.slice(
@@ -226,8 +233,9 @@ export default function FinanceTransactions() {
     setTypeFilter("all");
     setPaymentFilter("all");
     setStatusFilter("all");
-    setStartDate("");
-    setEndDate("");
+    // Reset to default (this month) instead of empty
+    setStartDate(getDefaultDateRange.start);
+    setEndDate(getDefaultDateRange.end);
     setCurrentPage(1);
   };
 
@@ -256,7 +264,7 @@ export default function FinanceTransactions() {
         <div className="flex gap-2">
           <Button variant="glow" onClick={() => setExpenseOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Add Transaction
+            Add Expense
           </Button>
           <Button variant="outline" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
@@ -270,16 +278,19 @@ export default function FinanceTransactions() {
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">Total Income</p>
           <p className="text-2xl font-display font-bold text-accent">{formatCurrency(totals.income)}</p>
+          <p className="text-xs text-muted-foreground mt-1">For selected period</p>
         </GlassCard>
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">Total Expenses</p>
           <p className="text-2xl font-display font-bold text-secondary">{formatCurrency(totals.expense)}</p>
+          <p className="text-xs text-muted-foreground mt-1">For selected period</p>
         </GlassCard>
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">Net Balance</p>
           <p className={`text-2xl font-display font-bold ${totals.net >= 0 ? "text-accent" : "text-secondary"}`}>
             {totals.net >= 0 ? "+" : "-"}{formatCurrency(totals.net)}
           </p>
+          <p className="text-xs text-muted-foreground mt-1">For selected period</p>
         </GlassCard>
       </div>
 
@@ -295,21 +306,75 @@ export default function FinanceTransactions() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Start Date</label>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-muted/50"
-            />
+            <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                    !startDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {startDate ? (
+                    formatDate(startDate + "T12:00:00", timezone)
+                  ) : (
+                    <span>dd/mm/yyyy</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={startDate ? new Date(startDate + "T12:00:00") : undefined}
+                  onSelect={(date) => {
+                    if (date) {
+                      setStartDate(format(date, "yyyy-MM-dd"));
+                      setStartDateOpen(false);
+                    } else {
+                      setStartDate("");
+                    }
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">End Date</label>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="bg-muted/50"
-            />
+            <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                    !endDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDate ? (
+                    formatDate(endDate + "T12:00:00", timezone)
+                  ) : (
+                    <span>dd/mm/yyyy</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={endDate ? new Date(endDate + "T12:00:00") : undefined}
+                  onSelect={(date) => {
+                    if (date) {
+                      setEndDate(format(date, "yyyy-MM-dd"));
+                      setEndDateOpen(false);
+                    } else {
+                      setEndDate("");
+                    }
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Type</label>
@@ -465,16 +530,16 @@ export default function FinanceTransactions() {
                 limit: 1000,
                 offset: 0,
               };
-              // Convert user's selected dates to UTC dates for API
+              // Convert user's selected dates for API (same logic as main useEffect)
               if (startDate) {
-                const userDate = new Date(startDate + "T12:00:00");
-                const utcStart = getStartOfDay(userDate, timezone);
+                const utcStart = getStartOfDay(new Date(startDate + "T12:00:00"), timezone);
                 params.start_date = format(utcStart, "yyyy-MM-dd");
               }
               if (endDate) {
-                const userDate = new Date(endDate + "T12:00:00");
-                const utcEnd = getEndOfDay(userDate, timezone);
-                params.end_date = format(utcEnd, "yyyy-MM-dd");
+                const utcEnd = getEndOfDay(new Date(endDate + "T12:00:00"), timezone);
+                const utcEndDate = new Date(utcEnd);
+                utcEndDate.setUTCDate(utcEndDate.getUTCDate() - 1);
+                params.end_date = format(utcEndDate, "yyyy-MM-dd");
               }
               if (typeFilter !== "all") params.transaction_type = typeFilter;
               if (paymentFilter !== "all") params.payment_method = paymentFilter;

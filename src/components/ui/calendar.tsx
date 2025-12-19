@@ -4,19 +4,73 @@ import { DayPicker } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
 function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
+  const [month, setMonth] = React.useState<Date>(() => {
+    if (props.month) return props.month;
+    if (props.selected && props.selected instanceof Date) return props.selected;
+    if (props.defaultMonth) return props.defaultMonth;
+    return new Date();
+  });
+
+  // Sync month with props.month if it changes externally
+  React.useEffect(() => {
+    if (props.month) {
+      setMonth(props.month);
+    } else if (props.selected && props.selected instanceof Date) {
+      setMonth(props.selected);
+    }
+  }, [props.month, props.selected]);
+
+  // Generate years (current year ± 10 years)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
+
+  // Generate months
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const handleMonthChange = (newMonth: Date) => {
+    setMonth(newMonth);
+    if (props.onMonthChange) {
+      props.onMonthChange(newMonth);
+    }
+  };
+
+  const handleYearChange = (year: string) => {
+    const newDate = new Date(month);
+    newDate.setFullYear(parseInt(year));
+    handleMonthChange(newDate);
+  };
+
+  const handleMonthSelect = (monthIndex: string) => {
+    const newDate = new Date(month);
+    newDate.setMonth(parseInt(monthIndex));
+    handleMonthChange(newDate);
+  };
+
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      month={month}
+      onMonthChange={handleMonthChange}
       className={cn("p-3", className)}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
-        caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
+        caption: "flex justify-center pt-1 relative items-center gap-2",
+        caption_label: "hidden", // Hide default caption, we'll use custom
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
@@ -44,6 +98,42 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
       components={{
         IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4" />,
+        Caption: ({ displayMonth }) => {
+          return (
+            <div className="flex items-center justify-center gap-2 w-full">
+              <Select
+                value={displayMonth.getMonth().toString()}
+                onValueChange={handleMonthSelect}
+              >
+                <SelectTrigger className="h-8 w-[140px] bg-muted/50 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((monthName, index) => (
+                    <SelectItem key={index} value={index.toString()}>
+                      {monthName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={displayMonth.getFullYear().toString()}
+                onValueChange={handleYearChange}
+              >
+                <SelectTrigger className="h-8 w-[100px] bg-muted/50 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        },
       }}
       {...props}
     />
