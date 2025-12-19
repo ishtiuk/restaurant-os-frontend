@@ -20,17 +20,50 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
   extraDiscount = 0,
 }) => {
   const settings = getPrintSettingsSync();
-  const { timezone } = useTimezone();
-  // Ensure createdAt is parsed correctly as UTC ISO string
-  // Parse the date string (backend returns UTC ISO string)
-  const orderDate = typeof order.createdAt === 'string' 
-    ? new Date(order.createdAt) 
-    : (order.createdAt as any) instanceof Date 
-      ? order.createdAt as Date
-      : new Date(order.createdAt as any);
-  // Format date as "19 Dec 2025" in user's timezone
-  const formattedDate = formatDate(orderDate, timezone);
-  const formattedTime = formatTime(orderDate, timezone);
+  // Get timezone with fallback (critical for print iframe)
+  // MUST read from localStorage directly to ensure we get the actual user setting
+  let timezone = localStorage.getItem("restaurant-os-timezone") || "Asia/Dhaka";
+  try {
+    const ctx = useTimezone();
+    timezone = ctx.timezone || timezone; // Use context if available, otherwise use localStorage value
+  } catch {
+    // Context not available (e.g., in print iframe), use localStorage
+    timezone = localStorage.getItem("restaurant-os-timezone") || "Asia/Dhaka";
+  }
+  
+  // Parse UTC ISO string from backend (e.g., "2025-12-19T06:23:00.000Z")
+  // CRITICAL: Ensure the string is treated as UTC by checking for 'Z' suffix
+  let orderDate: Date;
+  if (typeof order.createdAt === 'string') {
+    // If string doesn't end with 'Z', it might be interpreted as local time
+    // Force UTC interpretation by ensuring 'Z' suffix
+    const dateStr = order.createdAt.endsWith('Z') ? order.createdAt : order.createdAt + 'Z';
+    orderDate = new Date(dateStr);
+  } else if ((order.createdAt as any) instanceof Date) {
+    orderDate = order.createdAt as Date;
+  } else {
+    orderDate = new Date(order.createdAt as any);
+  }
+  
+  // Use Intl.DateTimeFormat directly for EXPLICIT timezone conversion
+  // This MUST use the same timezone as the modal to ensure consistency
+  const dateFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  
+  const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  
+  // Format with explicit timezone conversion (UTC → user's timezone)
+  const formattedDate = dateFormatter.format(orderDate);
+  const formattedTime = timeFormatter.format(orderDate);
 
   // Calculate correct total: Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
   const calculatedVat = order.vatAmount > 0 

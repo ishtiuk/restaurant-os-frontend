@@ -588,6 +588,12 @@ export default function SalesHistoryPage() {
                     <span className="text-muted-foreground">VAT</span>
                     <span>{formatCurrency(selectedSale.vatAmount)}</span>
                   </div>
+                  {selectedSale.serviceCharge > 0 && (
+                    <div className="flex justify-between text-sm text-primary">
+                      <span>Service Charge (5%)</span>
+                      <span>{formatCurrency(selectedSale.serviceCharge)}</span>
+                    </div>
+                  )}
                   {selectedSale.discount > 0 && (
                     <div className="flex justify-between text-sm text-accent">
                       <span>Discount</span>
