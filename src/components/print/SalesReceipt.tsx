@@ -25,7 +25,13 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
 }) => {
   const settings = getPrintSettingsSync();
   const { timezone } = useTimezone();
-  const saleDate = new Date(sale.createdAt);
+  // Ensure createdAt is parsed correctly as UTC ISO string
+  // Parse the date string (backend returns UTC ISO string)
+  const saleDate = typeof sale.createdAt === 'string' 
+    ? new Date(sale.createdAt) 
+    : (sale.createdAt as any) instanceof Date 
+      ? sale.createdAt as Date
+      : new Date(sale.createdAt as any);
   // Format date as "19 Dec 2025" in user's timezone
   const formattedDate = formatDate(saleDate, timezone);
   const formattedTime = formatTime(saleDate, timezone);

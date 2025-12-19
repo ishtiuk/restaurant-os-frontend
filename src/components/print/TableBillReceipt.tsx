@@ -21,7 +21,13 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
 }) => {
   const settings = getPrintSettingsSync();
   const { timezone } = useTimezone();
-  const orderDate = new Date(order.createdAt);
+  // Ensure createdAt is parsed correctly as UTC ISO string
+  // Parse the date string (backend returns UTC ISO string)
+  const orderDate = typeof order.createdAt === 'string' 
+    ? new Date(order.createdAt) 
+    : (order.createdAt as any) instanceof Date 
+      ? order.createdAt as Date
+      : new Date(order.createdAt as any);
   // Format date as "19 Dec 2025" in user's timezone
   const formattedDate = formatDate(orderDate, timezone);
   const formattedTime = formatTime(orderDate, timezone);
