@@ -262,19 +262,10 @@ export default function Dashboard() {
             {salesTrend && salesTrend.data.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
-                  data={salesTrend.data.map((point) => {
-                    const pointDate = new Date(point.period);
-                    // Format as "MMM dd" in user's timezone
-                    const formatted = pointDate.toLocaleDateString('en-US', {
-                      timeZone: timezone,
-                      month: 'short',
-                      day: 'numeric',
-                    });
-                    return {
-                      date: formatted,
-                      revenue: point.total_sales,
-                    };
-                  })}
+                  data={salesTrend.data.map((point) => ({
+                    date: formatDate(point.period, timezone),
+                    revenue: point.total_sales,
+                  }))}
                 >
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">

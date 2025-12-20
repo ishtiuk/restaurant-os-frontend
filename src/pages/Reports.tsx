@@ -26,7 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { getStartOfDay, getEndOfDay } from "@/utils/date";
+import { getStartOfDay, getEndOfDay, formatDate } from "@/utils/date";
 import { reportsApi, type SalesSummaryResponse, type SalesTrendResponse, type TopProductsResponse, type LowStockResponse } from "@/lib/api/reports";
 import { toast } from "@/hooks/use-toast";
 
@@ -167,20 +167,11 @@ export default function Reports() {
     }
   };
 
-  // Format sales trend data for chart (timezone-aware)
-  const chartData = salesTrend?.data.map((point) => {
-    const pointDate = new Date(point.period);
-    // Format as "MMM dd" in user's timezone
-    const formatted = pointDate.toLocaleDateString('en-US', {
-      timeZone: timezone,
-      month: 'short',
-      day: 'numeric',
-    });
-    return {
-      date: formatted,
-      revenue: point.total_sales,
-    };
-  }) || [];
+  // Format sales trend data for chart (timezone-aware using utility)
+  const chartData = salesTrend?.data.map((point) => ({
+    date: formatDate(point.period, timezone),
+    revenue: point.total_sales,
+  })) || [];
 
   const reportCards = [
     { title: "Sales Report", icon: TrendingUp, description: "Daily, weekly, monthly sales analysis", color: "primary" },
@@ -190,34 +181,12 @@ export default function Reports() {
   ];
 
   const getDateRangeLabel = () => {
-    // Format dates in user's timezone for display
+    // Use formatDate utility for consistent display
     if (dateRangePreset === "custom") {
-      const startFormatted = startDate.toLocaleDateString('en-US', {
-        timeZone: timezone,
-        month: 'short',
-        day: 'numeric',
-      });
-      const endFormatted = endDate.toLocaleDateString('en-US', {
-        timeZone: timezone,
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-      return `${startFormatted} - ${endFormatted}`;
+      return `${formatDate(startDate.toISOString(), timezone)} - ${formatDate(endDate.toISOString(), timezone)}`;
     }
     const range = getDateRange(dateRangePreset);
-    const startFormatted = range.start.toLocaleDateString('en-US', {
-      timeZone: timezone,
-      month: 'short',
-      day: 'numeric',
-    });
-    const endFormatted = range.end.toLocaleDateString('en-US', {
-      timeZone: timezone,
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-    return `${startFormatted} - ${endFormatted}`;
+    return `${formatDate(range.start.toISOString(), timezone)} - ${formatDate(range.end.toISOString(), timezone)}`;
   };
 
   return (

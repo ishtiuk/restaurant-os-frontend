@@ -1,7 +1,6 @@
 import React from "react";
 import { Sale } from "@/types";
 import { getPrintSettingsSync } from "@/utils/printUtils";
-import { useTimezone } from "@/contexts/TimezoneContext";
 import { formatDate, formatTime } from "@/utils/date";
 
 interface SalesReceiptProps {
@@ -24,50 +23,12 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
   deliveryNotes,
 }) => {
   const settings = getPrintSettingsSync();
-  // Get timezone with fallback (critical for print iframe)
-  // MUST read from localStorage directly to ensure we get the actual user setting
-  let timezone = localStorage.getItem("restaurant-os-timezone") || "Asia/Dhaka";
-  try {
-    const ctx = useTimezone();
-    timezone = ctx.timezone || timezone; // Use context if available, otherwise use localStorage value
-  } catch {
-    // Context not available (e.g., in print iframe), use localStorage
-    timezone = localStorage.getItem("restaurant-os-timezone") || "Asia/Dhaka";
-  }
+  // Get timezone from localStorage (required for print iframe where context is not available)
+  const timezone = localStorage.getItem("restaurant-os-timezone") || "Asia/Dhaka";
   
-  // Parse UTC ISO string from backend (e.g., "2025-12-19T06:23:00.000Z")
-  // CRITICAL: Ensure the string is treated as UTC by checking for 'Z' suffix
-  let saleDate: Date;
-  if (typeof sale.createdAt === 'string') {
-    // If string doesn't end with 'Z', it might be interpreted as local time
-    // Force UTC interpretation by ensuring 'Z' suffix
-    const dateStr = sale.createdAt.endsWith('Z') ? sale.createdAt : sale.createdAt + 'Z';
-    saleDate = new Date(dateStr);
-  } else if ((sale.createdAt as any) instanceof Date) {
-    saleDate = sale.createdAt as Date;
-  } else {
-    saleDate = new Date(sale.createdAt as any);
-  }
-  
-  // Use Intl.DateTimeFormat directly for EXPLICIT timezone conversion
-  // This MUST use the same timezone as the modal to ensure consistency
-  const dateFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-  
-  const timeFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-  
-  // Format with explicit timezone conversion (UTC → user's timezone)
-  const formattedDate = dateFormatter.format(saleDate);
-  const formattedTime = timeFormatter.format(saleDate);
+  // Use centralized utilities for consistent date formatting
+  const formattedDate = formatDate(sale.createdAt, timezone);
+  const formattedTime = formatTime(sale.createdAt, timezone);
 
   const orderTypeLabel = orderType === "delivery" ? "🚚 DELIVERY" : "🛍️ TAKEAWAY";
 

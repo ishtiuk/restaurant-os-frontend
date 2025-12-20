@@ -167,11 +167,17 @@ export default function FinanceTransactions() {
   const filteredTransactions = useMemo(() => {
     // API already filtered by date, type, payment method, and status
     // We only need to sort client-side
+    // Ensure UTC parsing by appending 'Z' if missing for accurate date comparison
+    const parseUTCDate = (dateStr: string) => {
+      const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+      return new Date(utcStr).getTime();
+    };
+    
     const sorted = [...transactions].sort((a, b) => {
       if (sortField === "date") {
         return sortOrder === "desc" 
-          ? new Date(b.date).getTime() - new Date(a.date).getTime()
-          : new Date(a.date).getTime() - new Date(b.date).getTime();
+          ? parseUTCDate(b.date) - parseUTCDate(a.date)
+          : parseUTCDate(a.date) - parseUTCDate(b.date);
       } else {
         return sortOrder === "desc" 
           ? Math.abs(b.amount) - Math.abs(a.amount)

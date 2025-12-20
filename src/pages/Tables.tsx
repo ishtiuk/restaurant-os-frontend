@@ -58,8 +58,10 @@ import { Label } from "@/components/ui/label";
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
 const getElapsedTime = (createdAt: string): string => {
+  // Ensure UTC parsing by appending 'Z' if missing
+  const dateStr = createdAt.endsWith('Z') ? createdAt : createdAt + 'Z';
   const now = new Date().getTime();
-  const created = new Date(createdAt).getTime();
+  const created = new Date(dateStr).getTime();
   const diffMs = now - created;
   const diffMins = Math.floor(diffMs / 60000);
   
@@ -71,8 +73,10 @@ const getElapsedTime = (createdAt: string): string => {
 };
 
 const getTimeColorClass = (createdAt: string): string => {
+  // Ensure UTC parsing by appending 'Z' if missing
+  const dateStr = createdAt.endsWith('Z') ? createdAt : createdAt + 'Z';
   const now = new Date().getTime();
-  const created = new Date(createdAt).getTime();
+  const created = new Date(dateStr).getTime();
   const diffMins = Math.floor((now - created) / 60000);
   
   if (diffMins < 20) return "text-accent";  // Green - fresh
