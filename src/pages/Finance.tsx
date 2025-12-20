@@ -320,19 +320,29 @@ export default function Finance() {
       const income = dayTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
       const expense = dayTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + Math.abs(t.amount), 0);
       
-      // Format label based on date range using formatWithTimezone utility
+      // Format label based on date range (date only, no time)
       // Parse dateStr as UTC by appending "T00:00:00Z"
       const dateObj = new Date(dateStr + "T00:00:00Z");
       let label: string;
       if (daysDiff <= 7) {
         // For short ranges, show day name
-        label = formatWithTimezone(dateObj, timezone, { weekday: 'short' }).slice(0, 3);
+        label = dateObj.toLocaleDateString("en-US", {
+          timeZone: timezone,
+          weekday: 'short'
+        }).slice(0, 3);
       } else if (daysDiff <= 31) {
         // For medium ranges, show day number
-        label = formatWithTimezone(dateObj, timezone, { day: 'numeric' });
+        label = dateObj.toLocaleDateString("en-US", {
+          timeZone: timezone,
+          day: 'numeric'
+        });
       } else {
         // For long ranges, show month/day
-        label = formatWithTimezone(dateObj, timezone, { month: 'short', day: 'numeric' });
+        label = dateObj.toLocaleDateString("en-US", {
+          timeZone: timezone,
+          month: 'short',
+          day: 'numeric'
+        });
       }
       
       return {

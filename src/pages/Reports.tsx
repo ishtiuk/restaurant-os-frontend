@@ -22,7 +22,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { getStartOfDay, getEndOfDay, getDateOnly, formatDate } from "@/utils/date";
@@ -49,6 +50,10 @@ type DateRangePreset = "today" | "last7days" | "last30days" | "last90days" | "th
 export default function Reports() {
   const { timezone } = useTimezone();
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("last7days");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [startDateOpen, setStartDateOpen] = useState(false);
+  const [endDateOpen, setEndDateOpen] = useState(false);
   
   const [salesSummary, setSalesSummary] = useState<SalesSummaryResponse | null>(null);
   const [salesTrend, setSalesTrend] = useState<SalesTrendResponse | null>(null);
@@ -80,6 +85,15 @@ export default function Reports() {
         return { start: getStartOfDay(startOfMonth(lastMonth), timezone), end: getEndOfDay(endOfMonth(lastMonth), timezone) };
       case "thisYear":
         return { start: getStartOfDay(startOfYear(today), timezone), end: getEndOfDay(endOfYear(today), timezone) };
+      case "custom":
+        // Use custom dates if available, otherwise fall back to last 7 days
+        if (customStartDate && customEndDate) {
+          return {
+            start: getStartOfDay(new Date(customStartDate + "T12:00:00"), timezone),
+            end: getEndOfDay(new Date(customEndDate + "T12:00:00"), timezone),
+          };
+        }
+        // Fall through to default
       default:
         return { start: getStartOfDay(subDays(today, 7), timezone), end: getEndOfDay(today, timezone) };
     }
@@ -217,7 +231,7 @@ export default function Reports() {
 
   useEffect(() => {
     loadReports();
-  }, [dateRangePreset]);
+  }, [dateRangePreset, customStartDate, customEndDate]);
 
   const handlePresetChange = (preset: DateRangePreset) => {
     setDateRangePreset(preset);
@@ -251,7 +265,7 @@ export default function Reports() {
           <h1 className="text-3xl font-display font-bold gradient-text">Reports</h1>
           <p className="text-muted-foreground">রিপোর্ট ও বিশ্লেষণ • Analytics & Reports</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline">
@@ -304,10 +318,87 @@ export default function Reports() {
                   >
                     This Year
                   </Button>
+                  <Button
+                    variant={dateRangePreset === "custom" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePresetChange("custom")}
+                    className="col-span-2"
+                  >
+                    Custom Range
+                  </Button>
                 </div>
               </div>
             </PopoverContent>
           </Popover>
+          {dateRangePreset === "custom" && (
+            <>
+              <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                      !customStartDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {customStartDate ? formatDate(customStartDate + "T12:00:00", timezone) : "Start Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customStartDate ? new Date(customStartDate + "T12:00:00") : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        setCustomStartDate(format(date, "yyyy-MM-dd"));
+                        setStartDateOpen(false);
+                      } else {
+                        setCustomStartDate("");
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                      !customEndDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {customEndDate ? formatDate(customEndDate + "T12:00:00", timezone) : "End Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={customEndDate ? new Date(customEndDate + "T12:00:00") : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        setCustomEndDate(format(date, "yyyy-MM-dd"));
+                        setEndDateOpen(false);
+                      } else {
+                        setCustomEndDate("");
+                      }
+                    }}
+                    disabled={(date) => {
+                      // Disable dates before start date
+                      if (customStartDate) {
+                        return date < new Date(customStartDate + "T12:00:00");
+                      }
+                      return false;
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </>
+          )}
           <Button variant="glow" disabled>
             <Download className="w-4 h-4 mr-2" />
             Export All
