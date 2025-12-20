@@ -124,7 +124,7 @@ export default function SalesHistoryPage() {
         localStorage.setItem("sales_history_reduction_factor", String(factor));
         toast({
           title: "VAT Mode Activated",
-          description: `Display reduced by ${(factor * 100).toFixed(1)}% (Frontend only)`,
+          description: `Display reduced by ${(factor * 100).toFixed(1)}% (Temporary only)`,
           duration: 2000,
         });
       } else {
