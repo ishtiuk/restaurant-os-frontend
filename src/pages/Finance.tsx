@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   BarChart,
@@ -46,7 +47,7 @@ import {
 } from "recharts";
 import { TransferCashToBank } from "@/components/finance/TransferCashToBank";
 import { AddExpense } from "@/components/finance/AddExpense";
-import { financeApi, type FinanceSummaryResponse, type TransactionResponse, type BankAccountResponse } from "@/lib/api/finance";
+import { financeApi, type FinanceSummaryResponse, type TransactionResponse, type BankAccountResponse, type CashTransferResponse } from "@/lib/api/finance";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
@@ -86,11 +87,15 @@ export default function Finance() {
   const [endDateOpen, setEndDateOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [pendingTransfersOpen, setPendingTransfersOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<FinanceSummaryResponse | null>(null);
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [chartTransactions, setChartTransactions] = useState<TransactionResponse[]>([]);
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
+  const [pendingTransfers, setPendingTransfers] = useState<CashTransferResponse[]>([]);
+  const [loadingTransfers, setLoadingTransfers] = useState(false);
+  const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
 
   // Calculate date range based on selection with timezone awareness
   // Returns Date objects (UTC) representing start/end of day in user's timezone
@@ -176,13 +181,15 @@ export default function Finance() {
         setBanks(banksData);
         
         // Recalculate summary from filtered transactions (backend summary may include edge cases)
-        const recalculatedSummary = {
+        const recalculatedSummary: FinanceSummaryResponse = {
           total_income: filteredChartTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0),
           total_expense: Math.abs(filteredChartTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)),
           net_profit: 0, // Will be calculated below
           cash_on_hand: summaryData?.cash_on_hand || 0, // Keep from backend (lifetime value)
           bank_balance: summaryData?.bank_balance || 0, // Keep from backend (lifetime value)
           pending_transfers: summaryData?.pending_transfers || 0, // Keep from backend (lifetime value)
+          period_start: summaryData?.period_start || startDate,
+          period_end: summaryData?.period_end || endDate,
         };
         recalculatedSummary.net_profit = recalculatedSummary.total_income - recalculatedSummary.total_expense;
         setSummary(recalculatedSummary);
@@ -199,6 +206,32 @@ export default function Finance() {
 
     loadData();
   }, [dateRange, customStartDate, customEndDate, timezone]);
+
+  const loadPendingTransfers = useCallback(async () => {
+    setLoadingTransfers(true);
+    try {
+      const transfers = await financeApi.listCashTransfers({ status: "pending" });
+      setPendingTransfers(transfers);
+      setPendingTransfersCount(transfers.length);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load pending transfers",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingTransfers(false);
+    }
+  }, []);
+
+  // Load pending transfers count when summary changes
+  useEffect(() => {
+    if (summary?.pending_transfers && summary.pending_transfers > 0) {
+      loadPendingTransfers();
+    } else {
+      setPendingTransfersCount(0);
+    }
+  }, [summary?.pending_transfers, loadPendingTransfers]);
 
   const handleExport = () => {
     if (transactions.length === 0) {
@@ -255,6 +288,44 @@ export default function Finance() {
     });
   };
 
+  const handleCompleteTransfer = async (transferId: string) => {
+    try {
+      await financeApi.updateCashTransfer(transferId, { status: "completed" });
+      toast({
+        title: "Transfer Completed",
+        description: "Cash transfer has been marked as completed",
+      });
+      // Reload data
+      handleRefresh();
+      loadPendingTransfers();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to complete transfer",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCancelTransfer = async (transferId: string) => {
+    try {
+      await financeApi.updateCashTransfer(transferId, { status: "cancelled" });
+      toast({
+        title: "Transfer Cancelled",
+        description: "Cash transfer has been cancelled",
+      });
+      // Reload data
+      handleRefresh();
+      loadPendingTransfers();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to cancel transfer",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleRefresh = () => {
     const { startDate: startDateObj, endDate: endDateObj } = getDateRange();
     
@@ -281,13 +352,15 @@ export default function Finance() {
       setChartTransactions(filteredChartTransactions);
       
       // Recalculate summary from filtered transactions
-      const recalculatedSummary = {
+      const recalculatedSummary: FinanceSummaryResponse = {
         total_income: filteredChartTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0),
         total_expense: Math.abs(filteredChartTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)),
         net_profit: 0,
         cash_on_hand: summaryData?.cash_on_hand || 0,
         bank_balance: summaryData?.bank_balance || 0,
         pending_transfers: summaryData?.pending_transfers || 0,
+        period_start: summaryData?.period_start || startDate,
+        period_end: summaryData?.period_end || endDate,
       };
       recalculatedSummary.net_profit = recalculatedSummary.total_income - recalculatedSummary.total_expense;
       setSummary(recalculatedSummary);
@@ -564,13 +637,45 @@ export default function Finance() {
             <p className="text-xs text-muted-foreground mt-1">ব্যাংক ব্যালেন্স</p>
           </GlassCard>
 
-          <GlassCard hover className="p-6 border-orange-500/20">
+          <GlassCard 
+            hover 
+            className="p-6 border-orange-500/20 cursor-pointer transition-all hover:border-orange-500/40 hover:shadow-lg relative"
+            onClick={() => {
+              if ((summary?.pending_transfers || 0) > 0) {
+                setPendingTransfersOpen(true);
+                loadPendingTransfers();
+              }
+            }}
+          >
+            {/* Notification Badge */}
+            {(summary?.pending_transfers || 0) > 0 && (
+              <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center shadow-lg animate-pulse">
+                <span className="text-xs font-bold text-white">{pendingTransfersCount || 1}</span>
+              </div>
+            )}
+            
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-muted-foreground">Pending Transfers</p>
-              <Clock className="w-5 h-5 text-orange-400" />
+              <div className="relative">
+                <Clock className={cn(
+                  "w-5 h-5 text-orange-400 transition-all",
+                  (summary?.pending_transfers || 0) > 0 && "animate-pulse"
+                )} />
+                {/* Pulsing dot indicator */}
+                {(summary?.pending_transfers || 0) > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full animate-ping" />
+                )}
+              </div>
             </div>
-            <p className="text-3xl font-display font-bold text-orange-400">{formatCurrency(summary?.pending_transfers || 0)}</p>
-            <p className="text-xs text-muted-foreground mt-1">বকেয়া স্থানান্তর</p>
+            <p className={cn(
+              "text-3xl font-display font-bold text-orange-400 transition-all",
+              (summary?.pending_transfers || 0) > 0 && "drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]"
+            )}>
+              {formatCurrency(summary?.pending_transfers || 0)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {(summary?.pending_transfers || 0) > 0 ? "Click to manage • ক্লিক করুন" : "বকেয়া স্থানান্তর"}
+            </p>
         </GlassCard>
         </div>
       )}
@@ -781,6 +886,103 @@ export default function Finance() {
         banks={banksForModals}
         onSuccess={handleRefresh}
       />
+
+      {/* Pending Transfers Modal */}
+      <Dialog open={pendingTransfersOpen} onOpenChange={setPendingTransfersOpen}>
+        <DialogContent className="glass-card max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-orange-400" />
+              Pending Cash Transfers
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto">
+            {loadingTransfers ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : pendingTransfers.length > 0 ? (
+              <div className="space-y-3">
+                {pendingTransfers.map((transfer) => {
+                  const bank = banks.find((b) => b.id === transfer.to_bank_id);
+                  return (
+                    <GlassCard key={transfer.id} className="p-4 border-orange-500/20">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-purple-400" />
+                            <span className="font-semibold">{bank?.name || "Unknown Bank"}</span>
+                            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
+                              <Clock className="w-3 h-3 mr-1" />
+                              Pending
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Amount:</span>
+                              <span className="ml-2 font-display font-bold text-orange-400">
+                                {formatCurrency(transfer.amount)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Date:</span>
+                              <span className="ml-2">{formatDate(transfer.created_at, timezone)}</span>
+                            </div>
+                            {transfer.reference && (
+                              <div>
+                                <span className="text-muted-foreground">Reference:</span>
+                                <span className="ml-2 font-mono text-xs">{transfer.reference}</span>
+                              </div>
+                            )}
+                            {transfer.notes && (
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground">Notes:</span>
+                                <span className="ml-2">{transfer.notes}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleCompleteTransfer(transfer.id)}
+                            className="bg-accent hover:bg-accent/90"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Complete
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCancelTransfer(transfer.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </GlassCard>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <CheckCircle className="w-12 h-12 text-accent mb-4 opacity-50" />
+                <h3 className="font-semibold mb-2">No Pending Transfers</h3>
+                <p className="text-sm text-muted-foreground">All transfers have been processed</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t pt-4 mt-4">
+            <Button variant="outline" onClick={() => setPendingTransfersOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

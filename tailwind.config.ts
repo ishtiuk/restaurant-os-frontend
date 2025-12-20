@@ -108,6 +108,10 @@ export default {
           "0%, 100%": { boxShadow: "0 0 20px hsl(38 95% 55% / 0.4)" },
           "50%": { boxShadow: "0 0 30px hsl(38 95% 55% / 0.6), 0 0 60px hsl(38 95% 55% / 0.3)" },
         },
+        "pulse-border": {
+          "0%, 100%": { borderColor: "hsl(251 146 60 / 0.2)", boxShadow: "0 0 0 0 hsl(251 146 60 / 0.4)" },
+          "50%": { borderColor: "hsl(251 146 60 / 0.4)", boxShadow: "0 0 0 4px hsl(251 146 60 / 0.1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -116,6 +120,7 @@ export default {
         "slide-up": "slide-up 0.5s ease-out forwards",
         "scale-in": "scale-in 0.3s ease-out forwards",
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
+        "pulse-border": "pulse-border 2s ease-in-out infinite",
       },
       backgroundImage: {
         "gradient-gold": "linear-gradient(135deg, hsl(38 95% 55%), hsl(45 90% 60%))",
