@@ -138,17 +138,39 @@ export default function SalesHistoryPage() {
     });
   }, []);
 
-  // Keyboard shortcut to toggle VAT mode (Ctrl+Shift+V)
+  // Triple-click on title to toggle VAT mode (for Electron apps where keyboard shortcuts don't work)
+  const [titleClickCount, setTitleClickCount] = useState(0);
+  const titleClickTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleTitleClick = () => {
+    if (titleClickTimeoutRef.current) {
+      clearTimeout(titleClickTimeoutRef.current);
+    }
+    
+    const newCount = titleClickCount + 1;
+    setTitleClickCount(newCount);
+
+    if (newCount >= 3) {
+      toggleVatMode();
+      setTitleClickCount(0);
+      if (titleClickTimeoutRef.current) {
+        clearTimeout(titleClickTimeoutRef.current);
+      }
+    } else {
+      titleClickTimeoutRef.current = setTimeout(() => {
+        setTitleClickCount(0);
+      }, 1000); // Reset count after 1 second
+    }
+  };
+
+  // Cleanup timeout on unmount
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === "V") {
-        e.preventDefault();
-        toggleVatMode();
+    return () => {
+      if (titleClickTimeoutRef.current) {
+        clearTimeout(titleClickTimeoutRef.current);
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleVatMode]);
+  }, []);
 
   // Helper to apply reduction factor to amounts
   const applyVatReduction = (amount: number): number => {
@@ -313,17 +335,23 @@ export default function SalesHistoryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
         <div>
-          <h1 className="text-3xl font-display font-bold gradient-text">Sales History</h1>
+          <h1 
+            className="text-3xl font-display font-bold gradient-text cursor-pointer select-none"
+            onClick={handleTitleClick}
+            title="Triple-click to toggle VAT mode"
+          >
+            Sales History
+          </h1>
           <p className="text-muted-foreground">বিক্রয় ইতিহাস • Transaction Records</p>
         </div>
         <div className="flex gap-2">
-          {/* Hidden VAT Mode Toggle - Appears on hover, or use Ctrl+Shift+V */}
+          {/* Hidden VAT Mode Toggle - Appears on hover, or triple-click title */}
           <Button
             variant="ghost"
             size="sm"
             onClick={toggleVatMode}
             className="opacity-0 hover:opacity-100 transition-opacity"
-            title="Toggle VAT Mode (Ctrl+Shift+V)"
+            title="Toggle VAT Mode (or triple-click 'Sales History' title)"
           >
             <EyeOff className="w-4 h-4" />
           </Button>
