@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -325,6 +326,9 @@ export default function BankAccounts() {
               <Building2 className="w-5 h-5 text-purple-400" />
               {selectedBank?.name} - Transaction History
             </DialogTitle>
+            <DialogDescription>
+              View all transactions for this bank account including deposits, withdrawals, and transfers.
+            </DialogDescription>
           </DialogHeader>
           
           {selectedBank && (

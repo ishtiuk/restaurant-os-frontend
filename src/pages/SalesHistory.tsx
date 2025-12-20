@@ -492,7 +492,7 @@ export default function SalesHistoryPage() {
           </table>
         </div>
         {salesTotal > 0 && (
-          <Pagination className="mt-4">
+          <Pagination className="mt-4 mb-4">
             <PaginationContent>
               <PaginationItem>
                 <PaginationPrevious

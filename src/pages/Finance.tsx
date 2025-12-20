@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   BarChart,
@@ -249,8 +249,23 @@ export default function Finance() {
       loadPendingTransfers();
     } else {
       setPendingTransfersCount(0);
+      setPendingTransfers([]);
     }
   }, [summary?.pending_transfers, loadPendingTransfers]);
+
+  // Load pending transfers when transfer modal opens to ensure accurate available cash
+  useEffect(() => {
+    if (transferOpen) {
+      loadPendingTransfers();
+    }
+  }, [transferOpen, loadPendingTransfers]);
+
+  // Calculate available cash (cash on hand minus pending transfers)
+  const availableCash = useMemo(() => {
+    const cashOnHand = summary?.cash_on_hand || 0;
+    const pendingTotal = pendingTransfers.reduce((sum, t) => sum + t.amount, 0);
+    return Math.max(0, cashOnHand - pendingTotal);
+  }, [summary?.cash_on_hand, pendingTransfers]);
 
   const handleExport = () => {
     if (transactions.length === 0) {
@@ -479,10 +494,10 @@ export default function Finance() {
   }, [chartTransactions]);
 
   // Recent transactions (last 10)
+  // Backend already returns transactions sorted by date (newest first) with limit 10
   const recentTransactions = useMemo(() => {
     return transactions
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 10)
+      .slice(0, 10) // Safeguard: ensure max 10 items
       .map((t) => ({
         id: t.id,
         type: t.type,
@@ -907,6 +922,8 @@ export default function Finance() {
         open={transferOpen}
         onOpenChange={setTransferOpen}
         cashBalance={summary?.cash_on_hand || 0}
+        availableCash={availableCash}
+        pendingTransfersTotal={pendingTransfers.reduce((sum, t) => sum + t.amount, 0)}
         banks={banksForModals}
         onSuccess={handleRefresh}
       />
@@ -925,6 +942,9 @@ export default function Finance() {
               <Clock className="w-5 h-5 text-orange-400" />
               Pending Cash Transfers
             </DialogTitle>
+            <DialogDescription>
+              Review and manage pending cash transfers to bank accounts. Complete or cancel transfers as needed.
+            </DialogDescription>
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto">

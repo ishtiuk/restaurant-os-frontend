@@ -27,6 +27,8 @@ interface TransferCashToBankProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cashBalance: number;
+  availableCash: number;
+  pendingTransfersTotal: number;
   banks: Array<{ id: string; name: string; balance: number }>;
   onSuccess?: () => void;
 }
@@ -35,6 +37,8 @@ export function TransferCashToBank({
   open,
   onOpenChange,
   cashBalance,
+  availableCash,
+  pendingTransfersTotal,
   banks,
   onSuccess,
 }: TransferCashToBankProps) {
@@ -68,10 +72,10 @@ export function TransferCashToBank({
       return;
     }
 
-    if (transferAmount > cashBalance) {
+    if (transferAmount > availableCash) {
       toast({
         title: "Insufficient Balance",
-        description: `Transfer amount cannot exceed cash balance (${formatCurrency(cashBalance)})`,
+        description: `Transfer amount cannot exceed available cash (${formatCurrency(availableCash)}). ${pendingTransfersTotal > 0 ? `You have ${formatCurrency(pendingTransfersTotal)} in pending transfers.` : ''}`,
         variant: "destructive",
       });
       return;
@@ -129,17 +133,33 @@ export function TransferCashToBank({
           <div className="space-y-2">
             <Label>From</Label>
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-blue-400" />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <Wallet className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Cash on Hand</p>
+                      <p className="text-sm text-muted-foreground">হাতে নগদ</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">Cash on Hand</p>
-                    <p className="text-sm text-muted-foreground">হাতে নগদ</p>
-                  </div>
+                  <p className="text-xl font-display font-bold text-blue-400">{formatCurrency(cashBalance)}</p>
                 </div>
-                <p className="text-xl font-display font-bold text-blue-400">{formatCurrency(cashBalance)}</p>
+                {pendingTransfersTotal > 0 && (
+                  <div className="pt-2 border-t border-blue-500/20">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Pending Transfers:</span>
+                      <span className="text-orange-400 font-medium">-{formatCurrency(pendingTransfersTotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-muted-foreground font-medium">Available Cash:</span>
+                      <span className={`font-display font-bold ${availableCash > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatCurrency(availableCash)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -187,8 +207,13 @@ export function TransferCashToBank({
               onChange={(e) => setAmount(e.target.value)}
               className="bg-muted/50"
               min="1"
-              max={cashBalance}
+              max={availableCash}
             />
+            {pendingTransfersTotal > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Maximum: {formatCurrency(availableCash)} (after pending transfers)
+              </p>
+            )}
           </div>
 
           {/* Reference */}
