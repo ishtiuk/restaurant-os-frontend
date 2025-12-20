@@ -177,16 +177,22 @@ export default function Suppliers() {
     : null;
 
   // Get purchase orders for selected supplier (use paginated data if in ledger view, otherwise use all)
+  // Helper function for consistent UTC date parsing
+  const parseUTCDate = (dateStr: string) => {
+    const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+    return new Date(utcStr).getTime();
+  };
+  
   const supplierPOs = useMemo(() => {
     if (!selectedSupplier) return [];
     if (showLedger && supplierPOsPaginated.length > 0) {
       // Use paginated data when viewing ledger
-      return supplierPOsPaginated.sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
+      return supplierPOsPaginated.sort((a, b) => parseUTCDate(b.order_date) - parseUTCDate(a.order_date));
     }
     // Fallback to all purchase orders (for stats calculation)
     return purchaseOrders
       .filter((po) => po.supplier_id === selectedSupplier.id)
-      .sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
+      .sort((a, b) => parseUTCDate(b.order_date) - parseUTCDate(a.order_date));
   }, [selectedSupplier, purchaseOrders, showLedger, supplierPOsPaginated]);
 
   // Calculate totals from POs and payments

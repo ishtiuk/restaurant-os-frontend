@@ -687,26 +687,7 @@ export default function Sales() {
                   <h3 className="font-display font-bold text-lg">RestaurantOS</h3>
                   <p className="text-muted-foreground text-xs">রেস্টুরেন্ট ওএস</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {(() => {
-                      // Parse UTC ISO string - ensure it's treated as UTC
-                      const dateStr = lastSale.createdAt.endsWith('Z') 
-                        ? lastSale.createdAt 
-                        : lastSale.createdAt + 'Z';
-                      const saleDate = new Date(dateStr);
-                      
-                      // Use Intl.DateTimeFormat directly for explicit timezone conversion
-                      // This MUST match the PDF component for consistency
-                      const formatter = new Intl.DateTimeFormat("en-US", {
-                        timeZone: timezone,
-                        year: "numeric",
-                        month: "short",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        hour12: true,
-                      });
-                      return formatter.format(saleDate);
-                    })()}
+                    {formatWithTimezone(lastSale.createdAt, timezone)}
                   </p>
                   <Badge variant="outline" className="mt-2">
                     {lastSale.orderType === 'takeaway' ? '🛍️ Takeaway' : '🚚 Delivery'}
