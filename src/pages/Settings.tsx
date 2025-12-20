@@ -21,6 +21,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Building2,
   Receipt,
   Globe,
@@ -76,6 +86,10 @@ export default function Settings() {
     paperSize: "thermal" as "thermal" | "thermal58",
     footerText: "",
   });
+  const [deleteCategoryDialogOpen, setDeleteCategoryDialogOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
 
   const TIMEZONES = [
     { value: "Asia/Dhaka", label: "Asia/Dhaka (Bangladesh)" },
@@ -339,10 +353,17 @@ export default function Settings() {
     toast({ title: "Category added", description: newCategory.name });
   };
 
-  const handleDeleteCategory = async (categoryId: string, name: string) => {
-    if (!confirm(`Delete category "${name}"?`)) return;
-    await removeCategory(categoryId);
-    toast({ title: "Category deleted", description: name });
+  const handleDeleteCategory = (categoryId: string, name: string) => {
+    setCategoryToDelete({ id: categoryId, name });
+    setDeleteCategoryDialogOpen(true);
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    await removeCategory(categoryToDelete.id);
+    toast({ title: "Category deleted", description: categoryToDelete.name });
+    setDeleteCategoryDialogOpen(false);
+    setCategoryToDelete(null);
   };
 
   const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -396,10 +417,15 @@ export default function Settings() {
   const handleRemoveUser = (userId: string) => {
     // Staff users don't have "owner" role - only manager, waiter, cashier, chef
     // Owner role is handled separately in the backend and won't appear in this list
-    if (!confirm("Are you sure you want to remove this user?")) return;
-    usersApi.remove(userId)
+    setUserToDelete(userId);
+    setDeleteUserDialogOpen(true);
+  };
+
+  const confirmRemoveUser = () => {
+    if (!userToDelete) return;
+    usersApi.remove(userToDelete)
       .then(() => {
-      setUsers(prev => prev.filter(u => u.id !== userId));
+      setUsers(prev => prev.filter(u => u.id !== userToDelete));
       toast({
         title: "User removed",
         description: "User has been deleted from the system.",
@@ -1227,6 +1253,67 @@ export default function Settings() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Category Confirmation Dialog */}
+      <AlertDialog open={deleteCategoryDialogOpen} onOpenChange={setDeleteCategoryDialogOpen}>
+        <AlertDialogContent className="glass-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 font-display gradient-text">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Delete Category?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you sure you want to delete the category <strong>"{categoryToDelete?.name}"</strong>?</p>
+              <p className="text-sm text-muted-foreground">
+                This action cannot be undone. Items in this category will need to be reassigned to another category.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCategory}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={deleteUserDialogOpen} onOpenChange={setDeleteUserDialogOpen}>
+        <AlertDialogContent className="glass-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 font-display gradient-text">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Remove User?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you sure you want to remove this user?</p>
+              {userToDelete && (
+                <div className="p-3 rounded-lg bg-muted/50 border border-border mt-2">
+                  <p className="text-sm text-muted-foreground">
+                    The user will lose access to the system immediately.
+                  </p>
+                </div>
+              )}
+              <p className="text-sm text-muted-foreground">
+                This action cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemoveUser}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -93,6 +93,7 @@ export default function Finance() {
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [chartTransactions, setChartTransactions] = useState<TransactionResponse[]>([]);
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
+  const [bankBalances, setBankBalances] = useState<Record<string, number>>({});
   const [pendingTransfers, setPendingTransfers] = useState<CashTransferResponse[]>([]);
   const [loadingTransfers, setLoadingTransfers] = useState(false);
   const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
@@ -179,6 +180,22 @@ export default function Finance() {
         });
         setChartTransactions(filteredChartTransactions);
         setBanks(banksData);
+        
+        // Fetch balances for all banks
+        const balancePromises = banksData.map(async (bank) => {
+          try {
+            const balance = await financeApi.getBankBalance(bank.id);
+            return { id: bank.id, balance: balance.balance };
+          } catch {
+            return { id: bank.id, balance: 0 };
+          }
+        });
+        const balances = await Promise.all(balancePromises);
+        const balanceMap: Record<string, number> = {};
+        balances.forEach((b) => {
+          balanceMap[b.id] = b.balance;
+        });
+        setBankBalances(balanceMap);
         
         // Recalculate summary from filtered transactions (backend summary may include edge cases)
         const recalculatedSummary: FinanceSummaryResponse = {
@@ -338,9 +355,25 @@ export default function Finance() {
       financeApi.getTransactions({ limit: 10 }).catch(() => []), // Always latest, no date filter
       financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 1000 }).catch(() => []),
       financeApi.listBankAccounts(true).catch(() => []),
-    ]).then(([summaryData, recentTransactionsData, chartTransactionsData, banksData]) => {
+    ]).then(async ([summaryData, recentTransactionsData, chartTransactionsData, banksData]) => {
       setTransactions(recentTransactionsData);
       setBanks(banksData);
+      
+      // Fetch balances for all banks
+      const balancePromises = banksData.map(async (bank) => {
+        try {
+          const balance = await financeApi.getBankBalance(bank.id);
+          return { id: bank.id, balance: balance.balance };
+        } catch {
+          return { id: bank.id, balance: 0 };
+        }
+      });
+      const balances = await Promise.all(balancePromises);
+      const balanceMap: Record<string, number> = {};
+      balances.forEach((b) => {
+        balanceMap[b.id] = b.balance;
+      });
+      setBankBalances(balanceMap);
       
       // Filter chart transactions by date in user's timezone
       const startDateStr = getDateOnly(startDateObj, timezone);
@@ -467,14 +500,14 @@ export default function Finance() {
       }));
   }, [transactions]);
 
-  // Format banks for modals
+  // Format banks for modals with actual balances
   const banksForModals = useMemo(() => {
     return banks.map((b) => ({
       id: b.id,
       name: b.name,
-      balance: 0, // Will be fetched separately if needed
+      balance: bankBalances[b.id] || 0,
     }));
-  }, [banks]);
+  }, [banks, bankBalances]);
 
   return (
     <div className="space-y-6">

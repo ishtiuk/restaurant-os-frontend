@@ -10,6 +10,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Building2,
   ArrowLeft,
   Plus,
@@ -21,8 +31,10 @@ import {
   ArrowDownRight,
   Wallet,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { AddBankAccount } from "@/components/finance/AddBankAccount";
+import { EditBankAccount } from "@/components/finance/EditBankAccount";
 import { financeApi, type BankAccountResponse, type BankTransactionResponse } from "@/lib/api/finance";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
@@ -36,11 +48,15 @@ export default function BankAccounts() {
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
   const [bankBalances, setBankBalances] = useState<Record<string, number>>({});
   const [addBankOpen, setAddBankOpen] = useState(false);
+  const [editBankOpen, setEditBankOpen] = useState(false);
+  const [bankToEdit, setBankToEdit] = useState<BankAccountResponse | null>(null);
   const [selectedBank, setSelectedBank] = useState<BankAccountResponse | null>(null);
   const [transactionsOpen, setTransactionsOpen] = useState(false);
   const [bankTransactions, setBankTransactions] = useState<BankTransactionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bankToDelete, setBankToDelete] = useState<BankAccountResponse | null>(null);
 
   // Fetch banks and balances
   useEffect(() => {
@@ -83,30 +99,43 @@ export default function BankAccounts() {
     .filter((b) => b.is_active)
     .reduce((sum, b) => sum + (bankBalances[b.id] || 0), 0);
 
-  const handleToggleStatus = async (bankId: string) => {
+  const handleDeleteBank = (bankId: string) => {
+    const bank = banks.find((b) => b.id === bankId);
+    if (!bank) return;
+    setBankToDelete(bank);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteBank = async () => {
+    if (!bankToDelete) return;
+
     try {
-      const bank = banks.find((b) => b.id === bankId);
-      if (!bank) return;
+      await financeApi.deleteBankAccount(bankToDelete.id);
 
-      await financeApi.updateBankAccount(bankId, {
-        is_active: !bank.is_active,
-      });
-
-      setBanks((prev) =>
-        prev.map((b) => (b.id === bankId ? { ...b, is_active: !b.is_active } : b))
-      );
+      setBanks((prev) => prev.filter((b) => b.id !== bankToDelete.id));
+      delete bankBalances[bankToDelete.id];
+      setBankBalances({ ...bankBalances });
 
       toast({
-        title: "Status Updated",
-        description: `Bank account ${!bank.is_active ? "activated" : "deactivated"}`,
+        title: "Bank Account Deleted",
+        description: `${bankToDelete.name} has been deleted successfully`,
       });
+
+      setDeleteDialogOpen(false);
+      setBankToDelete(null);
+      handleRefresh();
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error?.message || "Failed to update bank status",
+        description: error?.message || "Failed to delete bank account",
         variant: "destructive",
       });
     }
+  };
+
+  const handleEditBank = (bank: BankAccountResponse) => {
+    setBankToEdit(bank);
+    setEditBankOpen(true);
   };
 
   const handleViewTransactions = async (bank: BankAccountResponse) => {
@@ -254,15 +283,20 @@ export default function BankAccounts() {
                   <Eye className="w-4 h-4 mr-1" />
                   Transactions
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => handleEditBank(bank)}
+                >
                   <Edit className="w-4 h-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleToggleStatus(bank.id)}
+                  onClick={() => handleDeleteBank(bank.id)}
+                  className="text-destructive hover:text-destructive"
                 >
-                  {bank.is_active ? <Ban className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                  <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
             </GlassCard>
@@ -285,7 +319,7 @@ export default function BankAccounts() {
 
       {/* Bank Transactions Modal */}
       <Dialog open={transactionsOpen} onOpenChange={setTransactionsOpen}>
-        <DialogContent className="max-w-2xl glass-card">
+        <DialogContent className="max-w-4xl glass-card">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-purple-400" />
@@ -313,34 +347,34 @@ export default function BankAccounts() {
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
               ) : bankTransactions.length > 0 ? (
-                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                  <table className="w-full">
-                    <thead className="sticky top-0 bg-background">
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                  <table className="w-full min-w-[800px]">
+                    <thead className="sticky top-0 bg-background z-10">
                       <tr className="border-b border-border">
-                        <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Date</th>
-                        <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Description</th>
-                        <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">Type</th>
-                        <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Amount</th>
-                        <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Balance</th>
-                        <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">Ref No</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Description</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Type</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Amount</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Balance</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Ref No</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bankTransactions.map((txn) => (
                         <tr key={txn.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                          <td className="py-3 px-2 text-muted-foreground">{formatDate(txn.date, timezone)}</td>
-                          <td className="py-3 px-2 font-medium">{txn.description || "N/A"}</td>
-                          <td className="py-3 px-2">
+                          <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">{formatDate(txn.date, timezone)}</td>
+                          <td className="py-3 px-4 font-medium">{txn.description || "N/A"}</td>
+                          <td className="py-3 px-4">
                             <Badge className={txn.type === "deposit" ? "bg-accent/20 text-accent border-accent/30" : "bg-secondary/20 text-secondary border-secondary/30"}>
                               {txn.type === "deposit" ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
                               {txn.type}
                             </Badge>
                           </td>
-                          <td className={`py-3 px-2 text-right font-display font-semibold ${txn.type === "deposit" ? "text-accent" : "text-secondary"}`}>
+                          <td className={`py-3 px-4 text-right font-display font-semibold whitespace-nowrap ${txn.type === "deposit" ? "text-accent" : "text-secondary"}`}>
                             {txn.type === "deposit" ? "+" : "-"}{formatCurrency(Math.abs(txn.amount))}
                           </td>
-                          <td className="py-3 px-2 text-right font-medium">{formatCurrency(txn.balance_after)}</td>
-                          <td className="py-3 px-2 text-right text-muted-foreground font-mono text-sm">{txn.reference_no || "N/A"}</td>
+                          <td className="py-3 px-4 text-right font-medium whitespace-nowrap">{formatCurrency(txn.balance_after)}</td>
+                          <td className="py-3 px-4 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">{txn.reference_no || "N/A"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -361,6 +395,59 @@ export default function BankAccounts() {
         setAddBankOpen(open);
         if (!open) handleRefresh();
       }} />
+
+      {/* Edit Bank Modal */}
+      <EditBankAccount 
+        open={editBankOpen} 
+        onOpenChange={(open) => {
+          setEditBankOpen(open);
+          if (!open) {
+            setBankToEdit(null);
+            handleRefresh();
+          }
+        }}
+        bank={bankToEdit}
+        onSuccess={handleRefresh}
+      />
+
+      {/* Delete Bank Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="glass-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 font-display gradient-text">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Delete Bank Account?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you sure you want to delete <strong>{bankToDelete?.name}</strong>?</p>
+              {bankToDelete && (
+                <div className="p-3 rounded-lg bg-muted/50 border border-border mt-2">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-muted-foreground">Account Number:</span>
+                    <span className="font-mono font-semibold">{bankToDelete.account_number}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Balance:</span>
+                    <span className="font-semibold">{formatCurrency(bankBalances[bankToDelete.id] || 0)}</span>
+                  </div>
+                </div>
+              )}
+              <p className="text-sm text-destructive mt-2">
+                This action cannot be undone. All related transactions and transfers will also be deleted.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteBank}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

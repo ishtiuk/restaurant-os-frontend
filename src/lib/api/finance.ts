@@ -178,6 +178,10 @@ export const financeApi = {
     return apiClient.patch<BankAccountResponse>(`/finance/banks/${bankId}`, data);
   },
 
+  deleteBankAccount(bankId: string): Promise<void> {
+    return apiClient.delete<void>(`/finance/banks/${bankId}`);
+  },
+
   // Expenses
   createExpense(data: ExpenseCreate): Promise<ExpenseResponse> {
     return apiClient.post<ExpenseResponse>("/finance/expenses", data);
