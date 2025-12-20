@@ -1,10 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAppData } from "@/contexts/AppDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Sale } from "@/types";
 import { salesApi, type SaleDto } from "@/lib/api/sales";
@@ -20,11 +19,10 @@ import {
   Search,
   Filter,
   Eye,
-  Edit,
   AlertTriangle,
   History,
   Download,
-  Undo2,
+  EyeOff,
 } from "lucide-react";
 import {
   Dialog,
@@ -91,24 +89,72 @@ const formatSaleId = (id: string) => {
 };
 
 export default function SalesHistoryPage() {
-  const { updateSaleTotalWithAudit, replaceSale } = useAppData();
   const { user } = useAuth();
   const { timezone } = useTimezone();
-  const canEditSales = user?.role === "owner" || user?.role === "superadmin";
+  
+  // Hidden VAT mode toggle (frontend-only display reduction)
+  const [vatMode, setVatMode] = useState(() => {
+    const saved = localStorage.getItem("sales_history_vat_mode");
+    return saved === "true";
+  });
+  const [reductionFactor, setReductionFactor] = useState(() => {
+    const saved = localStorage.getItem("sales_history_reduction_factor");
+    return saved ? parseFloat(saved) : 0.5; // Default 50%
+  });
+
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [editReason, setEditReason] = useState("");
-  const [editAmount, setEditAmount] = useState("");
-  const [undoStack, setUndoStack] = useState<Record<string, Sale[]>>({});
-  const [redoStack, setRedoStack] = useState<Record<string, Sale[]>>({});
   const [salesPage, setSalesPage] = useState(1);
   const [salesPageSize] = useState(20);
   const [salesTotal, setSalesTotal] = useState(0);
+
+  const toggleVatMode = useCallback(() => {
+    setVatMode((prevMode) => {
+      const newMode = !prevMode;
+      localStorage.setItem("sales_history_vat_mode", String(newMode));
+      
+      if (newMode) {
+        // Generate random reduction factor between 45-55%
+        const factor = 0.45 + Math.random() * 0.1; // 0.45 to 0.55
+        setReductionFactor(factor);
+        localStorage.setItem("sales_history_reduction_factor", String(factor));
+        toast({
+          title: "VAT Mode Activated",
+          description: `Display reduced by ${(factor * 100).toFixed(1)}% (Frontend only)`,
+          duration: 2000,
+        });
+      } else {
+        toast({
+          title: "VAT Mode Deactivated",
+          description: "Showing real sales data",
+          duration: 2000,
+        });
+      }
+      return newMode;
+    });
+  }, []);
+
+  // Keyboard shortcut to toggle VAT mode (Ctrl+Shift+V)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === "V") {
+        e.preventDefault();
+        toggleVatMode();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleVatMode]);
+
+  // Helper to apply reduction factor to amounts
+  const applyVatReduction = (amount: number): number => {
+    if (!vatMode) return amount;
+    return Math.round(amount * reductionFactor * 100) / 100;
+  };
 
   // Load sales with pagination
   useEffect(() => {
@@ -149,86 +195,6 @@ export default function SalesHistoryPage() {
   const handleViewSale = (sale: Sale) => {
     setSelectedSale(sale);
     setShowDetailDialog(true);
-  };
-
-  const handleEditSale = (sale: Sale) => {
-    setSelectedSale(sale);
-    setEditAmount(sale.total.toString());
-    setEditReason("");
-    setShowEditDialog(true);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editReason.trim()) {
-      toast({ title: "Please provide a reason", variant: "destructive" });
-      return;
-    }
-    if (!selectedSale) return;
-
-    const current = sales.find((s) => s.id === selectedSale.id);
-    if (current) {
-      setUndoStack((prev) => ({
-        ...prev,
-        [current.id]: [...(prev[current.id] || []), current],
-      }));
-      setRedoStack((prev) => ({ ...prev, [current.id]: [] }));
-    }
-
-    try {
-      await updateSaleTotalWithAudit(selectedSale.id, {
-        newTotal: parseFloat(editAmount),
-        editedBy: user?.name || "Admin",
-        reason: editReason,
-      });
-
-      // Refresh sales list to get updated data
-      const offset = (salesPage - 1) * salesPageSize;
-      const response = await salesApi.list(salesPageSize, offset);
-      const convertedSales: Sale[] = response.data.map(mapSaleDtoToSale);
-      setSales(convertedSales);
-      setSalesTotal(response.total);
-
-      // Update selected sale if detail dialog is open
-      if (selectedSale) {
-        const updatedSale = convertedSales.find((s) => s.id === selectedSale.id);
-        if (updatedSale) {
-          setSelectedSale(updatedSale);
-        }
-      }
-
-      toast({
-        title: "Sale Updated",
-        description: `Sale ${formatSaleId(selectedSale.id)} has been modified. Audit log created.`,
-      });
-
-      setShowEditDialog(false);
-      setEditReason("");
-      setEditAmount("");
-    } catch (error: any) {
-      toast({
-        title: "Update Failed",
-        description: error?.message || "Failed to update sale. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleUndo = (sale: Sale) => {
-    const stack = undoStack[sale.id] || [];
-    if (stack.length === 0) return;
-    const prev = stack[stack.length - 1];
-    setUndoStack((s) => ({ ...s, [sale.id]: stack.slice(0, -1) }));
-    setRedoStack((s) => ({ ...s, [sale.id]: [...(s[sale.id] || []), sale] }));
-    replaceSale(prev);
-  };
-
-  const handleRedo = (sale: Sale) => {
-    const stack = redoStack[sale.id] || [];
-    if (stack.length === 0) return;
-    const next = stack[stack.length - 1];
-    setRedoStack((s) => ({ ...s, [sale.id]: stack.slice(0, -1) }));
-    setUndoStack((s) => ({ ...s, [sale.id]: [...(s[sale.id] || []), sale] }));
-    replaceSale(next);
   };
 
   const getStatusBadge = (status: Sale["status"]) => {
@@ -292,7 +258,7 @@ export default function SalesHistoryPage() {
       "Items Count",
     ];
 
-    // Convert sales to CSV rows
+    // Convert sales to CSV rows (apply VAT reduction if active)
     const rows = filteredSales.map((sale) => {
       const date = formatWithTimezone(sale.createdAt, timezone);
       const editCount = sale.editHistory?.length || 0;
@@ -305,11 +271,11 @@ export default function SalesHistoryPage() {
         sale.customerPhone || "",
         sale.orderType || "",
         sale.paymentMethod || "",
-        sale.subtotal.toFixed(2),
-        sale.vatAmount.toFixed(2),
-        sale.serviceCharge.toFixed(2),
-        sale.discount.toFixed(2),
-        sale.total.toFixed(2),
+        applyVatReduction(sale.subtotal).toFixed(2),
+        applyVatReduction(sale.vatAmount).toFixed(2),
+        applyVatReduction(sale.serviceCharge).toFixed(2),
+        applyVatReduction(sale.discount).toFixed(2),
+        applyVatReduction(sale.total).toFixed(2),
         sale.status || "",
         sale.tableNo || "",
         sale.deliveryAddress || "",
@@ -351,6 +317,16 @@ export default function SalesHistoryPage() {
           <p className="text-muted-foreground">বিক্রয় ইতিহাস • Transaction Records</p>
         </div>
         <div className="flex gap-2">
+          {/* Hidden VAT Mode Toggle - Appears on hover, or use Ctrl+Shift+V */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleVatMode}
+            className="opacity-0 hover:opacity-100 transition-opacity"
+            title="Toggle VAT Mode (Ctrl+Shift+V)"
+          >
+            <EyeOff className="w-4 h-4" />
+          </Button>
           <Button variant="outline" onClick={handleExport} disabled={filteredSales.length === 0}>
             <Download className="w-4 h-4 mr-2" />
             Export
@@ -358,21 +334,6 @@ export default function SalesHistoryPage() {
         </div>
       </div>
 
-      {/* Admin Warning */}
-      <GlassCard className={`p-4 border-2 ${canEditSales ? "border-primary/30 bg-primary/5" : "border-destructive/30 bg-destructive/10"} animate-fade-in stagger-1`}>
-        <div className="flex items-start gap-3">
-          <AlertTriangle className={`w-5 h-5 ${canEditSales ? "text-primary" : "text-destructive"} mt-0.5`} />
-          <div>
-            <p className="font-semibold">{canEditSales ? "Audit logging enabled" : "Owner/Admin Access Required"}</p>
-            <p className="text-sm text-muted-foreground">
-              Editing sales records is a sensitive operation. All changes are logged for audit purposes.
-              {canEditSales
-                ? " Owners (admins) and system superadmins can edit and undo/redo changes."
-                : " Only the restaurant owner (admin) or system superadmin can modify completed transactions."}
-            </p>
-          </div>
-        </div>
-      </GlassCard>
 
       {/* Filters */}
       <GlassCard className="p-4 animate-fade-in stagger-2">
@@ -416,7 +377,6 @@ export default function SalesHistoryPage() {
                 <th className="text-center p-4 font-medium">Payment</th>
                 <th className="text-right p-4 font-medium">Total</th>
                 <th className="text-center p-4 font-medium">Status</th>
-                <th className="text-center p-4 font-medium">Edited</th>
                 <th className="text-right p-4 font-medium">Actions</th>
               </tr>
             </thead>
@@ -441,7 +401,7 @@ export default function SalesHistoryPage() {
                   </td>
                   <td className="p-4 text-center">{getPaymentBadge(sale.paymentMethod)}</td>
                   <td className="p-4 text-right font-display font-semibold">
-                    {formatCurrency(sale.total)}
+                    {formatCurrency(applyVatReduction(sale.total))}
                   </td>
                   <td className="p-4 text-center">{getStatusBadge(sale.status)}</td>
                   <td className="p-4 text-center">
@@ -455,36 +415,9 @@ export default function SalesHistoryPage() {
                     )}
                   </td>
                   <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleViewSale(sale)}>
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditSale(sale)}
-                        className="text-destructive hover:text-destructive"
-                        disabled={!canEditSales}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={(undoStack[sale.id] || []).length === 0}
-                        onClick={() => handleUndo(sale)}
-                      >
-                        <Undo2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={(redoStack[sale.id] || []).length === 0}
-                        onClick={() => handleRedo(sale)}
-                      >
-                        <History className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => handleViewSale(sale)}>
+                      <Eye className="w-4 h-4" />
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -576,33 +509,33 @@ export default function SalesHistoryPage() {
                     <span>
                       {item.itemName} x{item.quantity}
                     </span>
-                    <span>{formatCurrency(item.total)}</span>
+                    <span>{formatCurrency(applyVatReduction(item.total))}</span>
                   </div>
                 ))}
                 <div className="border-t border-border pt-2 mt-2 space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span>{formatCurrency(selectedSale.subtotal)}</span>
+                    <span>{formatCurrency(applyVatReduction(selectedSale.subtotal))}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">VAT</span>
-                    <span>{formatCurrency(selectedSale.vatAmount)}</span>
+                    <span>{formatCurrency(applyVatReduction(selectedSale.vatAmount))}</span>
                   </div>
                   {selectedSale.serviceCharge > 0 && (
                     <div className="flex justify-between text-sm text-primary">
                       <span>Service Charge (5%)</span>
-                      <span>{formatCurrency(selectedSale.serviceCharge)}</span>
+                      <span>{formatCurrency(applyVatReduction(selectedSale.serviceCharge))}</span>
                     </div>
                   )}
                   {selectedSale.discount > 0 && (
                     <div className="flex justify-between text-sm text-accent">
                       <span>Discount</span>
-                      <span>-{formatCurrency(selectedSale.discount)}</span>
+                      <span>-{formatCurrency(applyVatReduction(selectedSale.discount))}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
                     <span>Total</span>
-                    <span className="gradient-text">{formatCurrency(selectedSale.total)}</span>
+                    <span className="gradient-text">{formatCurrency(applyVatReduction(selectedSale.total))}</span>
                   </div>
                 </div>
               </div>
@@ -639,82 +572,6 @@ export default function SalesHistoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Sale Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="glass-card">
-          <DialogHeader>
-            <DialogTitle className="font-display text-destructive flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              Edit Sale - {selectedSale && formatSaleId(selectedSale.id)}
-            </DialogTitle>
-            <DialogDescription>
-              This action will be logged. Please provide a valid reason.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-              <p className="text-sm text-muted-foreground mb-2">Current Total</p>
-              <p className="text-2xl font-display font-bold">
-                {selectedSale && formatCurrency(selectedSale.total)}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>New Total Amount (৳)</Label>
-              <Input
-                type="number"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-                className="bg-muted/50"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Reason for Edit (Required)</Label>
-              <Textarea
-                placeholder="Explain why this sale needs to be modified..."
-                value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
-                className="bg-muted/50"
-                rows={3}
-              />
-            </div>
-
-            {editAmount && selectedSale && parseFloat(editAmount) !== selectedSale.total && (
-              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Difference</span>
-                  <span
-                    className={`font-display font-bold ${
-                      parseFloat(editAmount) < selectedSale.total
-                        ? "text-destructive"
-                        : "text-accent"
-                    }`}
-                  >
-                    {parseFloat(editAmount) < selectedSale.total ? "-" : "+"}
-                    {formatCurrency(Math.abs(parseFloat(editAmount) - selectedSale.total))}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleSaveEdit}
-              disabled={!editReason.trim()}
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
