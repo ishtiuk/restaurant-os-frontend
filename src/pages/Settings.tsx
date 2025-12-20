@@ -56,7 +56,7 @@ import { tenantApi, type TenantSettingsDto } from "@/lib/api/tenant";
 import { savePrintSettings } from "@/utils/printUtils";
 
 export default function Settings() {
-  const { staff, categories, addCategory, removeCategory, tables, refreshTables } = useAppData();
+  const { staff, categories, addCategory, removeCategory, refreshCategories, tables, refreshTables } = useAppData();
   const { license, refreshFromStorage } = useLicense();
   const { user } = useAuth();
   const { timezone, setTimezone } = useTimezone();
@@ -344,13 +344,22 @@ export default function Settings() {
       toast({ title: "Category name required", variant: "destructive" });
       return;
     }
-    await addCategory({
-      name: newCategory.name.trim(),
-      nameBn: newCategory.nameBn.trim() || undefined,
-      icon: newCategory.icon || "🍽️",
-    });
-    setNewCategory({ name: "", nameBn: "", icon: "🍽️" });
-    toast({ title: "Category added", description: newCategory.name });
+    try {
+      const categoryName = newCategory.name.trim();
+      await addCategory({
+        name: categoryName,
+        nameBn: newCategory.nameBn.trim() || undefined,
+        icon: newCategory.icon || "🍽️",
+      });
+      setNewCategory({ name: "", nameBn: "", icon: "🍽️" });
+      toast({ title: "Category added", description: categoryName });
+    } catch (err: any) {
+      toast({
+        title: "Failed to add category",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteCategory = (categoryId: string, name: string) => {
@@ -360,10 +369,30 @@ export default function Settings() {
 
   const confirmDeleteCategory = async () => {
     if (!categoryToDelete) return;
-    await removeCategory(categoryToDelete.id);
-    toast({ title: "Category deleted", description: categoryToDelete.name });
-    setDeleteCategoryDialogOpen(false);
-    setCategoryToDelete(null);
+    try {
+      await removeCategory(categoryToDelete.id);
+      toast({ 
+        title: "Category deleted", 
+        description: `"${categoryToDelete.name}" has been removed successfully.` 
+      });
+      setDeleteCategoryDialogOpen(false);
+      setCategoryToDelete(null);
+    } catch (err: any) {
+      // Handle 409 error (category has items) or other errors
+      const errorMessage = err?.response?.data?.detail || err?.message || "Failed to delete category";
+      const isConflictError = err?.response?.status === 409 || errorMessage.toLowerCase().includes("products are using it");
+      
+      toast({
+        title: isConflictError ? "Cannot delete category" : "Error",
+        description: isConflictError 
+          ? `"${categoryToDelete.name}" cannot be deleted because it contains items. Please remove or reassign all items in this category first.`
+          : errorMessage,
+        variant: "destructive",
+      });
+      
+      // Don't close the dialog on error so user can see the message
+      // They can manually close it or try again
+    }
   };
 
   const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -681,14 +710,30 @@ export default function Settings() {
 
         {/* Categories Management */}
         <GlassCard className="p-6 animate-fade-in stagger-2">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-              <Tag className="w-5 h-5 text-accent" />
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                <Tag className="w-5 h-5 text-accent" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Menu Categories</h3>
+                <p className="text-sm text-muted-foreground">Create and manage item categories</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold">Menu Categories</h3>
-              <p className="text-sm text-muted-foreground">Create and manage item categories</p>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                await refreshCategories();
+                toast({
+                  title: "Categories refreshed",
+                  description: "Item counts have been updated.",
+                });
+              }}
+            >
+              <Clock className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

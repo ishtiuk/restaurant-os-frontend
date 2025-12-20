@@ -100,6 +100,7 @@ type AppData = {
   updateItem: (itemId: string, updates: Partial<Omit<Item, "id">>) => Promise<void>;
   addCategory: (input: Omit<Category, "id" | "itemCount"> & Partial<Pick<Category, "itemCount">>) => Promise<Category>;
   removeCategory: (categoryId: string) => Promise<void>;
+  refreshCategories: () => Promise<void>;
   
   completeSale: (input: Omit<Sale, "id">) => Promise<Sale>;
   refreshTables: () => Promise<void>;
@@ -347,6 +348,25 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       );
     } catch (err) {
       console.error("Failed to refresh tables", err);
+    }
+  };
+
+  // Function to refresh categories from API
+  const refreshCategories = async () => {
+    if (!user?.token) return;
+    try {
+      const refreshed = await categoriesApi.list();
+      setCategories(
+        refreshed.map((c) => ({
+          id: c.id,
+          name: c.name,
+          nameBn: c.name_bn ?? undefined,
+          icon: c.icon ?? "🍽️",
+          itemCount: c.item_count ?? 0,
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to refresh categories", err);
     }
   };
 
@@ -1339,8 +1359,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               // Fallback: remove from local state
               setCategories((prev) => prev.filter((c) => c.id !== categoryId));
             }
-          } catch (err) {
-            console.error(err);
+          } catch (err: any) {
+            // Re-throw the error so the caller can handle it (e.g., show toast)
+            // The error will have status 409 if category has items
             throw err;
           }
         } else {
@@ -1482,6 +1503,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         return sale;
       },
 
+      refreshCategories,
       refreshTables,
     }),
     [
@@ -1499,6 +1521,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       tableOrders,
       tables,
       vatEntries,
+      refreshCategories,
+      refreshTables,
     ]
   );
 
