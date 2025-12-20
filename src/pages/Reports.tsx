@@ -21,9 +21,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
+import { subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { getStartOfDay, getEndOfDay, getDateOnly, formatDate } from "@/utils/date";
@@ -50,9 +49,6 @@ type DateRangePreset = "today" | "last7days" | "last30days" | "last90days" | "th
 export default function Reports() {
   const { timezone } = useTimezone();
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("last7days");
-  const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7));
-  const [endDate, setEndDate] = useState<Date>(new Date());
-  const [calendarOpen, setCalendarOpen] = useState(false);
   
   const [salesSummary, setSalesSummary] = useState<SalesSummaryResponse | null>(null);
   const [salesTrend, setSalesTrend] = useState<SalesTrendResponse | null>(null);
@@ -84,8 +80,6 @@ export default function Reports() {
         return { start: getStartOfDay(startOfMonth(lastMonth), timezone), end: getEndOfDay(endOfMonth(lastMonth), timezone) };
       case "thisYear":
         return { start: getStartOfDay(startOfYear(today), timezone), end: getEndOfDay(endOfYear(today), timezone) };
-      case "custom":
-        return { start: getStartOfDay(startDate, timezone), end: getEndOfDay(endDate, timezone) };
       default:
         return { start: getStartOfDay(subDays(today, 7), timezone), end: getEndOfDay(today, timezone) };
     }
@@ -223,27 +217,10 @@ export default function Reports() {
 
   useEffect(() => {
     loadReports();
-  }, [dateRangePreset, startDate, endDate]);
+  }, [dateRangePreset]);
 
   const handlePresetChange = (preset: DateRangePreset) => {
     setDateRangePreset(preset);
-    if (preset !== "custom") {
-      const range = getDateRange(preset);
-      setStartDate(range.start);
-      setEndDate(range.end);
-    }
-  };
-
-  const handleDateRangeSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
-    if (range?.from && range?.to) {
-      setStartDate(range.from);
-      setEndDate(range.to);
-      setDateRangePreset("custom");
-      setCalendarOpen(false);
-    } else if (range?.from) {
-      setStartDate(range.from);
-      setEndDate(range.from);
-    }
   };
 
   // Format sales trend data for chart (timezone-aware using utility)
@@ -262,9 +239,6 @@ export default function Reports() {
 
   const getDateRangeLabel = () => {
     // Use formatDate utility for consistent display (formatDate accepts Date objects directly)
-    if (dateRangePreset === "custom") {
-      return `${formatDate(startDate, timezone)} - ${formatDate(endDate, timezone)}`;
-    }
     const range = getDateRange(dateRangePreset);
     return `${formatDate(range.start, timezone)} - ${formatDate(range.end, timezone)}`;
   };
@@ -278,7 +252,7 @@ export default function Reports() {
           <p className="text-muted-foreground">রিপোর্ট ও বিশ্লেষণ • Analytics & Reports</p>
         </div>
         <div className="flex gap-2">
-          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+          <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline">
                 <CalendarIcon className="w-4 h-4 mr-2" />
@@ -286,7 +260,7 @@ export default function Reports() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
-              <div className="p-3 space-y-2">
+              <div className="p-3">
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant={dateRangePreset === "today" ? "default" : "outline"}
@@ -330,15 +304,6 @@ export default function Reports() {
                   >
                     This Year
                   </Button>
-                </div>
-                <div className="border-t pt-2">
-                  <p className="text-sm font-medium mb-2">Custom Range</p>
-                  <Calendar
-                    mode="range"
-                    selected={{ from: startDate, to: endDate }}
-                    onSelect={handleDateRangeSelect}
-                    numberOfMonths={2}
-                  />
                 </div>
               </div>
             </PopoverContent>

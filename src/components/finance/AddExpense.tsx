@@ -17,12 +17,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Receipt, Wallet, CreditCard, Building2, Smartphone } from "lucide-react";
+import { Receipt, Wallet, CreditCard, Building2, Smartphone, Calendar as CalendarIcon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { financeApi } from "@/lib/api/finance";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { getDateOnly, getStartOfDay } from "@/utils/date";
+import { getDateOnly, getStartOfDay, formatDate } from "@/utils/date";
 import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -59,6 +62,7 @@ export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseP
   const [date, setDate] = useState(getDateOnly(new Date(), timezone));
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -249,13 +253,39 @@ export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseP
           {/* Date */}
           <div className="space-y-2">
             <Label htmlFor="date">Date *</Label>
-            <Input
-              id="date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-muted/50"
-            />
+            <Popover open={dateOpen} onOpenChange={setDateOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                    !date && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date ? (
+                    formatDate(date + "T12:00:00", timezone)
+                  ) : (
+                    <span>Select date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={date ? new Date(date + "T12:00:00") : undefined}
+                  onSelect={(selectedDate) => {
+                    if (selectedDate) {
+                      setDate(format(selectedDate, "yyyy-MM-dd"));
+                      setDateOpen(false);
+                    } else {
+                      setDate("");
+                    }
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Description */}

@@ -401,7 +401,7 @@ export default function Finance() {
           <h1 className="text-3xl font-display font-bold gradient-text">Finance</h1>
           <p className="text-muted-foreground">আর্থিক ড্যাশবোর্ড • Financial Dashboard</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <Select value={dateRange} onValueChange={setDateRange}>
             <SelectTrigger className="w-[160px] bg-muted/50">
             <CalendarIcon className="w-4 h-4 mr-2" />
@@ -414,72 +414,66 @@ export default function Finance() {
               <SelectItem value="custom">Custom Range</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-        </div>
-      </div>
-
-      {/* Custom Date Range Selection */}
-      {dateRange === "custom" && (
-        <GlassCard className="p-4 mb-6 animate-fade-in">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-            <div className="flex-1">
-              <label className="text-sm text-muted-foreground mb-1 block">Start Date</label>
+          {dateRange === "custom" && (
+            <>
               <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
-                      "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                      "justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
                       !customStartDate && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {customStartDate ? format(new Date(customStartDate), "dd/MM/yyyy") : <span>Select start date</span>}
+                    {customStartDate ? formatDate(customStartDate + "T12:00:00", timezone) : "Start Date"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={customStartDate ? new Date(customStartDate) : undefined}
+                    selected={customStartDate ? new Date(customStartDate + "T12:00:00") : undefined}
                     onSelect={(date) => {
-                      setCustomStartDate(date ? format(date, "yyyy-MM-dd") : "");
-                      setStartDateOpen(false);
+                      if (date) {
+                        setCustomStartDate(format(date, "yyyy-MM-dd"));
+                        setStartDateOpen(false);
+                      } else {
+                        setCustomStartDate("");
+                      }
                     }}
                     initialFocus
                   />
                 </PopoverContent>
               </Popover>
-            </div>
-            <div className="flex-1">
-              <label className="text-sm text-muted-foreground mb-1 block">End Date</label>
               <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
-                      "w-full justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
+                      "justify-start text-left font-normal bg-muted/50 hover:bg-muted/70",
                       !customEndDate && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {customEndDate ? format(new Date(customEndDate), "dd/MM/yyyy") : <span>Select end date</span>}
+                    {customEndDate ? formatDate(customEndDate + "T12:00:00", timezone) : "End Date"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={customEndDate ? new Date(customEndDate) : undefined}
+                    selected={customEndDate ? new Date(customEndDate + "T12:00:00") : undefined}
                     onSelect={(date) => {
-                      setCustomEndDate(date ? format(date, "yyyy-MM-dd") : "");
-                      setEndDateOpen(false);
+                      if (date) {
+                        setCustomEndDate(format(date, "yyyy-MM-dd"));
+                        setEndDateOpen(false);
+                      } else {
+                        setCustomEndDate("");
+                      }
                     }}
                     disabled={(date) => {
                       // Disable dates before start date
                       if (customStartDate) {
-                        return date < new Date(customStartDate);
+                        return date < new Date(customStartDate + "T12:00:00");
                       }
                       return false;
                     }}
@@ -487,17 +481,14 @@ export default function Finance() {
                   />
                 </PopoverContent>
               </Popover>
-            </div>
-            <Button
-              variant="glow"
-              onClick={handleRefresh}
-              disabled={!customStartDate || !customEndDate}
-            >
-              Apply
-            </Button>
-          </div>
-        </GlassCard>
-      )}
+            </>
+          )}
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+        </div>
+      </div>
 
       {/* Summary Cards - 6 tiles */}
       {loading ? (
