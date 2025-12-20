@@ -55,6 +55,8 @@ import { formatDate, formatWithTimezone, getStartOfDay, getEndOfDay, getDateOnly
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
 
+const CHART_COLORS = ["hsl(38, 95%, 55%)", "hsl(18, 75%, 45%)", "hsl(158, 65%, 45%)", "hsl(220, 15%, 40%)"];
+
 const getPaymentIcon = (method: string) => {
   switch (method) {
     case "cash": return <Wallet className="w-4 h-4" />;
@@ -468,18 +470,10 @@ export default function Finance() {
       }
     });
 
-    const colors: Record<string, string> = {
-      cash: "hsl(158, 65%, 45%)",
-      card: "hsl(220, 70%, 50%)",
-      bank_transfer: "hsl(280, 65%, 50%)",
-      online: "hsl(38, 95%, 55%)",
-    };
-
     return Object.entries(methodMap)
       .map(([name, value]) => ({
         name: name === "bank_transfer" ? "Bank Transfer" : name.charAt(0).toUpperCase() + name.slice(1),
         value,
-        color: colors[name] || "hsl(220, 15%, 50%)",
       }))
       .filter((item) => item.value > 0);
   }, [chartTransactions]);
@@ -572,7 +566,7 @@ export default function Finance() {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {customEndDate ? formatDate(customEndDate + "T12:00:00", timezone) : "End Date"}
-                  </Button>
+          </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
@@ -641,7 +635,7 @@ export default function Finance() {
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm text-muted-foreground">Net Profit</p>
             {(summary?.net_profit || 0) >= 0 ? (
-              <TrendingUp className="w-5 h-5 text-primary" />
+            <TrendingUp className="w-5 h-5 text-primary" />
             ) : (
               <TrendingDown className="w-5 h-5 text-destructive" />
             )}
@@ -798,8 +792,8 @@ export default function Finance() {
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                       labelLine={false}
                     >
-                      {paymentBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      {paymentBreakdown.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -824,9 +818,12 @@ export default function Finance() {
                 </ResponsiveContainer>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {paymentBreakdown.map((item) => (
+                {paymentBreakdown.map((item, index) => (
                   <div key={item.name} className="flex items-center gap-2 text-sm">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                    />
                     <span className="text-muted-foreground">{item.name}:</span>
                     <span className="font-medium">{formatCurrency(item.value)}</span>
                   </div>

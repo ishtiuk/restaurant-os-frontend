@@ -268,7 +268,7 @@ export default function Reports() {
         <div className="flex flex-wrap gap-2 items-center">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline">
+          <Button variant="outline">
                 <CalendarIcon className="w-4 h-4 mr-2" />
                 {getDateRangeLabel()}
               </Button>
@@ -372,7 +372,7 @@ export default function Reports() {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {customEndDate ? formatDate(customEndDate + "T12:00:00", timezone) : "End Date"}
-                  </Button>
+          </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
@@ -483,29 +483,29 @@ export default function Reports() {
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 20%)" />
-                <XAxis dataKey="date" stroke="hsl(220, 10%, 55%)" fontSize={12} />
-                <YAxis stroke="hsl(220, 10%, 55%)" fontSize={12} tickFormatter={(v) => `৳${v / 1000}k`} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(220, 15%, 12%)",
-                    border: "1px solid hsl(220, 15%, 25%)",
-                    borderRadius: "8px",
-                  }}
-                  formatter={(value: number) => [formatCurrency(value), "Revenue"]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="hsl(38, 95%, 55%)"
-                  strokeWidth={3}
-                  dot={{ fill: "hsl(38, 95%, 55%)", strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 20%)" />
+              <XAxis dataKey="date" stroke="hsl(220, 10%, 55%)" fontSize={12} />
+              <YAxis stroke="hsl(220, 10%, 55%)" fontSize={12} tickFormatter={(v) => `৳${v / 1000}k`} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(220, 15%, 12%)",
+                  border: "1px solid hsl(220, 15%, 25%)",
+                  borderRadius: "8px",
+                }}
+                formatter={(value: number) => [formatCurrency(value), "Revenue"]}
+              />
+              <Line
+                type="monotone"
+                dataKey="revenue"
+                stroke="hsl(38, 95%, 55%)"
+                strokeWidth={3}
+                dot={{ fill: "hsl(38, 95%, 55%)", strokeWidth: 2, r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               No sales data for selected period
@@ -523,22 +523,22 @@ export default function Reports() {
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : topProducts && topProducts.data.length > 0 ? (
-            <div className="space-y-3">
+          <div className="space-y-3">
               {topProducts.data.map((item) => (
                 <div key={item.product_id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-hero flex items-center justify-center font-display font-bold text-primary-foreground">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-hero flex items-center justify-center font-display font-bold text-primary-foreground">
                       {item.rank}
-                    </div>
-                    <div>
+                  </div>
+                  <div>
                       <p className="font-medium">{item.product_name}</p>
                       <p className="text-sm text-muted-foreground">{item.quantity_sold} units sold</p>
                     </div>
                   </div>
                   <span className="font-display font-semibold text-primary">{formatCurrency(item.total_revenue)}</span>
-                </div>
-              ))}
-            </div>
+              </div>
+            ))}
+          </div>
           ) : (
             <div className="flex items-center justify-center h-48 text-muted-foreground">
               No products sold in selected period
@@ -561,7 +561,7 @@ export default function Reports() {
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : lowStock && lowStock.data.length > 0 ? (
-            <div className="space-y-3">
+          <div className="space-y-3">
               {lowStock.data.map((item) => (
                 <div
                   key={item.product_id}
@@ -571,23 +571,23 @@ export default function Reports() {
                       ? "bg-destructive/10 border-destructive/20"
                       : "bg-warning/10 border-warning/20"
                   )}
-                >
-                  <div className="flex items-center gap-3">
+              >
+                <div className="flex items-center gap-3">
                     <AlertTriangle className={cn("w-5 h-5", item.is_critical ? "text-destructive" : "text-warning")} />
-                    <div>
+                  <div>
                       <p className="font-medium">{item.product_name}</p>
-                      <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
-                    </div>
+                    <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
                   </div>
-                  <div className="text-right">
+                </div>
+                <div className="text-right">
                     <p className={cn("font-medium", item.is_critical ? "text-destructive" : "text-warning")}>
                       {item.current_stock} left
                     </p>
-                    <p className="text-sm text-muted-foreground">{item.unit}</p>
-                  </div>
+                  <p className="text-sm text-muted-foreground">{item.unit}</p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+          </div>
           ) : (
             <div className="flex items-center justify-center h-48 text-muted-foreground">
               All items are well stocked

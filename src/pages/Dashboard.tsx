@@ -361,7 +361,7 @@ export default function Dashboard() {
           </div>
           <div className="h-64">
             {salesTrend && salesTrend.data.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={salesTrend.data.map((point) => ({
                     // point.period is "YYYY-MM-DD" from backend, treat as UTC by appending "T00:00:00Z"
@@ -369,33 +369,33 @@ export default function Dashboard() {
                     revenue: point.total_sales,
                   }))}
                 >
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(38, 95%, 55%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(38, 95%, 55%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 20%)" />
-                  <XAxis dataKey="date" stroke="hsl(220, 10%, 55%)" fontSize={12} />
-                  <YAxis stroke="hsl(220, 10%, 55%)" fontSize={12} tickFormatter={(v) => `৳${v / 1000}k`} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(220, 15%, 12%)",
-                      border: "1px solid hsl(220, 15%, 25%)",
-                      borderRadius: "8px",
-                    }}
-                    formatter={(value: number) => [formatCurrency(value), "Revenue"]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="hsl(38, 95%, 55%)"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorRevenue)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(38, 95%, 55%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(38, 95%, 55%)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 20%)" />
+                <XAxis dataKey="date" stroke="hsl(220, 10%, 55%)" fontSize={12} />
+                <YAxis stroke="hsl(220, 10%, 55%)" fontSize={12} tickFormatter={(v) => `৳${v / 1000}k`} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(220, 15%, 12%)",
+                    border: "1px solid hsl(220, 15%, 25%)",
+                    borderRadius: "8px",
+                  }}
+                  formatter={(value: number) => [formatCurrency(value), "Revenue"]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="hsl(38, 95%, 55%)"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorRevenue)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 No sales data for the last 7 days
@@ -412,27 +412,27 @@ export default function Dashboard() {
           </div>
           {paymentMethodBreakdown.length > 0 ? (
             <>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
                       data={paymentMethodBreakdown}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={70}
-                      paddingAngle={4}
-                      dataKey="amount"
-                    >
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={70}
+                  paddingAngle={4}
+                  dataKey="amount"
+                >
                       {paymentMethodBreakdown.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
                         backgroundColor: "hsl(220, 15%, 18%)",
                         border: "1px solid hsl(220, 15%, 30%)",
-                        borderRadius: "8px",
+                    borderRadius: "8px",
                         color: "hsl(220, 10%, 90%)",
                         padding: "8px 12px",
                         boxShadow: "0 4px 6px rgba(0, 0, 0, 0.3)",
@@ -445,21 +445,21 @@ export default function Dashboard() {
                         fontWeight: 600,
                       }}
                       formatter={(value: number) => [formatCurrency(value), "Amount"]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-4">
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-4">
                 {paymentMethodBreakdown.map((item, index) => (
-                  <div key={item.method} className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
+              <div key={item.method} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                    />
-                    <span className="text-sm text-muted-foreground">{item.method}</span>
-                  </div>
-                ))}
+                />
+                <span className="text-sm text-muted-foreground">{item.method}</span>
               </div>
+            ))}
+          </div>
             </>
           ) : (
             <div className="flex items-center justify-center h-48 text-muted-foreground">
@@ -483,13 +483,13 @@ export default function Dashboard() {
           <div className="space-y-3">
             {lowStock && lowStock.data.length > 0 ? (
               lowStock.data.slice(0, 5).map((item) => (
-                <div
+              <div
                   key={item.product_id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20"
-                >
-                  <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-5 h-5 text-destructive" />
-                    <div>
+                className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                  <div>
                       <p className="font-medium">{item.product_name}</p>
                       <p className="text-sm text-muted-foreground">Stock: {item.current_stock} {item.unit}</p>
                     </div>
@@ -505,19 +505,19 @@ export default function Dashboard() {
                 const supplier = suppliers.find((s) => s.id === po.supplier_id);
                 const supplierName = supplier?.name || `PO #${po.id.substring(0, 8).toUpperCase()}`;
                 return (
-                  <div
-                    key={po.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Package className="w-5 h-5 text-primary" />
-                      <div>
+              <div
+                key={po.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20"
+              >
+                <div className="flex items-center gap-3">
+                  <Package className="w-5 h-5 text-primary" />
+                  <div>
                         <p className="font-medium">{supplierName}</p>
                         <p className="text-sm text-muted-foreground">{formatCurrency(po.total_amount)}</p>
-                      </div>
-                    </div>
-                    <Badge variant="warning">Pending</Badge>
                   </div>
+                </div>
+                <Badge variant="warning">Pending</Badge>
+              </div>
                 );
               })
             ) : (
@@ -540,15 +540,15 @@ export default function Dashboard() {
           <div className="space-y-3">
             {topProducts && topProducts.data.length > 0 ? (
               topProducts.data.map((item, index) => (
-                <div
+              <div
                   key={item.product_id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-hero flex items-center justify-center font-display font-bold text-primary-foreground">
-                      {index + 1}
-                    </div>
-                    <div>
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-hero flex items-center justify-center font-display font-bold text-primary-foreground">
+                    {index + 1}
+                  </div>
+                  <div>
                       <p className="font-medium">{item.product_name}</p>
                       <p className="text-sm text-muted-foreground">{item.quantity_sold} sold</p>
                     </div>

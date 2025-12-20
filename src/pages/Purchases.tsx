@@ -34,7 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { formatDate as formatDateWithTimezone, getStartOfDay } from "@/utils/date";
+import { formatDate as formatDateWithTimezone, getStartOfDay, getDateOnly } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -206,11 +206,16 @@ export default function Purchases() {
 
   const totalThisMonth = useMemo(() => {
     const now = new Date();
-    const startOfMonth = getStartOfDay(new Date(now.getFullYear(), now.getMonth(), 1), timezone);
+    // Get current month/year in user's timezone (format: YYYY-MM)
+    const currentDateStr = getDateOnly(now, timezone);
+    const currentMonthYear = currentDateStr.substring(0, 7); // "YYYY-MM"
+    
     return purchaseOrders
       .filter((po) => {
-        const poDate = new Date(po.order_date);
-        return poDate >= startOfMonth;
+        // Get PO date in user's timezone and compare month/year
+        const poDateStr = getDateOnly(po.order_date, timezone);
+        const poMonthYear = poDateStr.substring(0, 7); // Get YYYY-MM part
+        return poMonthYear === currentMonthYear;
       })
       .reduce((sum, po) => sum + po.total_amount, 0);
   }, [purchaseOrders, timezone]);

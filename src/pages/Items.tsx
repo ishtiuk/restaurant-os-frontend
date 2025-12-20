@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +58,7 @@ export default function Items() {
   const [imagePreview, setImagePreview] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [stockInput, setStockInput] = useState<number>(0);
+  const [isPackagedItem, setIsPackagedItem] = useState<boolean>(false);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -78,6 +79,15 @@ export default function Items() {
       return matchesSearch && matchesCategory && matchesStock;
     });
   }, [items, searchQuery, selectedCategory, stockFilter]);
+
+  // Sync isPackagedItem state when editing an item
+  useEffect(() => {
+    if (selectedItem && isEditMode) {
+      setIsPackagedItem(selectedItem.isPackaged);
+    } else if (!isEditMode && !selectedItem) {
+      setIsPackagedItem(false);
+    }
+  }, [selectedItem, isEditMode]);
 
   const getCategoryName = (categoryId: string) => {
     return categories.find((c) => c.id === categoryId)?.name || "Unknown";
@@ -216,6 +226,7 @@ export default function Items() {
   const handleEdit = (item: Item) => {
     setSelectedItem(item);
     setStockInput(item.stockQty);
+    setIsPackagedItem(item.isPackaged);
     setIsEditMode(true);
     setIsAddModalOpen(true);
     setImagePreview(item.imageUrl || "");
@@ -262,6 +273,9 @@ export default function Items() {
             setIsAddModalOpen(true);
             setImagePreview("");
             setSelectedFile(null);
+            setIsPackagedItem(false);
+            setIsEditMode(false);
+            setSelectedItem(null);
           }}
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -518,13 +532,14 @@ export default function Items() {
       {/* Add Item Modal */}
       <Dialog 
         open={isAddModalOpen} 
-        onOpenChange={(open) => {
+          onOpenChange={(open) => {
           setIsAddModalOpen(open);
           if (!open) {
             setIsEditMode(false);
             setSelectedItem(null);
             setImagePreview("");
             setSelectedFile(null);
+            setIsPackagedItem(false);
           }
         }}
       >
@@ -696,21 +711,24 @@ export default function Items() {
               </div>
 
               {/* Stock Quantity (only for packaged items) */}
-              <div className="space-y-2">
-                <Label htmlFor="stockQty">Initial Stock</Label>
-                <Input
-                  id="stockQty"
-                  name="stockQty"
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  defaultValue={selectedItem?.stockQty ?? 0}
-                  className="bg-muted/50"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Only required for packaged items
-                </p>
-              </div>
+              {isPackagedItem && (
+                <div className="space-y-2">
+                  <Label htmlFor="stockQty">Initial Stock *</Label>
+                  <Input
+                    id="stockQty"
+                    name="stockQty"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    required={isPackagedItem}
+                    defaultValue={selectedItem?.stockQty ?? 0}
+                    className="bg-muted/50"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Only required for packaged items
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Is Packaged Switch */}
@@ -734,18 +752,13 @@ export default function Items() {
                 />
                 <Switch
                   id="isPackaged"
+                  checked={isPackagedItem}
                   defaultChecked={selectedItem?.isPackaged ?? false}
                   onCheckedChange={(checked) => {
+                    setIsPackagedItem(checked);
                     const hiddenInput = document.getElementById("isPackaged-hidden") as HTMLInputElement;
                     if (hiddenInput) {
                       hiddenInput.value = checked ? "true" : "false";
-                    }
-                    const input = document.getElementById("stockQty") as HTMLInputElement;
-                    if (input) {
-                      input.required = checked;
-                      if (!checked) {
-                        input.value = "0";
-                      }
                     }
                   }}
                 />

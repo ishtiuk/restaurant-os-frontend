@@ -32,7 +32,12 @@ export const formatWithTimezone = (
  * Get date-only string in user's timezone (YYYY-MM-DD format)
  */
 export const getDateOnly = (utcDate: string | Date, timezone: string): string => {
-  const date = typeof utcDate === "string" ? new Date(utcDate) : utcDate;
+  // Parse UTC ISO string from backend
+  // Backend returns timestamps with 'Z' suffix (e.g., 2025-12-20T13:35:00Z)
+  // Workaround for backward compatibility: append 'Z' if missing (handles old +00:00 format)
+  const date = typeof utcDate === "string"
+    ? new Date(utcDate.endsWith('Z') ? utcDate : utcDate + 'Z')
+    : utcDate;
   return date.toLocaleDateString("en-CA", {
     timeZone: timezone,
   });
@@ -42,7 +47,12 @@ export const getDateOnly = (utcDate: string | Date, timezone: string): string =>
  * Format date for display (date only, no time)
  */
 export const formatDate = (utcDate: string | Date, timezone: string): string => {
-  const date = typeof utcDate === "string" ? new Date(utcDate) : utcDate;
+  // Parse UTC ISO string from backend
+  // Backend returns timestamps with 'Z' suffix (e.g., 2025-12-20T13:35:00Z)
+  // Workaround for backward compatibility: append 'Z' if missing (handles old +00:00 format)
+  const date = typeof utcDate === "string"
+    ? new Date(utcDate.endsWith('Z') ? utcDate : utcDate + 'Z')
+    : utcDate;
   return date.toLocaleDateString("en-US", {
     timeZone: timezone,
     year: "numeric",

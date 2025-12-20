@@ -29,6 +29,9 @@ import {
   ChefHat,
   Truck,
   HandCoins,
+  Edit,
+  Trash2,
+  MoreVertical,
 } from "lucide-react";
 import {
   Dialog,
@@ -40,9 +43,26 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { formatDate, getDateOnly } from "@/utils/date";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -91,7 +111,7 @@ const getRoleBadge = (role: Staff["role"]) => {
 export default function StaffPage() {
   // TODO: Re-enable attendance when backend is implemented
   // const { staff, staffPayments, attendance, createStaffPayment, createStaff } = useAppData();
-  const { staff, staffPayments, createStaffPayment, createStaff } = useAppData();
+  const { staff, staffPayments, createStaffPayment, createStaff, updateStaff, deleteStaff } = useAppData();
   const { timezone } = useTimezone();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const attendance: never[] = []; // Placeholder - attendance not implemented yet
@@ -100,6 +120,9 @@ export default function StaffPage() {
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState<Staff | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
@@ -114,6 +137,7 @@ export default function StaffPage() {
     salary: "20000",
     email: "",
     address: "",
+    isActive: true,
   });
   const [submitting, setSubmitting] = useState(false);
   const [staffPaymentPage, setStaffPaymentPage] = useState(1);
@@ -174,11 +198,21 @@ export default function StaffPage() {
       s.role.includes(searchQuery.toLowerCase())
   );
 
-  const totalSalaryDue = staff.reduce((sum, s) => sum + s.salary, 0);
+  // Filter only active staff for stats
+  const activeStaff = staff.filter((s) => s.isActive);
+  const totalSalaryDue = activeStaff.reduce((sum, s) => sum + s.salary, 0);
   const totalPaid = staffPayments
-    .filter((p) => p.type === "salary" || p.type === "bonus")
+    .filter((p) => {
+      const paymentStaff = staff.find((s) => s.id === p.staffId);
+      return paymentStaff?.isActive && (p.type === "salary" || p.type === "bonus");
+    })
     .reduce((sum, p) => sum + p.amount, 0);
-  const totalAdvances = staffPayments.filter((p) => p.type === "advance").reduce((sum, p) => sum + p.amount, 0);
+  const totalAdvances = staffPayments
+    .filter((p) => {
+      const paymentStaff = staff.find((s) => s.id === p.staffId);
+      return paymentStaff?.isActive && p.type === "advance";
+    })
+    .reduce((sum, p) => sum + p.amount, 0);
 
   const getStaffPayments = (staffId: string) => staffPayments.filter((p) => p.staffId === staffId);
   
@@ -188,10 +222,30 @@ export default function StaffPage() {
 
   const calculateBalance = (staff: Staff) => {
     const payments = getStaffPayments(staff.id);
-    const totalPaid = payments.filter((p) => p.type === "salary" || p.type === "bonus").reduce((sum, p) => sum + p.amount, 0);
-    const advances = payments.filter((p) => p.type === "advance").reduce((sum, p) => sum + p.amount, 0);
-    const deductions = payments.filter((p) => p.type === "deduction").reduce((sum, p) => sum + p.amount, 0);
-    return staff.salary - totalPaid + advances - deductions;
+    
+    // Get current month and year in user's timezone
+    const now = new Date();
+    const currentMonth = now.toLocaleString('en-US', { month: '2-digit', year: 'numeric', timeZone: timezone });
+    const [month, year] = currentMonth.split('/');
+    const currentMonthYear = `${year}-${month}`;
+    
+    // Filter payments for current month only
+    const currentMonthPayments = payments.filter((p) => {
+      const paymentDate = new Date(p.date + 'T12:00:00');
+      const paymentMonth = paymentDate.toLocaleString('en-US', { month: '2-digit', year: 'numeric', timeZone: timezone });
+      const [pMonth, pYear] = paymentMonth.split('/');
+      return `${pYear}-${pMonth}` === currentMonthYear;
+    });
+    
+    const totalPaid = currentMonthPayments.filter((p) => p.type === "salary" || p.type === "bonus").reduce((sum, p) => sum + p.amount, 0);
+    const advances = currentMonthPayments.filter((p) => p.type === "advance").reduce((sum, p) => sum + p.amount, 0);
+    const deductions = currentMonthPayments.filter((p) => p.type === "deduction").reduce((sum, p) => sum + p.amount, 0);
+    
+    // Due = Monthly Salary - (Salary Payments + Bonus) - Advances - Deductions
+    // Deductions reduce what's due (they're already taken from salary)
+    // Advances reduce what's due (they're pre-payments that need to be deducted)
+    // Positive = money still due to staff this month, Negative = overpaid this month
+    return staff.salary - totalPaid - advances - deductions;
   };
 
   const handleViewStaff = (staff: Staff) => {
@@ -224,6 +278,38 @@ export default function StaffPage() {
       });
       setShowPaymentDialog(false);
       setPaymentForm({ amount: "", type: "salary", description: "" });
+      
+      // Reload payments for the current staff member
+      const loadStaffPayments = async () => {
+        try {
+          const offset = (staffPaymentPage - 1) * staffPaymentPageSize;
+          const paymentsData = await staffApi.listPayments({
+            staff_id: selectedStaff.id,
+            limit: staffPaymentPageSize,
+            offset: offset,
+          });
+          const mappedPayments: StaffPayment[] = paymentsData.map((p) => ({
+            id: p.id,
+            staffId: p.staff_id,
+            amount: Number(p.amount),
+            type: p.type as StaffPayment["type"],
+            description: p.description ?? p.type,
+            date: p.date,
+            createdAt: p.created_at,
+          }));
+          setCurrentStaffPayments(mappedPayments);
+          // Estimate total
+          if (paymentsData.length === staffPaymentPageSize) {
+            setStaffPaymentTotal((staffPaymentPage + 1) * staffPaymentPageSize);
+          } else {
+            setStaffPaymentTotal((staffPaymentPage - 1) * staffPaymentPageSize + paymentsData.length);
+          }
+        } catch (error: any) {
+          console.error("Failed to load staff payments", error);
+        }
+      };
+      await loadStaffPayments();
+      
       toast({ title: "Payment recorded" });
     } catch (err: any) {
       setError(err?.message || "Failed to record payment");
@@ -257,11 +343,78 @@ export default function StaffPage() {
         address: staffForm.address || undefined,
       });
       setShowAddDialog(false);
-      setStaffForm({ name: "", phone: "", role: "waiter", salary: "20000", email: "", address: "" });
+      setStaffForm({ name: "", phone: "", role: "waiter", salary: "20000", email: "", address: "", isActive: true });
       toast({ title: "Staff added" });
     } catch (err: any) {
       setError(err?.message || "Failed to add staff");
       toast({ title: "Failed to add staff", description: err?.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditStaff = (staff: Staff) => {
+    setSelectedStaff(staff);
+    setStaffForm({
+      name: staff.name,
+      phone: staff.phone,
+      role: staff.role,
+      salary: staff.salary.toString(),
+      email: staff.email || "",
+      address: staff.address || "",
+      isActive: staff.isActive,
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleUpdateStaff = async () => {
+    if (!selectedStaff || !staffForm.name || !staffForm.phone) {
+      toast({ title: "Name & phone required", variant: "destructive" });
+      return;
+    }
+    const salary = Number(staffForm.salary);
+    if (isNaN(salary) || salary < 0) {
+      toast({ title: "Invalid salary amount", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateStaff(selectedStaff.id, {
+        name: staffForm.name,
+        phone: staffForm.phone,
+        role: staffForm.role as Staff["role"],
+        salary,
+        email: staffForm.email || undefined,
+        address: staffForm.address || undefined,
+        isActive: staffForm.isActive,
+      });
+      setShowEditDialog(false);
+      setSelectedStaff(null);
+      setStaffForm({ name: "", phone: "", role: "waiter", salary: "20000", email: "", address: "", isActive: true });
+      toast({ title: "Staff updated" });
+    } catch (err: any) {
+      setError(err?.message || "Failed to update staff");
+      toast({ title: "Failed to update staff", description: err?.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeactivateStaff = async () => {
+    if (!staffToDelete) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateStaff(staffToDelete.id, {
+        isActive: false,
+      });
+      setShowDeleteDialog(false);
+      setStaffToDelete(null);
+      toast({ title: "Staff deactivated" });
+    } catch (err: any) {
+      setError(err?.message || "Failed to deactivate staff");
+      toast({ title: "Failed to deactivate staff", description: err?.message, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -285,7 +438,7 @@ export default function StaffPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 animate-fade-in stagger-1">
         <GlassCard className="p-4">
           <p className="text-sm text-muted-foreground">Total Staff</p>
-          <p className="text-2xl font-display font-bold">{toBengaliNumeral(staff.length)}</p>
+          <p className="text-2xl font-display font-bold">{toBengaliNumeral(activeStaff.length)}</p>
         </GlassCard>
         <GlassCard className="p-4" glow="primary">
           <p className="text-sm text-muted-foreground">Monthly Salary</p>
@@ -348,7 +501,7 @@ export default function StaffPage() {
           const presentDays = 0; // Placeholder - attendance not implemented yet
 
           return (
-            <GlassCard key={staff.id} hover className="p-5">
+            <GlassCard key={staff.id} hover className={`p-5 ${!staff.isActive ? "opacity-60" : ""}`}>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-gradient-hero flex items-center justify-center text-primary-foreground font-bold text-lg">
@@ -359,7 +512,54 @@ export default function StaffPage() {
                     {staff.nameBn && <p className="text-sm text-muted-foreground">{staff.nameBn}</p>}
                   </div>
                 </div>
-                {getRoleBadge(staff.role)}
+                <div className="flex items-center gap-2">
+                  {getRoleBadge(staff.role)}
+                  {!staff.isActive && (
+                    <Badge variant="outline" className="bg-muted text-muted-foreground border-muted-foreground/30">
+                      Deactivated
+                    </Badge>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditStaff(staff)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      {staff.isActive ? (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setStaffToDelete(staff);
+                            setShowDeleteDialog(true);
+                          }}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Deactivate
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            try {
+                              await updateStaff(staff.id, { isActive: true });
+                              toast({ title: "Staff reactivated" });
+                            } catch (err: any) {
+                              toast({ title: "Failed to reactivate staff", description: err?.message, variant: "destructive" });
+                            }
+                          }}
+                          className="text-accent"
+                        >
+                          <User className="w-4 h-4 mr-2" />
+                          Reactivate
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               <div className="space-y-2 text-sm mb-4">
@@ -386,8 +586,12 @@ export default function StaffPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Balance</span>
-                  <span className={`font-semibold ${balance > 0 ? "text-destructive" : "text-accent"}`}>
-                    {balance > 0 ? `Due: ${formatCurrency(balance)}` : "Paid"}
+                  <span className={`font-semibold text-base ${balance > 0 ? "text-accent" : balance < 0 ? "text-destructive" : ""}`}>
+                    {balance > 0 
+                      ? `Due: ${formatCurrency(balance)}` 
+                      : balance < 0 
+                      ? `Overpaid: ${formatCurrency(Math.abs(balance))}` 
+                      : "Paid"}
                   </span>
                 </div>
                 {/* TODO: Re-enable when attendance backend is implemented */}
@@ -691,6 +895,97 @@ export default function StaffPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Staff Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md glass-card">
+          <DialogHeader>
+            <DialogTitle className="font-display gradient-text">Edit Staff</DialogTitle>
+            <DialogDescription>Update staff member information</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Name</Label>
+              <Input value={staffForm.name} onChange={(e) => setStaffForm((f) => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Phone</Label>
+              <Input value={staffForm.phone} onChange={(e) => setStaffForm((f) => ({ ...f, phone: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Role</Label>
+              <Select value={staffForm.role} onValueChange={(v) => setStaffForm((f) => ({ ...f, role: v }))}>
+                <SelectTrigger className="bg-muted/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="chef">Chef</SelectItem>
+                  <SelectItem value="waiter">Waiter</SelectItem>
+                  <SelectItem value="cashier">Cashier</SelectItem>
+                  <SelectItem value="cleaner">Cleaner</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="delivery">Delivery</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Salary</Label>
+              <Input
+                type="number"
+                value={staffForm.salary}
+                onChange={(e) => setStaffForm((f) => ({ ...f, salary: e.target.value }))}
+                className="bg-muted/50"
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label>Email</Label>
+              <Input value={staffForm.email} onChange={(e) => setStaffForm((f) => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label>Address</Label>
+              <Input value={staffForm.address} onChange={(e) => setStaffForm((f) => ({ ...f, address: e.target.value }))} />
+            </div>
+            <div className="space-y-1 md:col-span-2 flex items-center justify-between p-3 rounded-lg bg-muted/30">
+              <div>
+                <Label>Active Status</Label>
+                <p className="text-sm text-muted-foreground">Deactivated staff won't be counted in statistics</p>
+              </div>
+              <Switch
+                checked={staffForm.isActive}
+                onCheckedChange={(checked) => setStaffForm((f) => ({ ...f, isActive: checked }))}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="glow" onClick={handleUpdateStaff} disabled={submitting}>
+              {submitting ? "Saving..." : "Update"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deactivate Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate Staff Member</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to deactivate <strong>{staffToDelete?.name}</strong>? 
+              Deactivated staff will not be counted in statistics and will not appear in active staff lists.
+              Payment records will be preserved. You can reactivate them later by editing their profile.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setStaffToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeactivateStaff} disabled={submitting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {submitting ? "Deactivating..." : "Deactivate"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

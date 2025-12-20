@@ -87,6 +87,7 @@ type AppData = {
   ) => Promise<StaffPayment>;
   createStaff: (input: Omit<Staff, "id">) => Promise<Staff>;
   updateStaff: (staffId: string, updates: Partial<Omit<Staff, "id">>) => Promise<void>;
+  deleteStaff: (staffId: string) => Promise<void>;
 
   updateSaleTotalWithAudit: (saleId: string, input: { newTotal: number; editedBy: string; reason: string }) => Promise<void>;
   replaceSale: (sale: Sale) => void; // used for undo/redo in UI
@@ -1102,6 +1103,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         }
       },
 
+      deleteStaff: async (staffId) => {
+        if (user?.token) {
+          try {
+            await staffApi.delete(staffId);
+            setStaff((prev) => prev.filter((s) => s.id !== staffId));
+          } catch (err: any) {
+            console.error("Failed to delete staff", err);
+            throw new Error(err?.message || "Failed to delete staff");
+          }
+        } else {
+          // Fallback for offline mode
+          await delay(150);
+          setStaff((prev) => prev.filter((s) => s.id !== staffId));
+        }
+      },
+
       updateSaleTotalWithAudit: async (saleId, { newTotal, editedBy, reason }) => {
         try {
           // Call the real API
@@ -1201,59 +1218,30 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             : await productsApi.create(payload, file);
           // Ensure freshness by refetching list (handles server defaults, ids, and media paths)
           const refreshed = await productsApi.list();
-          setItems(
-            refreshed.map((p) => ({
-              id: String(p.id),
-              name: p.name,
-              nameBn: p.name_bn ?? undefined,
-              sku: p.sku,
-              categoryId: p.category_id,
-              price: Number(p.price),
-              cost: Number(p.cost),
-              stockQty: Number(p.stock_qty ?? 0),
-              unit: (p.unit as Item["unit"]) || "pcs",
-              imageUrl: p.image_url
-                ? p.image_url.startsWith("http")
-                  ? p.image_url
-                  : `${API_ORIGIN}${p.image_url}`
-                : undefined,
-              isActive: Boolean(p.is_active),
-              isPackaged: Boolean(p.is_packaged),
-              vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }))
-          );
-          const mapped: Item = {
-            id: String(saved.id),
-            name: saved.name,
-            nameBn: saved.name_bn ?? undefined,
-            sku: saved.sku,
-            categoryId: saved.category_id,
-            price: Number(saved.price),
-            cost: Number(saved.cost),
-            stockQty: Number(saved.stock_qty ?? 0),
-            unit: (saved.unit as Item["unit"]) || "pcs",
-            imageUrl: saved.image_url
-              ? saved.image_url.startsWith("http")
-                ? saved.image_url
-                : `${API_ORIGIN}${saved.image_url}`
+          const mappedItems = refreshed.map((p) => ({
+            id: String(p.id),
+            name: p.name,
+            nameBn: p.name_bn ?? undefined,
+            sku: p.sku,
+            categoryId: p.category_id,
+            price: Number(p.price),
+            cost: Number(p.cost),
+            stockQty: Number(p.stock_qty ?? 0),
+            unit: (p.unit as Item["unit"]) || "pcs",
+            imageUrl: p.image_url
+              ? p.image_url.startsWith("http")
+                ? p.image_url
+                : `${API_ORIGIN}${p.image_url}`
               : undefined,
-            isActive: Boolean(saved.is_active),
-            isPackaged: Boolean(saved.is_packaged),
-            vatRate: saved.vat_rate != null ? Number(saved.vat_rate) : undefined,
-            createdAt: input.createdAt,
-            updatedAt: new Date().toISOString(),
-          };
-          setItems((prev) => {
-            const idx = prev.findIndex((x) => x.id === mapped.id);
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = mapped;
-              return next;
-            }
-            return [mapped, ...prev];
-          });
+            isActive: Boolean(p.is_active),
+            isPackaged: Boolean(p.is_packaged),
+            vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
+            createdAt: p.created_at ? new Date(p.created_at).toISOString() : new Date().toISOString(),
+            updatedAt: p.updated_at ? new Date(p.updated_at).toISOString() : new Date().toISOString(),
+          }));
+          setItems(mappedItems);
+          // Return the saved item from the refreshed list
+          const mapped = mappedItems.find((x) => x.id === String(saved.id)) || mappedItems[0];
           return mapped;
         }
         await delay(120);
