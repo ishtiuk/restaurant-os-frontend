@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ const toBengaliNumeral = (num: number | string): string => {
 const CHART_COLORS = ["hsl(38, 95%, 55%)", "hsl(18, 75%, 45%)", "hsl(158, 65%, 45%)", "hsl(220, 15%, 40%)"];
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { items } = useAppData();
   const { timezone } = useTimezone();
   const [loading, setLoading] = useState(true);
@@ -533,7 +535,7 @@ export default function Dashboard() {
               <h3 className="font-display font-semibold text-lg">Top Selling Items</h3>
               <p className="text-sm text-muted-foreground">সেরা বিক্রিত আইটেম</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => window.location.href = "/reports"}>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/reports")}>
               View All <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
