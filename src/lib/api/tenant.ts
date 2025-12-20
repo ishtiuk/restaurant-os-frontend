@@ -13,6 +13,7 @@ export interface TenantSettingsDto {
   invoice_prefix?: string | null;
   paper_size?: string | null;
   footer_text?: string | null;
+  timezone: string; // IANA timezone (e.g., Asia/Dhaka, America/New_York)
   is_active: boolean;
   created_at: string;
 }
@@ -28,6 +29,7 @@ export interface TenantSettingsUpdateInput {
   invoice_prefix?: string;
   paper_size?: "thermal" | "thermal58" | "a4";
   footer_text?: string;
+  timezone?: string; // IANA timezone (e.g., Asia/Dhaka, America/New_York)
 }
 
 export const tenantApi = {

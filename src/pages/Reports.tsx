@@ -26,8 +26,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { getStartOfDay, getEndOfDay, formatDate } from "@/utils/date";
+import { getStartOfDay, getEndOfDay, getDateOnly, formatDate } from "@/utils/date";
 import { reportsApi, type SalesSummaryResponse, type SalesTrendResponse, type TopProductsResponse, type LowStockResponse } from "@/lib/api/reports";
+import { salesApi, type SaleDto } from "@/lib/api/sales";
 import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
@@ -93,8 +94,12 @@ export default function Reports() {
   // Load all reports
   const loadReports = async () => {
     const range = getDateRange(dateRangePreset);
-    const startDateStr = format(range.start, "yyyy-MM-dd");
-    const endDateStr = format(range.end, "yyyy-MM-dd");
+    // getStartOfDay/getEndOfDay return UTC Date objects representing start/end of user's local day
+    // Convert to UTC date strings (YYYY-MM-DD) for backend API
+    // Backend interprets these as UTC dates and filters: created_at >= start_date 00:00:00 UTC AND <= end_date 23:59:59.999 UTC
+    // Note: Backend's end_date 23:59:59.999 UTC may include a few hours of the next day in user's timezone, but that's acceptable
+    const startDateStr = range.start.toISOString().split('T')[0];
+    const endDateStr = range.end.toISOString().split('T')[0];
 
     setLoadingSummary(true);
     setLoadingTrend(true);
@@ -102,8 +107,8 @@ export default function Reports() {
     setLoadingLowStock(true);
 
     try {
-      // Load all reports in parallel
-      const [summary, trend, top, low] = await Promise.all([
+      // Load all reports in parallel, including sales list for client-side filtering
+      const [summary, trend, top, low, salesData] = await Promise.all([
         reportsApi.getSalesSummary(startDateStr, endDateStr).catch((err) => {
           console.error("Failed to load sales summary:", err);
           toast({ title: "Failed to load sales summary", variant: "destructive" });
@@ -124,10 +129,84 @@ export default function Reports() {
           toast({ title: "Failed to load low stock", variant: "destructive" });
           return null;
         }),
+        // Fetch all sales using pagination to ensure we get all sales in the date range
+        // Backend has max limit of 1000, so we need to fetch in batches
+        (async () => {
+          let allSales: SaleDto[] = [];
+          let offset = 0;
+          const limit = 1000;
+          
+          while (true) {
+            try {
+              const response = await salesApi.list(limit, offset);
+              allSales = [...allSales, ...response.data];
+              // If we got fewer than limit, we've reached the end
+              if (response.data.length < limit) {
+                break;
+              }
+              offset += limit;
+              // Safety check: don't fetch more than 10000 sales (10 pages)
+              if (allSales.length >= 10000) {
+                break;
+              }
+            } catch (error) {
+              console.error("Error fetching sales:", error);
+              break;
+            }
+          }
+          
+          return { data: allSales, total: allSales.length };
+        })().catch(() => ({ data: [], total: 0 })),
       ]);
 
-      if (summary) setSalesSummary(summary);
-      if (trend) setSalesTrend(trend);
+      // Filter sales by date in user's timezone and recalculate summary and trend
+      // (Backend aggregations use UTC dates, so we need client-side grouping by local dates)
+      if (salesData.data) {
+        const startDateStrTZ = getDateOnly(range.start, timezone);
+        const endDateStrTZ = getDateOnly(range.end, timezone);
+        const filteredSales = salesData.data.filter((sale: SaleDto) => {
+          const saleDate = getDateOnly(sale.created_at, timezone);
+          return saleDate >= startDateStrTZ && saleDate <= endDateStrTZ && sale.status === "completed";
+        });
+
+        // Recalculate summary from filtered sales
+        const recalculatedSummary: SalesSummaryResponse = {
+          period: {
+            start_date: startDateStr,
+            end_date: endDateStr,
+            total_sales: filteredSales.reduce((sum, sale) => sum + sale.total, 0),
+            total_orders: filteredSales.length,
+            average_order_value: filteredSales.length > 0 ? filteredSales.reduce((sum, sale) => sum + sale.total, 0) / filteredSales.length : 0,
+          }
+        };
+        setSalesSummary(recalculatedSummary);
+
+        // Calculate sales trend grouped by local date
+        const salesByDate: Record<string, { total_sales: number; order_count: number }> = {};
+        filteredSales.forEach((sale: SaleDto) => {
+          const saleDate = getDateOnly(sale.created_at, timezone);
+          if (!salesByDate[saleDate]) {
+            salesByDate[saleDate] = { total_sales: 0, order_count: 0 };
+          }
+          salesByDate[saleDate].total_sales += sale.total;
+          salesByDate[saleDate].order_count += 1;
+        });
+
+        // Convert to array and sort by date
+        const trendDataPoints = Object.entries(salesByDate)
+          .map(([period, data]) => ({
+            period,
+            total_sales: data.total_sales,
+            order_count: data.order_count,
+          }))
+          .sort((a, b) => a.period.localeCompare(b.period));
+
+        setSalesTrend({ data: trendDataPoints });
+      } else if (summary) {
+        // Fallback to backend data if sales list is not available
+        setSalesSummary(summary);
+        if (trend) setSalesTrend(trend);
+      }
       if (top) setTopProducts(top);
       if (low) setLowStock(low);
     } catch (error) {
@@ -169,7 +248,8 @@ export default function Reports() {
 
   // Format sales trend data for chart (timezone-aware using utility)
   const chartData = salesTrend?.data.map((point) => ({
-    date: formatDate(point.period, timezone),
+    // point.period is "YYYY-MM-DD" from backend, treat as UTC by appending "T00:00:00Z"
+    date: formatDate(point.period + "T00:00:00Z", timezone),
     revenue: point.total_sales,
   })) || [];
 
@@ -181,12 +261,12 @@ export default function Reports() {
   ];
 
   const getDateRangeLabel = () => {
-    // Use formatDate utility for consistent display
+    // Use formatDate utility for consistent display (formatDate accepts Date objects directly)
     if (dateRangePreset === "custom") {
-      return `${formatDate(startDate.toISOString(), timezone)} - ${formatDate(endDate.toISOString(), timezone)}`;
+      return `${formatDate(startDate, timezone)} - ${formatDate(endDate, timezone)}`;
     }
     const range = getDateRange(dateRangePreset);
-    return `${formatDate(range.start.toISOString(), timezone)} - ${formatDate(range.end.toISOString(), timezone)}`;
+    return `${formatDate(range.start, timezone)} - ${formatDate(range.end, timezone)}`;
   };
 
   return (

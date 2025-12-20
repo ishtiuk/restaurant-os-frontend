@@ -24,11 +24,25 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
 }) => {
   const settings = getPrintSettingsSync();
   // Get timezone from localStorage (required for print iframe where context is not available)
-  const timezone = localStorage.getItem("restaurant-os-timezone") || "Asia/Dhaka";
+  // Ensure timezone is always available - if not in localStorage, use default and save it
+  let timezone = localStorage.getItem("restaurant-os-timezone");
+  if (!timezone) {
+    timezone = "Asia/Dhaka";
+    try {
+      localStorage.setItem("restaurant-os-timezone", timezone);
+    } catch {
+      // localStorage may not be available in some contexts
+    }
+  }
   
   // Use centralized utilities for consistent date formatting
-  const formattedDate = formatDate(sale.createdAt, timezone);
-  const formattedTime = formatTime(sale.createdAt, timezone);
+  // Backend now returns timestamps with 'Z' suffix, but append 'Z' if missing for safety
+  // (formatDate/formatTime need explicit UTC parsing - 'Z' ensures new Date() treats it as UTC)
+  const utcDateStr = typeof sale.createdAt === "string" && !sale.createdAt.endsWith('Z') 
+    ? sale.createdAt + 'Z' 
+    : sale.createdAt;
+  const formattedDate = formatDate(utcDateStr, timezone);
+  const formattedTime = formatTime(utcDateStr, timezone);
 
   const orderTypeLabel = orderType === "delivery" ? "🚚 DELIVERY" : "🛍️ TAKEAWAY";
 

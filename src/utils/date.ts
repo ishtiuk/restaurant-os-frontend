@@ -6,7 +6,9 @@ export const formatWithTimezone = (
   timezone: string,
   options?: Intl.DateTimeFormatOptions
 ): string => {
-  // Parse UTC ISO string from backend (ensure 'Z' suffix for correct UTC parsing)
+  // Parse UTC ISO string from backend
+  // Backend now returns timestamps with 'Z' suffix (e.g., 2025-12-20T06:24:07Z)
+  // Workaround for backward compatibility: append 'Z' if missing (handles old +00:00 format)
   const date = typeof utcDate === "string"
     ? new Date(utcDate.endsWith('Z') ? utcDate : utcDate + 'Z')
     : utcDate;
@@ -107,10 +109,11 @@ export const getStartOfDay = (date: Date, timezone: string): Date => {
   const [hourStr] = noonInUserTZ.split(":");
   const hourInUserTZ = parseInt(hourStr, 10);
   
-  // Calculate: if noon UTC is 6 PM (18:00) in user's TZ, 
-  // then midnight in user's TZ is 12 hours before that = 6 hours before noon UTC
-  // So: midnight in user's TZ = noon UTC - (hourInUserTZ - 12) hours
-  const hoursToSubtract = hourInUserTZ - 12;
+  // Calculate: if noon UTC (12:00 UTC) shows as 18:00 in user's TZ (UTC+6),
+  // then midnight in user's TZ (00:00) is hourInUserTZ hours before noon UTC
+  // So: midnight in user's TZ = noon UTC - hourInUserTZ hours
+  // Example: 12:00 UTC - 18 hours = 18:00 previous day UTC = 00:00 in UTC+6
+  const hoursToSubtract = hourInUserTZ;
   const midnightUTC = new Date(noonUTC.getTime() - hoursToSubtract * 60 * 60 * 1000);
   
   // Verify the date is correct (handle edge cases)

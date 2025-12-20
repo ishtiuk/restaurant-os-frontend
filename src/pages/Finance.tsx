@@ -50,7 +50,7 @@ import { financeApi, type FinanceSummaryResponse, type TransactionResponse, type
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { formatDate, getStartOfDay, getEndOfDay, getDateOnly } from "@/utils/date";
+import { formatDate, formatWithTimezone, getStartOfDay, getEndOfDay, getDateOnly } from "@/utils/date";
 
 const formatCurrency = (amount: number) => `৳${Math.abs(amount).toLocaleString("bn-BD")}`;
 
@@ -93,6 +93,7 @@ export default function Finance() {
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
 
   // Calculate date range based on selection with timezone awareness
+  // Returns Date objects (UTC) representing start/end of day in user's timezone
   const getDateRange = () => {
     const now = new Date();
     switch (dateRange) {
@@ -101,29 +102,30 @@ export default function Finance() {
         const todayStart = getStartOfDay(now, timezone);
         const todayEnd = getEndOfDay(now, timezone);
         return {
-          startDate: format(todayStart, "yyyy-MM-dd"),
-          endDate: format(todayEnd, "yyyy-MM-dd"),
+          startDate: todayStart,
+          endDate: todayEnd,
         };
       case "this_week":
         const weekStart = getStartOfDay(startOfWeek(now), timezone);
         const weekEnd = getEndOfDay(now, timezone);
         return {
-          startDate: format(weekStart, "yyyy-MM-dd"),
-          endDate: format(weekEnd, "yyyy-MM-dd"),
+          startDate: weekStart,
+          endDate: weekEnd,
         };
       case "this_month":
         const monthStart = getStartOfDay(startOfMonth(now), timezone);
         const monthEnd = getEndOfDay(now, timezone);
         return {
-          startDate: format(monthStart, "yyyy-MM-dd"),
-          endDate: format(monthEnd, "yyyy-MM-dd"),
+          startDate: monthStart,
+          endDate: monthEnd,
         };
       case "custom":
         // Use custom dates if available, otherwise fall back to this month
         if (customStartDate && customEndDate) {
+          // Convert custom date strings to Date objects
           return {
-            startDate: customStartDate,
-            endDate: customEndDate,
+            startDate: getStartOfDay(new Date(customStartDate + "T12:00:00"), timezone),
+            endDate: getEndOfDay(new Date(customEndDate + "T12:00:00"), timezone),
           };
         }
         // Fall through to default
@@ -131,8 +133,8 @@ export default function Finance() {
         const defaultStart = getStartOfDay(startOfMonth(now), timezone);
         const defaultEnd = getEndOfDay(now, timezone);
         return {
-          startDate: format(defaultStart, "yyyy-MM-dd"),
-          endDate: format(defaultEnd, "yyyy-MM-dd"),
+          startDate: defaultStart,
+          endDate: defaultEnd,
         };
     }
   };
@@ -142,19 +144,14 @@ export default function Finance() {
     const loadData = async () => {
       setLoading(true);
       try {
-        let { startDate, endDate } = getDateRange();
+        const { startDate: startDateObj, endDate: endDateObj } = getDateRange();
         
-        // Convert dates for API (fix end date to exclude next day)
-        if (startDate) {
-          const utcStart = getStartOfDay(new Date(startDate + "T12:00:00"), timezone);
-          startDate = format(utcStart, "yyyy-MM-dd");
-        }
-        if (endDate) {
-          const utcEnd = getEndOfDay(new Date(endDate + "T12:00:00"), timezone);
-          const utcEndDate = new Date(utcEnd);
-          utcEndDate.setUTCDate(utcEndDate.getUTCDate() - 1);
-          endDate = format(utcEndDate, "yyyy-MM-dd");
-        }
+        // Convert UTC Date objects to UTC date strings (YYYY-MM-DD) for backend API
+        // getStartOfDay/getEndOfDay return UTC Date objects representing start/end of user's local day
+        // Backend interprets these as UTC dates and filters: created_at >= start_date 00:00:00 UTC AND <= end_date 23:59:59.999 UTC
+        // Note: Backend's end_date 23:59:59.999 UTC may include a few hours of the next day in user's timezone, but that's acceptable
+        const startDate = startDateObj.toISOString().split('T')[0];
+        const endDate = endDateObj.toISOString().split('T')[0];
         
         // Recent transactions: Always fetch latest 10 from all time (independent of date filter)
         // Summary, chart, and payment breakdown: Use date filter
@@ -165,10 +162,30 @@ export default function Finance() {
           financeApi.listBankAccounts(true).catch(() => []),
         ]);
 
-        if (summaryData) setSummary(summaryData);
         setTransactions(recentTransactionsData);
-        setChartTransactions(chartTransactionsData);
+        
+        // Filter chart transactions by date in user's timezone (backend filtering may include edge cases)
+        // Reuse startDateObj and endDateObj from line 147
+        const startDateStr = getDateOnly(startDateObj, timezone);
+        const endDateStr = getDateOnly(endDateObj, timezone);
+        const filteredChartTransactions = chartTransactionsData.filter((t) => {
+          const txnDate = getDateOnly(t.date, timezone);
+          return txnDate >= startDateStr && txnDate <= endDateStr;
+        });
+        setChartTransactions(filteredChartTransactions);
         setBanks(banksData);
+        
+        // Recalculate summary from filtered transactions (backend summary may include edge cases)
+        const recalculatedSummary = {
+          total_income: filteredChartTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0),
+          total_expense: Math.abs(filteredChartTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)),
+          net_profit: 0, // Will be calculated below
+          cash_on_hand: summaryData?.cash_on_hand || 0, // Keep from backend (lifetime value)
+          bank_balance: summaryData?.bank_balance || 0, // Keep from backend (lifetime value)
+          pending_transfers: summaryData?.pending_transfers || 0, // Keep from backend (lifetime value)
+        };
+        recalculatedSummary.net_profit = recalculatedSummary.total_income - recalculatedSummary.total_expense;
+        setSummary(recalculatedSummary);
       } catch (error) {
         toast({
           title: "Error",
@@ -239,41 +256,58 @@ export default function Finance() {
   };
 
   const handleRefresh = () => {
-    let { startDate, endDate } = getDateRange();
+    const { startDate: startDateObj, endDate: endDateObj } = getDateRange();
     
-    // Convert dates for API (fix end date to exclude next day)
-    if (startDate) {
-      const utcStart = getStartOfDay(new Date(startDate + "T12:00:00"), timezone);
-      startDate = format(utcStart, "yyyy-MM-dd");
-    }
-    if (endDate) {
-      const utcEnd = getEndOfDay(new Date(endDate + "T12:00:00"), timezone);
-      const utcEndDate = new Date(utcEnd);
-      utcEndDate.setUTCDate(utcEndDate.getUTCDate() - 1);
-      endDate = format(utcEndDate, "yyyy-MM-dd");
-    }
+    // Convert UTC Date objects to UTC date strings (same logic as loadData)
+    const startDate = startDateObj.toISOString().split('T')[0];
+    const endDate = endDateObj.toISOString().split('T')[0];
     
     Promise.all([
-      financeApi.getSummary(startDate, endDate).then(setSummary).catch(() => null),
-      financeApi.getTransactions({ limit: 10 }).then(setTransactions).catch(() => []), // Always latest, no date filter
-      financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 1000 }).then(setChartTransactions).catch(() => []),
-      financeApi.listBankAccounts(true).then(setBanks).catch(() => []),
-    ]);
+      financeApi.getSummary(startDate, endDate).catch(() => null),
+      financeApi.getTransactions({ limit: 10 }).catch(() => []), // Always latest, no date filter
+      financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 1000 }).catch(() => []),
+      financeApi.listBankAccounts(true).catch(() => []),
+    ]).then(([summaryData, recentTransactionsData, chartTransactionsData, banksData]) => {
+      setTransactions(recentTransactionsData);
+      setBanks(banksData);
+      
+      // Filter chart transactions by date in user's timezone
+      const startDateStr = getDateOnly(startDateObj, timezone);
+      const endDateStr = getDateOnly(endDateObj, timezone);
+      const filteredChartTransactions = chartTransactionsData.filter((t) => {
+        const txnDate = getDateOnly(t.date, timezone);
+        return txnDate >= startDateStr && txnDate <= endDateStr;
+      });
+      setChartTransactions(filteredChartTransactions);
+      
+      // Recalculate summary from filtered transactions
+      const recalculatedSummary = {
+        total_income: filteredChartTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0),
+        total_expense: Math.abs(filteredChartTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)),
+        net_profit: 0,
+        cash_on_hand: summaryData?.cash_on_hand || 0,
+        bank_balance: summaryData?.bank_balance || 0,
+        pending_transfers: summaryData?.pending_transfers || 0,
+      };
+      recalculatedSummary.net_profit = recalculatedSummary.total_income - recalculatedSummary.total_expense;
+      setSummary(recalculatedSummary);
+    });
   };
 
   // Process transactions for chart based on selected date range (timezone-aware)
   const incomeExpenseData = useMemo(() => {
     const { startDate, endDate } = getDateRange();
-    const start = new Date(startDate + "T12:00:00");
-    const end = new Date(endDate + "T12:00:00");
+    // startDate and endDate are now Date objects (UTC), not strings
+    const start = startDate;
+    const end = endDate;
     
     // Calculate number of days in the range
     const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     
-    // Generate array of dates in the range
+    // Generate array of dates in the range (in user's timezone)
     const datesInRange = Array.from({ length: daysDiff }, (_, i) => {
       const date = new Date(start);
-      date.setDate(start.getDate() + i);
+      date.setUTCDate(date.getUTCDate() + i);
       return getDateOnly(date, timezone);
     });
 
@@ -286,28 +320,19 @@ export default function Finance() {
       const income = dayTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
       const expense = dayTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + Math.abs(t.amount), 0);
       
-      // Format label based on date range
-      const dateObj = new Date(dateStr + "T12:00:00");
+      // Format label based on date range using formatWithTimezone utility
+      // Parse dateStr as UTC by appending "T00:00:00Z"
+      const dateObj = new Date(dateStr + "T00:00:00Z");
       let label: string;
       if (daysDiff <= 7) {
         // For short ranges, show day name
-        label = dateObj.toLocaleDateString('en-US', {
-          timeZone: timezone,
-          weekday: 'short',
-        }).slice(0, 3);
+        label = formatWithTimezone(dateObj, timezone, { weekday: 'short' }).slice(0, 3);
       } else if (daysDiff <= 31) {
         // For medium ranges, show day number
-        label = dateObj.toLocaleDateString('en-US', {
-          timeZone: timezone,
-          day: 'numeric',
-        });
+        label = formatWithTimezone(dateObj, timezone, { day: 'numeric' });
       } else {
         // For long ranges, show month/day
-        label = dateObj.toLocaleDateString('en-US', {
-          timeZone: timezone,
-          month: 'short',
-          day: 'numeric',
-        });
+        label = formatWithTimezone(dateObj, timezone, { month: 'short', day: 'numeric' });
       }
       
       return {

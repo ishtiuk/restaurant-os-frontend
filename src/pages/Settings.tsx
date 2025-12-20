@@ -133,6 +133,11 @@ export default function Settings() {
           footerText: settings.footer_text || "",
         });
         
+        // Sync timezone from backend (TimezoneContext will also fetch, but this ensures sync)
+        if (settings.timezone) {
+          setTimezone(settings.timezone);
+        }
+        
         // Sync to localStorage for print system
         savePrintSettings({
           paperSize: settings.paper_size === 'thermal58' ? '58mm' : '80mm',

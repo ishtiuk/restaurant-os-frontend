@@ -112,30 +112,19 @@ export default function FinanceTransactions() {
         };
         // Convert user's selected dates for API
         // Backend creates: start_date 00:00:00 UTC to end_date 23:59:59.999 UTC
-        // We need: user's date range in their timezone -> correct UTC date range
+        // Convert user's selected dates to UTC date range for backend API
+        // getStartOfDay/getEndOfDay return UTC Date objects representing start/end of user's local day
         if (startDate) {
-          // User selects Dec 18 -> want Dec 18 00:00:00 in their timezone
-          // Dec 18 00:00:00 UTC+6 = Dec 17 18:00:00 UTC
-          // We send the UTC date that represents the start of user's selected date
           const utcStart = getStartOfDay(new Date(startDate + "T12:00:00"), timezone);
-          params.start_date = format(utcStart, "yyyy-MM-dd");
+          // Convert UTC Date object to UTC date string (YYYY-MM-DD)
+          params.start_date = utcStart.toISOString().split('T')[0];
         }
         if (endDate) {
-          // User selects Dec 18 -> want transactions up to Dec 18 23:59:59 in their timezone (UTC+6)
-          // Dec 18 23:59:59 UTC+6 = Dec 19 05:59:59 UTC
-          // getEndOfDay returns Dec 19 05:59:59.999 UTC (date part: "2025-12-19")
-          // Problem: If we send "2025-12-19", backend creates Dec 19 23:59:59.999 UTC, which includes Dec 20 in user's timezone
-          // If we send "2025-12-18", backend creates Dec 18 23:59:59.999 UTC = Dec 19 05:59:59.999 UTC+6
-          // This correctly represents the end of Dec 18, but includes Dec 19 transactions with UTC timestamps < Dec 18 23:59:59.999
-          // Solution: Get the UTC date of the end time, then subtract 1 day
-          // This ensures backend's 23:59:59.999 doesn't include the next day in user's timezone
           const utcEnd = getEndOfDay(new Date(endDate + "T12:00:00"), timezone);
-          // utcEnd is Dec 19 05:59:59.999 UTC for Dec 18 in UTC+6
-          // We want to send a date that, when backend adds 23:59:59.999, gives us <= Dec 19 05:59:59 UTC
-          // Since backend always uses 23:59:59.999, we send the date BEFORE the UTC date
-          const utcEndDate = new Date(utcEnd);
-          utcEndDate.setUTCDate(utcEndDate.getUTCDate() - 1);
-          params.end_date = format(utcEndDate, "yyyy-MM-dd");
+          // Convert UTC Date object to UTC date string (YYYY-MM-DD)
+          // Backend will filter: created_at <= end_date 23:59:59.999 UTC
+          // Note: This may include a few hours of the next day in user's timezone, but ensures we capture all of the selected day
+          params.end_date = utcEnd.toISOString().split('T')[0];
         }
         if (typeFilter !== "all") params.transaction_type = typeFilter;
         if (paymentFilter !== "all") params.payment_method = paymentFilter;
@@ -163,17 +152,35 @@ export default function FinanceTransactions() {
     loadTransactions();
   }, [startDate, endDate, typeFilter, paymentFilter, statusFilter, timezone]);
 
-  // Transactions are already filtered by API, just need to sort client-side
+  // Filter and sort transactions client-side
   const filteredTransactions = useMemo(() => {
-    // API already filtered by date, type, payment method, and status
-    // We only need to sort client-side
+    // First, filter by date in user's timezone (backend filtering may include edge cases)
+    let filtered = [...transactions];
+    
+    if (startDate) {
+      const startDateStr = getDateOnly(new Date(startDate + "T12:00:00"), timezone);
+      filtered = filtered.filter((t) => {
+        const txnDate = getDateOnly(t.date, timezone);
+        return txnDate >= startDateStr;
+      });
+    }
+    
+    if (endDate) {
+      const endDateStr = getDateOnly(new Date(endDate + "T12:00:00"), timezone);
+      filtered = filtered.filter((t) => {
+        const txnDate = getDateOnly(t.date, timezone);
+        return txnDate <= endDateStr;
+      });
+    }
+    
+    // Sort client-side
     // Ensure UTC parsing by appending 'Z' if missing for accurate date comparison
     const parseUTCDate = (dateStr: string) => {
       const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
       return new Date(utcStr).getTime();
     };
     
-    const sorted = [...transactions].sort((a, b) => {
+    const sorted = filtered.sort((a, b) => {
       if (sortField === "date") {
         return sortOrder === "desc" 
           ? parseUTCDate(b.date) - parseUTCDate(a.date)
@@ -194,7 +201,7 @@ export default function FinanceTransactions() {
       paymentMethod: t.payment_method,
       status: t.status,
     }));
-  }, [transactions, sortField, sortOrder]);
+  }, [transactions, startDate, endDate, sortField, sortOrder, timezone]);
 
   const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
   const paginatedTransactions = filteredTransactions.slice(

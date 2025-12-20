@@ -75,17 +75,22 @@ export default function Dashboard() {
         const last7Days = subDays(today, 7);
         
         // Use timezone-aware date calculations
+        // getStartOfDay/getEndOfDay return UTC Date objects representing start/end of user's local day
         const todayStart = getStartOfDay(today, timezone);
         const todayEnd = getEndOfDay(today, timezone);
         const yesterdayStart = getStartOfDay(yesterday, timezone);
         const yesterdayEnd = getEndOfDay(yesterday, timezone);
         const last7DaysStart = getStartOfDay(last7Days, timezone);
         
-        const todayStr = format(todayStart, "yyyy-MM-dd");
-        const todayEndStr = format(todayEnd, "yyyy-MM-dd");
-        const yesterdayStr = format(yesterdayStart, "yyyy-MM-dd");
-        const yesterdayEndStr = format(yesterdayEnd, "yyyy-MM-dd");
-        const last7DaysStr = format(last7DaysStart, "yyyy-MM-dd");
+        // Convert UTC Date objects to UTC date strings (YYYY-MM-DD) for backend API
+        // Backend interprets these as UTC dates and filters: created_at >= start_date 00:00:00 UTC AND <= end_date 23:59:59.999 UTC
+        // Note: Backend's end_date 23:59:59.999 UTC may include a few hours of the next day in user's timezone, but that's acceptable
+        // as it ensures we capture all of the user's selected day
+        const todayStr = todayStart.toISOString().split('T')[0];
+        const todayEndStr = todayEnd.toISOString().split('T')[0];
+        const yesterdayStr = yesterdayStart.toISOString().split('T')[0];
+        const yesterdayEndStr = yesterdayEnd.toISOString().split('T')[0];
+        const last7DaysStr = last7DaysStart.toISOString().split('T')[0];
 
         // Load all data in parallel
         const [
@@ -105,25 +110,89 @@ export default function Dashboard() {
           reportsApi.getLowStock(10).catch(() => null),
           purchasesApi.list({ status: "pending", limit: 10 }).catch(() => []),
           suppliersApi.list().catch(() => []),
-          salesApi.list(1000, 0).catch(() => ({ data: [], total: 0 })),
+          // Fetch all sales using pagination to ensure we get all today's sales
+          // Backend has max limit of 1000, so we need to fetch in batches
+          (async () => {
+            let allSales: SaleDto[] = [];
+            let offset = 0;
+            const limit = 1000;
+            
+            while (true) {
+              try {
+                const response = await salesApi.list(limit, offset);
+                allSales = [...allSales, ...response.data];
+                // If we got fewer than limit, we've reached the end
+                if (response.data.length < limit) {
+                  break;
+                }
+                offset += limit;
+                // Safety check: don't fetch more than 10000 sales (10 pages)
+                if (allSales.length >= 10000) {
+                  break;
+                }
+              } catch (error) {
+                console.error("Error fetching sales:", error);
+                break;
+              }
+            }
+            
+            return { data: allSales, total: allSales.length };
+          })().catch(() => ({ data: [], total: 0 })),
         ]);
 
-        if (todayData) setTodaySummary(todayData);
         if (yesterdayData) setYesterdaySummary(yesterdayData);
-        if (trendData) setSalesTrend(trendData);
         if (topProductsData) setTopProducts(topProductsData);
         if (lowStockData) setLowStock(lowStockData);
         if (Array.isArray(pendingOrdersData)) setPendingOrders(pendingOrdersData);
         if (Array.isArray(suppliersData)) setSuppliers(suppliersData);
 
-        // Calculate payment method breakdown from today's sales
+        // Filter sales by date in user's timezone and recalculate summaries and trend
+        // (Backend aggregations use UTC dates, so we need client-side grouping by local dates)
         if (todaySalesData.data) {
           const todayDateStr = getDateOnly(today, timezone);
-          const todaySales = todaySalesData.data.filter((sale: SaleDto) => {
+          const yesterdayDateStr = getDateOnly(yesterday, timezone);
+          const last7DaysDateStr = getDateOnly(last7Days, timezone);
+          
+          // Filter completed sales
+          const completedSales = todaySalesData.data.filter((sale: SaleDto) => sale.status === "completed");
+          
+          // Filter today's sales
+          const todaySales = completedSales.filter((sale: SaleDto) => {
             const saleDate = getDateOnly(sale.created_at, timezone);
-            return saleDate === todayDateStr && sale.status === "completed";
+            return saleDate === todayDateStr;
           });
 
+          // Filter yesterday's sales
+          const yesterdaySales = completedSales.filter((sale: SaleDto) => {
+            const saleDate = getDateOnly(sale.created_at, timezone);
+            return saleDate === yesterdayDateStr;
+          });
+
+          // Recalculate today's summary from filtered sales
+          const recalculatedTodaySummary = {
+            period: {
+              start_date: todayStr,
+              end_date: todayEndStr,
+              total_sales: todaySales.reduce((sum, sale) => sum + sale.total, 0),
+              total_orders: todaySales.length,
+              average_order_value: todaySales.length > 0 ? todaySales.reduce((sum, sale) => sum + sale.total, 0) / todaySales.length : 0,
+            }
+          };
+          setTodaySummary(recalculatedTodaySummary);
+
+          // Recalculate yesterday's summary from filtered sales
+          const recalculatedYesterdaySummary = {
+            period: {
+              start_date: yesterdayStr,
+              end_date: yesterdayEndStr,
+              total_sales: yesterdaySales.reduce((sum, sale) => sum + sale.total, 0),
+              total_orders: yesterdaySales.length,
+              average_order_value: yesterdaySales.length > 0 ? yesterdaySales.reduce((sum, sale) => sum + sale.total, 0) / yesterdaySales.length : 0,
+            }
+          };
+          setYesterdaySummary(recalculatedYesterdaySummary);
+
+          // Calculate payment method breakdown for today
           const paymentGroups: Record<string, number> = {};
           todaySales.forEach((sale: SaleDto) => {
             const method = sale.payment_method === "card" ? "Card" : 
@@ -135,6 +204,38 @@ export default function Dashboard() {
           setPaymentMethodBreakdown(
             Object.entries(paymentGroups).map(([method, amount]) => ({ method, amount }))
           );
+
+          // Calculate sales trend for last 7 days (grouped by local date)
+          const last7DaysSales = completedSales.filter((sale: SaleDto) => {
+            const saleDate = getDateOnly(sale.created_at, timezone);
+            return saleDate >= last7DaysDateStr && saleDate <= todayDateStr;
+          });
+
+          // Group sales by local date
+          const salesByDate: Record<string, { total_sales: number; order_count: number }> = {};
+          last7DaysSales.forEach((sale: SaleDto) => {
+            const saleDate = getDateOnly(sale.created_at, timezone);
+            if (!salesByDate[saleDate]) {
+              salesByDate[saleDate] = { total_sales: 0, order_count: 0 };
+            }
+            salesByDate[saleDate].total_sales += sale.total;
+            salesByDate[saleDate].order_count += 1;
+          });
+
+          // Convert to array and sort by date
+          const trendDataPoints = Object.entries(salesByDate)
+            .map(([period, data]) => ({
+              period,
+              total_sales: data.total_sales,
+              order_count: data.order_count,
+            }))
+            .sort((a, b) => a.period.localeCompare(b.period));
+
+          setSalesTrend({ data: trendDataPoints });
+        } else if (todayData) {
+          // Fallback to backend data if sales list is not available
+          setTodaySummary(todayData);
+          if (trendData) setSalesTrend(trendData);
         }
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
@@ -263,7 +364,8 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={salesTrend.data.map((point) => ({
-                    date: formatDate(point.period, timezone),
+                    // point.period is "YYYY-MM-DD" from backend, treat as UTC by appending "T00:00:00Z"
+                    date: formatDate(point.period + "T00:00:00Z", timezone),
                     revenue: point.total_sales,
                   }))}
                 >
