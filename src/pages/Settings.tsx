@@ -274,6 +274,7 @@ export default function Settings() {
       // Refresh tables from API
       await refreshTables();
       // Update the numberOfTables to reflect the new total (will be updated by useEffect when tables change)
+      setIsCreatingTables(false);
     } catch (err: any) {
       toast({
         title: "Failed to create tables",

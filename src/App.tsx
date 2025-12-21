@@ -32,6 +32,7 @@ import Attendance from "@/pages/Attendance";
 import Vat from "@/pages/Vat";
 import Expenses from "@/pages/Expenses";
 import SalesHistory from "@/pages/SalesHistory";
+import LicenseActivation from "@/pages/LicenseActivation";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
                   <Routes>
                     <Route path="/" element={<Login />} />
                     <Route path="/login" element={<Login />} />
+                    <Route path="/license-activation" element={<LicenseActivation />} />
 
                     <Route element={<RequireAuth />}>
                       <Route element={<AppLayout />}>

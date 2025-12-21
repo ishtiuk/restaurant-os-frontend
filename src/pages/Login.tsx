@@ -44,11 +44,22 @@ export default function Login() {
         navigate(from, { replace: true });
       }, 50);
     } catch (err: any) {
-      toast({
-        title: "Login failed",
-        description: err?.message || "Please check your credentials",
-        variant: "destructive",
-      });
+      // Check if it's a license error (402 Payment Required)
+      if (err?.code === "402" || err?.response?.status === 402) {
+        // Redirect to license activation page
+        navigate("/license-activation", { replace: true });
+        toast({
+          title: "License Required",
+          description: err?.message || "Your license has expired. Please activate your license to continue.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Login failed",
+          description: err?.message || "Please check your credentials",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }

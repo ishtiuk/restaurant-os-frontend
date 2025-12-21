@@ -18,6 +18,10 @@ const TENANT_KEY = "restaurant-os-tenant-id";
 export interface ApiError extends Error {
   code?: string;
   details?: Record<string, any>;
+  response?: {
+    status: number;
+    data?: any;
+  };
 }
 
 class ApiClient {
@@ -72,6 +76,12 @@ class ApiClient {
     }
 
     if (!res.ok) {
+      // Handle 402 Payment Required - License expired/invalid
+      if (res.status === 402) {
+        // Don't redirect automatically - let the calling component handle it
+        // This allows login page to show activation screen
+      }
+      
       // Handle 401 Unauthorized - token is invalid or user doesn't exist
       // Don't trigger logout on login endpoint (login failures are expected)
       if (res.status === 401 && !endpoint.includes("/auth/login")) {
@@ -104,6 +114,7 @@ class ApiClient {
       const err: ApiError = new Error(message);
       err.code = data?.detail?.code || data?.code || String(res.status);
       err.details = data?.detail?.details || data?.details;
+      err.response = { status: res.status, data };
       throw err;
     }
 
