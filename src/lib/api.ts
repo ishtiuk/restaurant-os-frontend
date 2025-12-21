@@ -2,13 +2,31 @@
  * Base API client (RestaurantOS)
  */
 
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) || "http://localhost:8001/api";
+// When served from backend, use relative path
+const getApiBaseUrl = (): string => {
+  // Check if we're served from backend (same origin)
+  const origin = window.location.origin;
+  const isServedFromBackend = 
+    origin === "http://localhost:8001" || 
+    origin === "http://127.0.0.1:8001";
+  
+  // Use env var if set, otherwise use relative path when served from backend
+  const envUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  if (envUrl) return envUrl;
+  
+  return isServedFromBackend ? "/api" : "http://localhost:8001/api";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 const API_ORIGIN = (() => {
   try {
+    // If API_BASE_URL is a relative path, use current origin
+    if (API_BASE_URL.startsWith("/")) {
+      return window.location.origin;
+    }
     return new URL(API_BASE_URL).origin;
   } catch {
-    return "";
+    return window.location.origin;
   }
 })();
 

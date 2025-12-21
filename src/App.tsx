@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,28 +12,43 @@ import { TenantProvider } from "./contexts/TenantContext";
 import { TimezoneProvider } from "@/contexts/TimezoneContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { RequireAuth, RequireRole } from "@/components/auth/RequireAuth";
-import Index from "@/pages/Index";
+
+// Eager load critical pages (login, dashboard) - needed immediately
 import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
-import Items from "@/pages/Items";
-import Sales from "@/pages/Sales";
-import Purchases from "@/pages/Purchases";
-import Suppliers from "@/pages/Suppliers";
-import Customers from "@/pages/Customers";
-import Finance from "@/pages/Finance";
-import FinanceTransactions from "@/pages/FinanceTransactions";
-import BankAccounts from "@/pages/BankAccounts";
-import Reports from "@/pages/Reports";
-import Settings from "@/pages/Settings";
-import Admin from "@/pages/Admin";
-import NotFound from "@/pages/NotFound";
-import Tables from "@/pages/Tables";
-import Staff from "@/pages/Staff";
-import Attendance from "@/pages/Attendance";
-import Vat from "@/pages/Vat";
-import Expenses from "@/pages/Expenses";
-import SalesHistory from "@/pages/SalesHistory";
-import LicenseActivation from "@/pages/LicenseActivation";
+import Index from "@/pages/Index";
+
+// Lazy load all other pages - only load when user navigates to them
+// This significantly reduces initial bundle size and memory usage
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Items = lazy(() => import("@/pages/Items"));
+const Sales = lazy(() => import("@/pages/Sales"));
+const Purchases = lazy(() => import("@/pages/Purchases"));
+const Suppliers = lazy(() => import("@/pages/Suppliers"));
+const Customers = lazy(() => import("@/pages/Customers"));
+const Finance = lazy(() => import("@/pages/Finance"));
+const FinanceTransactions = lazy(() => import("@/pages/FinanceTransactions"));
+const BankAccounts = lazy(() => import("@/pages/BankAccounts"));
+const Reports = lazy(() => import("@/pages/Reports"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Admin = lazy(() => import("@/pages/Admin"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+const Tables = lazy(() => import("@/pages/Tables"));
+const Staff = lazy(() => import("@/pages/Staff"));
+const Attendance = lazy(() => import("@/pages/Attendance"));
+const Vat = lazy(() => import("@/pages/Vat"));
+const Expenses = lazy(() => import("@/pages/Expenses"));
+const SalesHistory = lazy(() => import("@/pages/SalesHistory"));
+const LicenseActivation = lazy(() => import("@/pages/LicenseActivation"));
+
+// Loading fallback component for lazy-loaded pages
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-screen">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+      <p className="text-muted-foreground">Loading...</p>
+    </div>
+  </div>
+);
 
 const queryClient = new QueryClient();
 
@@ -56,40 +72,180 @@ const App = () => (
                   <Routes>
                     <Route path="/" element={<Login />} />
                     <Route path="/login" element={<Login />} />
-                    <Route path="/license-activation" element={<LicenseActivation />} />
+                    <Route 
+                      path="/license-activation" 
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <LicenseActivation />
+                        </Suspense>
+                      } 
+                    />
 
                     <Route element={<RequireAuth />}>
                       <Route element={<AppLayout />}>
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/items" element={<Items />} />
-                        <Route path="/sales" element={<Sales />} />
-                        <Route path="/tables" element={<Tables />} />
-                        <Route path="/purchases" element={<Purchases />} />
-                        <Route path="/suppliers" element={<Suppliers />} />
-                        <Route path="/customers" element={<Customers />} />
-                        <Route path="/staff" element={<Staff />} />
-                        <Route path="/attendance" element={<Attendance />} />
-                        <Route path="/finance" element={<Finance />} />
-                        <Route path="/finance/transactions" element={<FinanceTransactions />} />
-                        <Route path="/finance/banks" element={<BankAccounts />} />
-                        <Route path="/expenses" element={<Expenses />} />
-                        <Route path="/vat" element={<Vat />} />
-                        <Route path="/reports" element={<Reports />} />
-                        <Route path="/sales-history" element={<SalesHistory />} />
+                        <Route 
+                          path="/dashboard" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Dashboard />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/items" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Items />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/sales" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Sales />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/tables" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Tables />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/purchases" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Purchases />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/suppliers" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Suppliers />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/customers" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Customers />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/staff" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Staff />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/attendance" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Attendance />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/finance" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Finance />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/finance/transactions" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <FinanceTransactions />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/finance/banks" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <BankAccounts />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/expenses" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Expenses />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/vat" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Vat />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/reports" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <Reports />
+                            </Suspense>
+                          } 
+                        />
+                        <Route 
+                          path="/sales-history" 
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <SalesHistory />
+                            </Suspense>
+                          } 
+                        />
 
                         {/* Settings is available to restaurant owner and superadmin */}
                         <Route element={<RequireRole role={["owner", "superadmin"]} />}>
-                          <Route path="/settings" element={<Settings />} />
+                          <Route 
+                            path="/settings" 
+                            element={
+                              <Suspense fallback={<PageLoader />}>
+                                <Settings />
+                              </Suspense>
+                            } 
+                          />
                         </Route>
 
                         <Route element={<RequireRole role="superadmin" />}>
-                          <Route path="/admin" element={<Admin />} />
+                          <Route 
+                            path="/admin" 
+                            element={
+                              <Suspense fallback={<PageLoader />}>
+                                <Admin />
+                              </Suspense>
+                            } 
+                          />
                         </Route>
                       </Route>
                     </Route>
 
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
+                    <Route 
+                      path="*" 
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <NotFound />
+                        </Suspense>
+                      } 
+                    />
+                  </Routes>
                   </BrowserRouter>
                 </TooltipProvider>
               </PermissionsProvider>

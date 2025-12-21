@@ -565,10 +565,6 @@ export default function Settings() {
             <Users className="h-4 w-4" />
             Users
           </TabsTrigger>
-          <TabsTrigger value="subscription" className="gap-2">
-            <Shield className="h-4 w-4" />
-            Subscription
-          </TabsTrigger>
         </TabsList>
 
         {/* Business Tab */}
@@ -1090,90 +1086,6 @@ export default function Settings() {
                   <li><strong>Waiter:</strong> Tables management, take orders, send KOTs</li>
                   <li><strong>Chef:</strong> View KOTs and order status (future feature)</li>
                 </ul>
-              </div>
-            </div>
-          </GlassCard>
-        </TabsContent>
-
-        {/* Subscription / Activation Tab */}
-        <TabsContent value="subscription" className="space-y-6">
-          <GlassCard className="p-6 animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  Subscription & Activation
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  সাবস্ক্রিপশন ও অ্যাক্টিভেশন • Manage your offline license
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Current status:</span>
-                {license.status === "active" && (
-                  <Badge variant="success">
-                    Active{license.validUntil && (
-                      <> • until {formatDate(license.validUntil, timezone)}</>
-                    )}
-                  </Badge>
-                )}
-                {license.status === "expired" && (
-                  <Badge variant="destructive">
-                    Expired{license.validUntil && (
-                      <> • {formatDate(license.validUntil, timezone)}</>
-                    )}
-                  </Badge>
-                )}
-                {license.status === "invalid" && (
-                  <Badge variant="destructive">Invalid code</Badge>
-                )}
-                {license.status === "none" && (
-                  <Badge variant="outline">Not activated</Badge>
-                )}
-              </div>
-              {license.plan && (
-                <p className="text-sm text-muted-foreground">
-                  Plan: <span className="font-medium text-foreground">{license.plan}</span>
-                </p>
-              )}
-              {license.customerName && (
-                <p className="text-sm text-muted-foreground">
-                  Licensed to:{" "}
-                  <span className="font-medium text-foreground">{license.customerName}</span>
-                </p>
-              )}
-
-              <div className="space-y-2 pt-4">
-                <Label htmlFor="activation-code">Activation Code</Label>
-                <textarea
-                  id="activation-code"
-                  className="w-full min-h-[120px] rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-                  placeholder="Paste the activation code (license token) provided by your vendor..."
-                  value={licenseInput}
-                  onChange={(e) => setLicenseInput(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Your provider will send you a time-limited activation code (for example monthly).
-                  Paste it here to activate or renew your subscription. Works fully offline.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setLicenseInput("");
-                  }}
-                >
-                  Clear
-                </Button>
-                <Button type="button" variant="glow" onClick={handleActivateLicense}>
-                  Activate / Renew
-                </Button>
               </div>
             </div>
           </GlassCard>
