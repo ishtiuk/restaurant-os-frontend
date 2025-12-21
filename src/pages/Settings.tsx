@@ -1360,6 +1360,28 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Footer */}
+      <div className="mt-12 pt-8 border-t border-border animate-fade-in">
+        <GlassCard className="p-6">
+          <div className="text-center space-y-2">
+            <p className="text-sm text-muted-foreground">
+              © 2024 RestaurantOS. All rights reserved.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Powered by{" "}
+              <a 
+                href="https://archextech.netlify.app/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline font-medium transition-colors"
+              >
+                Archex Tech
+              </a>
+            </p>
+          </div>
+        </GlassCard>
+      </div>
     </div>
   );
 }

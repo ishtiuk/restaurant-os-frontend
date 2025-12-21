@@ -31,7 +31,7 @@ export const KotSlip: React.FC<KotSlipProps> = ({
     <div id="kot-slip-print">
       {/* KOT Header */}
       <div className="kot-header">
-        <p className="kot-title">🍳 KITCHEN ORDER</p>
+        <p className="kot-title">KITCHEN ORDER</p>
         <p className="kot-number">KOT #{kotNumber}</p>
       </div>
 

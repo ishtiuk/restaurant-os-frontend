@@ -44,7 +44,7 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
   const formattedDate = formatDate(utcDateStr, timezone);
   const formattedTime = formatTime(utcDateStr, timezone);
 
-  const orderTypeLabel = orderType === "delivery" ? "🚚 DELIVERY" : "🛍️ TAKEAWAY";
+  const orderTypeLabel = orderType === "delivery" ? "DELIVERY" : "TAKEAWAY";
 
   return (
     <div id="sales-receipt-print">
@@ -52,8 +52,8 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
       <div className="slip-header">
         <p className="restaurant-name">{settings.restaurantName}</p>
         <p className="restaurant-name-bn">{settings.restaurantNameBn}</p>
-        <p className="address">📍 {settings.address}</p>
-        <p className="phone">📞 {settings.phone}</p>
+        <p className="address">Address: {settings.address}</p>
+        <p className="phone">Phone: {settings.phone}</p>
       </div>
 
       {/* Order Info */}
@@ -83,7 +83,7 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
       {/* Delivery Info */}
       {orderType === "delivery" && (customerName || customerPhone || deliveryAddress) && (
         <div className="delivery-info">
-          <p className="delivery-info-title">📦 Delivery Details</p>
+          <p className="delivery-info-title">Delivery Details</p>
           {customerName && <p><strong>Name:</strong> {customerName}</p>}
           {customerPhone && <p><strong>Phone:</strong> {customerPhone}</p>}
           {deliveryAddress && <p><strong>Address:</strong> {deliveryAddress}</p>}
@@ -139,7 +139,7 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
       {/* Footer */}
       <div className="slip-footer">
         <p><strong>{settings.footerText || 'ধন্যবাদ, আবার আসবেন'}</strong></p>
-        <p style={{ marginTop: '6px' }}>--- Powered by RestaurantOS ---</p>
+        <p style={{ marginTop: '6px' }}>--- Powered by RestaurantOS | Archex Tech ---</p>
       </div>
     </div>
   );

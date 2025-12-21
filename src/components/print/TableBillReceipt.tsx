@@ -60,8 +60,8 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
       <div className="slip-header">
         <p className="restaurant-name">{settings.restaurantName}</p>
         <p className="restaurant-name-bn">{settings.restaurantNameBn}</p>
-        <p className="address">📍 {settings.address}</p>
-        <p className="phone">📞 {settings.phone}</p>
+        <p className="address">Address: {settings.address}</p>
+        <p className="phone">Phone: {settings.phone}</p>
       </div>
 
       {/* Bill Info */}
@@ -84,7 +84,7 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
         </div>
         <div className="slip-info-row">
           <span className="label">Type:</span>
-          <span className="value order-type-badge">🍽️ DINE-IN</span>
+          <span className="value order-type-badge">DINE-IN</span>
         </div>
       </div>
 
@@ -165,7 +165,7 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
       {/* Footer */}
       <div className="slip-footer">
         <p><strong>{settings.footerText || 'ধন্যবাদ, আবার আসবেন'}</strong></p>
-        <p style={{ marginTop: '6px' }}>--- Powered by RestaurantOS ---</p>
+        <p style={{ marginTop: '6px' }}>--- Powered by RestaurantOS | Archex Tech ---</p>
       </div>
     </div>
   );

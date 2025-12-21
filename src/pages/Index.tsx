@@ -453,8 +453,19 @@ const Index = () => {
               </ul>
             </div>
           </div>
-          <div className="mt-12 pt-8 border-t border-border text-center text-sm text-muted-foreground">
+          <div className="mt-12 pt-8 border-t border-border text-center text-sm text-muted-foreground space-y-2">
             <p>© 2024 InventoryOS. All rights reserved.</p>
+            <p>
+              Powered by{" "}
+              <a 
+                href="https://archextech.netlify.app/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline font-medium transition-colors"
+              >
+                Archex Tech
+              </a>
+            </p>
           </div>
         </div>
       </footer>
