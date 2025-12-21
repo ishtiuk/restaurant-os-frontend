@@ -652,12 +652,15 @@ export default function Items() {
                     <SelectValue placeholder="Select unit" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="pcs">Pieces (pcs)</SelectItem>
                     <SelectItem value="plate">Plate</SelectItem>
                     <SelectItem value="bowl">Bowl</SelectItem>
-                    <SelectItem value="pcs">Pieces</SelectItem>
                     <SelectItem value="bottle">Bottle</SelectItem>
-                    <SelectItem value="kg">Kilogram</SelectItem>
-                    <SelectItem value="litre">Litre</SelectItem>
+                    <SelectItem value="cup">Cup</SelectItem>
+                    <SelectItem value="glass">Glass</SelectItem>
+                    <SelectItem value="packet">Packet</SelectItem>
+                    <SelectItem value="kg">Kilogram (kg)</SelectItem>
+                    <SelectItem value="litre">Litre (L)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

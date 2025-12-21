@@ -526,72 +526,100 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                     notes: i.notes,
                   })),
                 });
+                // Refresh items after KOT creation to show updated stock for packaged items
+                try {
+                  const refreshedItems = await productsApi.list();
+                  setItems(
+                    refreshedItems.map((p) => ({
+                      id: String(p.id),
+                      name: p.name,
+                      nameBn: p.name_bn ?? undefined,
+                      sku: p.sku,
+                      categoryId: p.category_id,
+                      price: Number(p.price),
+                      cost: Number(p.cost),
+                      stockQty: Number(p.stock_qty ?? 0),
+                      unit: (p.unit as Item["unit"]) || "pcs",
+                      imageUrl: p.image_url
+                        ? p.image_url.startsWith("http")
+                          ? p.image_url
+                          : `${API_ORIGIN}${p.image_url}`
+                        : undefined,
+                      isActive: Boolean(p.is_active),
+                      isPackaged: Boolean(p.is_packaged),
+                      vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    }))
+                  );
+                } catch (err) {
+                  console.error("Failed to refresh items after KOT", err);
+                }
               } catch (err) {
                 console.error("Failed to create KOT", err);
               }
             }
 
-            // Refresh tables and active orders to get currentOrderId
-            const [refreshedTables, activeOrders] = await Promise.all([
-              tablesApi.list().catch(() => tables),
-              tablesApi.listActiveOrders().catch(() => []),
+            // Refresh tables and orders from backend to ensure consistency
+            const [refreshedTables, refreshedOrders] = await Promise.all([
+              tablesApi.list(),
+              tablesApi.listActiveOrders(),
             ]);
-            if (refreshedTables !== tables) {
-              setTables(
-                refreshedTables.map((t) => {
-                  const order = activeOrders.find((o) => o.table_id === t.id && o.status !== "completed");
-                  return {
-                    id: t.id,
-                    tableNo: t.table_no,
-                    capacity: t.capacity,
-                    status: t.status as RestaurantTable["status"],
-                    location: t.location ?? undefined,
-                    isActive: t.is_active,
-                    currentOrderId: order?.id,
-                  };
-                })
-              );
-            }
 
-            // Map and update order in local state
-            const mappedOrder: TableOrder = {
-              id: created.id,
-              tableId: created.table_id,
-              tableNo: tables.find((t) => t.id === tableId)?.tableNo || tableId,
-              items: created.items.map((i) => {
-                // Look up product to get vatRate
-                const product = items.find((p) => p.id === String(i.product_id));
-                return {
-                  itemId: String(i.product_id), // Use product_id from backend
-                  itemName: i.item_name,
-                  quantity: i.quantity,
-                  unitPrice: i.unit_price,
-                  discount: i.discount,
-                  total: i.total,
-                  notes: i.notes ?? undefined,
-                  available: 9999,
-                  vatRate: product?.vatRate,
-                };
-              }),
-              subtotal: created.subtotal,
-              vatAmount: created.vat_amount,
-              serviceCharge: created.service_charge,
-              discount: created.discount,
-              total: created.total,
-              status: created.status as TableOrder["status"],
-              createdAt: created.created_at,
-              updatedAt: created.updated_at,
-              kots: [],
-            };
-            setTableOrders((prev) => {
-              const idx = prev.findIndex((o) => o.id === mappedOrder.id);
-              if (idx >= 0) {
-                const next = [...prev];
-                next[idx] = mappedOrder;
-                return next;
-              }
-              return [mappedOrder, ...prev];
+            // Map refreshed orders
+            const mappedOrders: TableOrder[] = refreshedOrders.map((o) => {
+              const table = refreshedTables.find((t) => t.id === o.table_id);
+              return {
+                id: o.id,
+                tableId: o.table_id,
+                tableNo: table?.table_no || o.table_id,
+                items: o.items.map((i) => {
+                  const product = items.find((p) => p.id === String(i.product_id));
+                  return {
+                    itemId: String(i.product_id),
+                    itemName: i.item_name,
+                    quantity: i.quantity,
+                    unitPrice: i.unit_price,
+                    discount: i.discount,
+                    total: i.total,
+                    notes: i.notes ?? undefined,
+                    available: 9999,
+                    vatRate: product?.vatRate,
+                  };
+                }),
+                subtotal: o.subtotal,
+                vatAmount: o.vat_amount,
+                serviceCharge: o.service_charge,
+                discount: o.discount,
+                total: o.total,
+                status: o.status as TableOrder["status"],
+                createdAt: o.created_at,
+                updatedAt: o.updated_at,
+                kots: [],
+              };
             });
+
+            // Update tableOrders with refreshed data
+            setTableOrders(mappedOrders);
+
+            // Map refreshed tables and set currentOrderId based on active orders
+            setTables(
+              refreshedTables.map((t) => {
+                // Find active order for this table
+                const activeOrder = mappedOrders.find(
+                  (o) => o.tableId === t.id && o.status !== "completed"
+                );
+                return {
+                  id: t.id,
+                  tableNo: t.table_no,
+                  capacity: t.capacity,
+                  status: t.status as RestaurantTable["status"],
+                  location: t.location ?? undefined,
+                  isActive: t.is_active,
+                  currentOrderId: activeOrder?.id,
+                };
+              })
+            );
           } catch (err: any) {
             console.error("Failed to save table order", err);
             throw new Error(err?.message || "Failed to save table order");
@@ -685,19 +713,71 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             if (existing) {
               // Update table status
               await tablesApi.update(tableId, { status: "occupied" });
-              const refreshedTables = await tablesApi.list();
+              
+              // Refresh tables and orders from backend to ensure consistency
+              const [refreshedTables, refreshedOrders] = await Promise.all([
+                tablesApi.list(),
+                tablesApi.listActiveOrders(),
+              ]);
+
+              // Map refreshed orders
+              const mappedOrders: TableOrder[] = refreshedOrders.map((o) => {
+                const table = refreshedTables.find((t) => t.id === o.table_id);
+                return {
+                  id: o.id,
+                  tableId: o.table_id,
+                  tableNo: table?.table_no || o.table_id,
+                  items: o.items.map((i) => {
+                    const product = items.find((p) => p.id === String(i.product_id));
+                    return {
+                      itemId: String(i.product_id),
+                      itemName: i.item_name,
+                      quantity: i.quantity,
+                      unitPrice: i.unit_price,
+                      discount: i.discount,
+                      total: i.total,
+                      notes: i.notes ?? undefined,
+                      available: 9999,
+                      vatRate: product?.vatRate,
+                    };
+                  }),
+                  subtotal: o.subtotal,
+                  vatAmount: o.vat_amount,
+                  serviceCharge: o.service_charge,
+                  discount: o.discount,
+                  total: o.total,
+                  status: o.status as TableOrder["status"],
+                  createdAt: o.created_at,
+                  updatedAt: o.updated_at,
+                  kots: [],
+                };
+              });
+
+              // Update tableOrders with refreshed data
+              setTableOrders(mappedOrders);
+
+              // Map refreshed tables and set currentOrderId based on active orders
               setTables(
-                refreshedTables.map((t) => ({
-                  id: t.id,
-                  tableNo: t.table_no,
-                  capacity: t.capacity,
-                  status: t.status as RestaurantTable["status"],
-                  location: t.location ?? undefined,
-                  isActive: t.is_active,
-                  currentOrderId: t.id === tableId ? existing.id : undefined,
-                }))
+                refreshedTables.map((t) => {
+                  // Find active order for this table
+                  const activeOrder = mappedOrders.find(
+                    (o) => o.tableId === t.id && o.status !== "completed"
+                  );
+                  return {
+                    id: t.id,
+                    tableNo: t.table_no,
+                    capacity: t.capacity,
+                    status: t.status as RestaurantTable["status"],
+                    location: t.location ?? undefined,
+                    isActive: t.is_active,
+                    currentOrderId: activeOrder?.id,
+                  };
+                })
               );
-              return existing;
+              
+              // Return the refreshed order
+              const refreshedOrder = mappedOrders.find((o) => o.id === existing.id);
+              return refreshedOrder || existing;
             }
 
             // No existing order - don't create empty order
@@ -774,23 +854,65 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             // Update table status via API
             await tablesApi.update(tableId, { status: "billing" });
             
-            // Update local state
-            setTableOrders((prev) =>
-              prev.map((o) => (o.tableId === tableId && o.status !== "completed" ? { ...o, status: "billing" } : o))
-            );
-            
-            // Refresh tables from backend
-            const refreshedTables = await tablesApi.list();
+            // Refresh tables and orders from backend to ensure consistency
+            const [refreshedTables, refreshedOrders] = await Promise.all([
+              tablesApi.list(),
+              tablesApi.listActiveOrders(),
+            ]);
+
+            // Map refreshed orders
+            const mappedOrders: TableOrder[] = refreshedOrders.map((o) => {
+              const table = refreshedTables.find((t) => t.id === o.table_id);
+              return {
+                id: o.id,
+                tableId: o.table_id,
+                tableNo: table?.table_no || o.table_id,
+                items: o.items.map((i) => {
+                  const product = items.find((p) => p.id === String(i.product_id));
+                  return {
+                    itemId: String(i.product_id),
+                    itemName: i.item_name,
+                    quantity: i.quantity,
+                    unitPrice: i.unit_price,
+                    discount: i.discount,
+                    total: i.total,
+                    notes: i.notes ?? undefined,
+                    available: 9999,
+                    vatRate: product?.vatRate,
+                  };
+                }),
+                subtotal: o.subtotal,
+                vatAmount: o.vat_amount,
+                serviceCharge: o.service_charge,
+                discount: o.discount,
+                total: o.total,
+                status: o.status as TableOrder["status"],
+                createdAt: o.created_at,
+                updatedAt: o.updated_at,
+                kots: [],
+              };
+            });
+
+            // Update tableOrders with refreshed data
+            setTableOrders(mappedOrders);
+
+            // Map refreshed tables and set currentOrderId based on active orders
             setTables(
-              refreshedTables.map((t) => ({
-                id: t.id,
-                tableNo: t.table_no,
-                capacity: t.capacity,
-                status: t.status as RestaurantTable["status"],
-                location: t.location ?? undefined,
-                isActive: t.is_active,
-                currentOrderId: undefined,
-              }))
+              refreshedTables.map((t) => {
+                // Find active order for this table
+                const activeOrder = mappedOrders.find(
+                  (o) => o.tableId === t.id && o.status !== "completed"
+                );
+                return {
+                  id: t.id,
+                  tableNo: t.table_no,
+                  capacity: t.capacity,
+                  status: t.status as RestaurantTable["status"],
+                  location: t.location ?? undefined,
+                  isActive: t.is_active,
+                  currentOrderId: activeOrder?.id,
+                };
+              })
             );
           } catch (err: any) {
             console.error("Failed to mark table billing", err);
@@ -855,28 +977,65 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             };
             setSales((prev) => [sale, ...prev]);
 
-            // Update tables and orders
-            setTables((prev) =>
-              prev.map((t) =>
-                t.id === tableId
-                  ? {
-                      ...t,
-                      status: "empty",
-                      currentOrderId: undefined,
-                    }
-                  : t
-              )
-            );
-            setTableOrders((prev) =>
-              prev.map((o) =>
-                o.id === order.id
-                  ? {
-                      ...o,
-                      status: "completed",
-                      updatedAt: result.order.updated_at,
-                    }
-                  : o
-              )
+            // Refresh tables and orders from backend to ensure consistency
+            const [refreshedTables, refreshedOrders] = await Promise.all([
+              tablesApi.list(),
+              tablesApi.listActiveOrders(),
+            ]);
+
+            // Map refreshed orders
+            const mappedOrders: TableOrder[] = refreshedOrders.map((o) => {
+              const table = refreshedTables.find((t) => t.id === o.table_id);
+              return {
+                id: o.id,
+                tableId: o.table_id,
+                tableNo: table?.table_no || o.table_id,
+                items: o.items.map((i) => {
+                  const product = items.find((p) => p.id === String(i.product_id));
+                  return {
+                    itemId: String(i.product_id),
+                    itemName: i.item_name,
+                    quantity: i.quantity,
+                    unitPrice: i.unit_price,
+                    discount: i.discount,
+                    total: i.total,
+                    notes: i.notes ?? undefined,
+                    available: 9999,
+                    vatRate: product?.vatRate,
+                  };
+                }),
+                subtotal: o.subtotal,
+                vatAmount: o.vat_amount,
+                serviceCharge: o.service_charge,
+                discount: o.discount,
+                total: o.total,
+                status: o.status as TableOrder["status"],
+                createdAt: o.created_at,
+                updatedAt: o.updated_at,
+                kots: [],
+              };
+            });
+
+            // Update tableOrders with refreshed data
+            setTableOrders(mappedOrders);
+
+            // Map refreshed tables and set currentOrderId based on active orders
+            setTables(
+              refreshedTables.map((t) => {
+                // Find active order for this table
+                const activeOrder = mappedOrders.find(
+                  (o) => o.tableId === t.id && o.status !== "completed"
+                );
+                return {
+                  id: t.id,
+                  tableNo: t.table_no,
+                  capacity: t.capacity,
+                  status: t.status as RestaurantTable["status"],
+                  location: t.location ?? undefined,
+                  isActive: t.is_active,
+                  currentOrderId: activeOrder?.id,
+                };
+              })
             );
 
             // Refresh items to reflect stock changes
@@ -1236,8 +1395,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             isActive: Boolean(p.is_active),
             isPackaged: Boolean(p.is_packaged),
             vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
-            createdAt: p.created_at ? new Date(p.created_at).toISOString() : new Date().toISOString(),
-            updatedAt: p.updated_at ? new Date(p.updated_at).toISOString() : new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           }));
           setItems(mappedItems);
           // Return the saved item from the refreshed list

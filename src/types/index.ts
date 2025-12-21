@@ -9,7 +9,7 @@ export interface Item {
   price: number;
   cost: number;
   stockQty: number;
-  unit: 'pcs' | 'plate' | 'bowl' | 'bottle' | 'kg' | 'litre';
+  unit: 'pcs' | 'plate' | 'bowl' | 'bottle' | 'cup' | 'glass' | 'packet' | 'kg' | 'litre';
   imageUrl?: string;
   isActive: boolean;
   isPackaged: boolean; // true = packaged item (ice cream, coke) needs stock tracking, false = cooked item (biryani, curry) no stock needed
