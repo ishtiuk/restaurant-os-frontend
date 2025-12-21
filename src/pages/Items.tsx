@@ -751,7 +751,7 @@ export default function Items() {
                   type="hidden"
                   name="isPackaged"
                   id="isPackaged-hidden"
-                  value={selectedItem?.isPackaged ? "true" : "false"}
+                  value={isPackagedItem ? "true" : "false"}
                 />
                 <Switch
                   id="isPackaged"
