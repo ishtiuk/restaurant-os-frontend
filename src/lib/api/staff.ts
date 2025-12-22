@@ -47,6 +47,7 @@ export interface StaffPaymentDto {
   staff_id: string;
   amount: number;
   type: "salary" | "advance" | "bonus" | "deduction";
+  payment_method?: string | null;
   date: string; // ISO date string
   description?: string | null;
   reference_no?: string | null;
@@ -58,6 +59,7 @@ export interface StaffPaymentCreateInput {
   staff_id: string;
   amount: number;
   type: "salary" | "advance" | "bonus" | "deduction";
+  payment_method?: "cash" | "bank_transfer" | "check" | "online";
   date?: string; // ISO date string (YYYY-MM-DD), defaults to today
   description?: string;
   reference_no?: string;

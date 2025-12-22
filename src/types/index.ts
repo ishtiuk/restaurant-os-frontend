@@ -205,6 +205,7 @@ export interface StaffPayment {
   staffId: string;
   amount: number;
   type: 'salary' | 'advance' | 'bonus' | 'deduction';
+  paymentMethod?: string | null;
   description: string;
   date: string;
   createdAt: string;

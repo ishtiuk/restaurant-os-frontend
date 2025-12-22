@@ -128,6 +128,7 @@ export default function StaffPage() {
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     type: "salary",
+    payment_method: "cash" as "cash" | "bank_transfer" | "check" | "online" | undefined,
     description: "",
   });
   const [staffForm, setStaffForm] = useState({
@@ -172,6 +173,7 @@ export default function StaffPage() {
           staffId: p.staff_id,
           amount: Number(p.amount),
           type: p.type as StaffPayment["type"],
+          paymentMethod: p.payment_method ?? null,
           description: p.description ?? p.type,
           date: p.date,
           createdAt: p.created_at,
@@ -255,7 +257,7 @@ export default function StaffPage() {
 
   const handleOpenPay = (staff: Staff) => {
     setSelectedStaff(staff);
-    setPaymentForm({ amount: "", type: "salary", description: "" });
+    setPaymentForm({ amount: "", type: "salary", payment_method: "cash", description: "" });
     setShowPaymentDialog(true);
   };
 
@@ -273,11 +275,12 @@ export default function StaffPage() {
         staffId: selectedStaff.id,
         amount,
         type: paymentForm.type as StaffPayment["type"],
+        paymentMethod: paymentForm.payment_method,
         description: paymentForm.description || paymentForm.type,
         date: getDateOnly(new Date(), timezone),
       });
       setShowPaymentDialog(false);
-      setPaymentForm({ amount: "", type: "salary", description: "" });
+      setPaymentForm({ amount: "", type: "salary", payment_method: "cash", description: "" });
       
       // Reload payments for the current staff member
       const loadStaffPayments = async () => {
@@ -813,6 +816,23 @@ export default function StaffPage() {
                 placeholder="0.00"
                 className="bg-muted/50"
               />
+            </div>
+            <div className="space-y-1">
+              <Label>Payment Method</Label>
+              <Select 
+                value={paymentForm.payment_method || "cash"} 
+                onValueChange={(v) => setPaymentForm((f) => ({ ...f, payment_method: v as "cash" | "bank_transfer" | "check" | "online" }))}
+              >
+                <SelectTrigger className="bg-muted/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="check">Check</SelectItem>
+                  <SelectItem value="online">Online</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Description</Label>
