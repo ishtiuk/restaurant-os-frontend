@@ -128,7 +128,7 @@ export default function StaffPage() {
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     type: "salary",
-    payment_method: "cash" as "cash" | "bank_transfer" | "check" | "online" | undefined,
+    payment_method: "cash" as "cash" | "bank_transfer" | "online" | "other" | undefined,
     description: "",
   });
   const [staffForm, setStaffForm] = useState({
@@ -821,7 +821,7 @@ export default function StaffPage() {
               <Label>Payment Method</Label>
               <Select 
                 value={paymentForm.payment_method || "cash"} 
-                onValueChange={(v) => setPaymentForm((f) => ({ ...f, payment_method: v as "cash" | "bank_transfer" | "check" | "online" }))}
+                onValueChange={(v) => setPaymentForm((f) => ({ ...f, payment_method: v as "cash" | "bank_transfer" | "online" | "other" }))}
               >
                 <SelectTrigger className="bg-muted/50">
                   <SelectValue />
@@ -829,8 +829,8 @@ export default function StaffPage() {
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="check">Check</SelectItem>
                   <SelectItem value="online">Online</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
