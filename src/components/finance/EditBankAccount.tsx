@@ -120,6 +120,9 @@ export function EditBankAccount({ open, onOpenChange, bank, onSuccess }: EditBan
             <Building2 className="w-5 h-5 text-purple-400" />
             Edit Bank Account
           </DialogTitle>
+          <p className="text-sm text-muted-foreground mt-2">
+            Note: Only one bank account can be active at a time. Activating this account will automatically deactivate other active accounts.
+          </p>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
