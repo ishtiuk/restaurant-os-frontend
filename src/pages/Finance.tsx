@@ -47,7 +47,9 @@ import {
 } from "recharts";
 import { TransferCashToBank } from "@/components/finance/TransferCashToBank";
 import { AddExpense } from "@/components/finance/AddExpense";
-import { financeApi, type FinanceSummaryResponse, type TransactionResponse, type BankAccountResponse, type CashTransferResponse } from "@/lib/api/finance";
+import { AddMfsAccount } from "@/components/finance/AddMfsAccount";
+import { TransferMfsToBank } from "@/components/finance/TransferMfsToBank";
+import { financeApi, type FinanceSummaryResponse, type TransactionResponse, type BankAccountResponse, type CashTransferResponse, type MfsAccountResponse, type MfsTransferResponse } from "@/lib/api/finance";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
@@ -90,13 +92,18 @@ export default function Finance() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [pendingTransfersOpen, setPendingTransfersOpen] = useState(false);
+  const [mfsAccountOpen, setMfsAccountOpen] = useState(false);
+  const [mfsTransferOpen, setMfsTransferOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<FinanceSummaryResponse | null>(null);
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [chartTransactions, setChartTransactions] = useState<TransactionResponse[]>([]);
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
   const [bankBalances, setBankBalances] = useState<Record<string, number>>({});
+  const [mfsAccounts, setMfsAccounts] = useState<MfsAccountResponse[]>([]);
+  const [mfsBalances, setMfsBalances] = useState<Record<string, number>>({});
   const [pendingTransfers, setPendingTransfers] = useState<CashTransferResponse[]>([]);
+  const [pendingMfsTransfers, setPendingMfsTransfers] = useState<MfsTransferResponse[]>([]);
   const [loadingTransfers, setLoadingTransfers] = useState(false);
   const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
 
@@ -163,11 +170,12 @@ export default function Finance() {
         
         // Recent transactions: Always fetch latest 10 from all time (independent of date filter)
         // Summary, chart, and payment breakdown: Use date filter
-        const [summaryData, recentTransactionsData, chartTransactionsData, banksData] = await Promise.all([
+        const [summaryData, recentTransactionsData, chartTransactionsData, banksData, mfsAccountsData] = await Promise.all([
           financeApi.getSummary(startDate, endDate).catch(() => null),
           financeApi.getTransactions({ limit: 10 }).catch(() => []), // No date filter - always latest
           financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 1000 }).catch(() => []),
           financeApi.listBankAccounts(true).catch(() => []),
+          financeApi.listMfsAccounts(undefined, true).catch(() => []),
         ]);
 
         setTransactions(recentTransactionsData);
@@ -182,6 +190,7 @@ export default function Finance() {
         });
         setChartTransactions(filteredChartTransactions);
         setBanks(banksData);
+        setMfsAccounts(mfsAccountsData || []);
         
         // Fetch balances for all banks
         const balancePromises = banksData.map(async (bank) => {
@@ -199,6 +208,22 @@ export default function Finance() {
         });
         setBankBalances(balanceMap);
         
+        // Fetch balances for all MFS accounts
+        const mfsBalancePromises = (mfsAccountsData || []).map(async (mfs) => {
+          try {
+            const balance = await financeApi.getMfsBalance(mfs.id);
+            return { id: mfs.id, balance: balance.balance };
+          } catch {
+            return { id: mfs.id, balance: 0 };
+          }
+        });
+        const mfsBalances = await Promise.all(mfsBalancePromises);
+        const mfsBalanceMap: Record<string, number> = {};
+        mfsBalances.forEach((b) => {
+          mfsBalanceMap[b.id] = b.balance;
+        });
+        setMfsBalances(mfsBalanceMap);
+        
         // Recalculate summary from filtered transactions (backend summary may include edge cases)
         const recalculatedSummary: FinanceSummaryResponse = {
           total_income: filteredChartTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0),
@@ -206,7 +231,9 @@ export default function Finance() {
           net_profit: 0, // Will be calculated below
           cash_on_hand: summaryData?.cash_on_hand || 0, // Keep from backend (lifetime value)
           bank_balance: summaryData?.bank_balance || 0, // Keep from backend (lifetime value)
+          mfs_balance: summaryData?.mfs_balance || 0, // Keep from backend (lifetime value)
           pending_transfers: summaryData?.pending_transfers || 0, // Keep from backend (lifetime value)
+          pending_mfs_transfers: summaryData?.pending_mfs_transfers || 0, // Keep from backend (lifetime value)
           period_start: summaryData?.period_start || startDate,
           period_end: summaryData?.period_end || endDate,
         };
@@ -229,9 +256,13 @@ export default function Finance() {
   const loadPendingTransfers = useCallback(async () => {
     setLoadingTransfers(true);
     try {
-      const transfers = await financeApi.listCashTransfers({ status: "pending" });
-      setPendingTransfers(transfers);
-      setPendingTransfersCount(transfers.length);
+      const [cashTransfers, mfsTransfers] = await Promise.all([
+        financeApi.listCashTransfers({ status: "pending" }),
+        financeApi.listMfsTransfers({ status: "pending" }),
+      ]);
+      setPendingTransfers(cashTransfers);
+      setPendingMfsTransfers(mfsTransfers);
+      setPendingTransfersCount(cashTransfers.length + mfsTransfers.length);
     } catch (error) {
       toast({
         title: "Error",
@@ -372,11 +403,13 @@ export default function Finance() {
       financeApi.getTransactions({ limit: 10 }).catch(() => []), // Always latest, no date filter
       financeApi.getTransactions({ start_date: startDate, end_date: endDate, limit: 1000 }).catch(() => []),
       financeApi.listBankAccounts(true).catch(() => []),
-    ]).then(async ([summaryData, recentTransactionsData, chartTransactionsData, banksData]) => {
+      financeApi.listMfsAccounts(undefined, true).catch(() => []),
+    ]).then(async ([summaryData, recentTransactionsData, chartTransactionsData, banksData, mfsAccountsData]) => {
       setTransactions(recentTransactionsData);
-      setBanks(banksData);
-      
-      // Fetch balances for all banks
+        setBanks(banksData);
+        setMfsAccounts(mfsAccountsData || []);
+        
+        // Fetch balances for all banks
       const balancePromises = banksData.map(async (bank) => {
         try {
           const balance = await financeApi.getBankBalance(bank.id);
@@ -391,6 +424,22 @@ export default function Finance() {
         balanceMap[b.id] = b.balance;
       });
       setBankBalances(balanceMap);
+      
+      // Fetch balances for all MFS accounts
+      const mfsBalancePromises = mfsAccountsData.map(async (mfs) => {
+        try {
+          const balance = await financeApi.getMfsBalance(mfs.id);
+          return { id: mfs.id, balance: balance.balance };
+        } catch {
+          return { id: mfs.id, balance: 0 };
+        }
+      });
+      const mfsBalances = await Promise.all(mfsBalancePromises);
+      const mfsBalanceMap: Record<string, number> = {};
+      mfsBalances.forEach((b) => {
+        mfsBalanceMap[b.id] = b.balance;
+      });
+      setMfsBalances(mfsBalanceMap);
       
       // Filter chart transactions by date in user's timezone
       const startDateStr = getDateOnly(startDateObj, timezone);
@@ -408,7 +457,9 @@ export default function Finance() {
         net_profit: 0,
         cash_on_hand: summaryData?.cash_on_hand || 0,
         bank_balance: summaryData?.bank_balance || 0,
+        mfs_balance: summaryData?.mfs_balance || 0,
         pending_transfers: summaryData?.pending_transfers || 0,
+        pending_mfs_transfers: summaryData?.pending_mfs_transfers || 0,
         period_start: summaryData?.period_start || startDate,
         period_end: summaryData?.period_end || endDate,
       };
@@ -517,6 +568,16 @@ export default function Finance() {
       balance: bankBalances[b.id] || 0,
     }));
   }, [banks, bankBalances]);
+
+  // Format MFS accounts for modals with actual balances
+  const mfsAccountsForModals = useMemo(() => {
+    return mfsAccounts.map((mfs) => ({
+      id: mfs.id,
+      provider: mfs.provider,
+      account_number: mfs.account_number,
+      balance: mfsBalances[mfs.id] || 0,
+    }));
+  }, [mfsAccounts, mfsBalances]);
 
   return (
     <div className="space-y-6">
@@ -679,69 +740,109 @@ export default function Finance() {
             <p className="text-xs text-muted-foreground mt-1">ব্যাংক ব্যালেন্স</p>
           </GlassCard>
 
+          <GlassCard hover className="p-6 border-teal-500/20">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-muted-foreground">MFS Balance</p>
+              <Smartphone className="w-5 h-5 text-teal-400" />
+            </div>
+            <p className="text-3xl font-display font-bold text-teal-400">{formatCurrency(summary?.mfs_balance || 0)}</p>
+            <p className="text-xs text-muted-foreground mt-1">মোবাইল ব্যালেন্স (bKash/Nagad/Rocket)</p>
+          </GlassCard>
+
           <GlassCard 
             hover 
             className="p-6 border-orange-500/20 cursor-pointer transition-all hover:border-orange-500/40 hover:shadow-lg relative"
             onClick={() => {
-              if ((summary?.pending_transfers || 0) > 0) {
+              const totalPending = (summary?.pending_transfers || 0) + (summary?.pending_mfs_transfers || 0);
+              if (totalPending > 0) {
                 setPendingTransfersOpen(true);
                 loadPendingTransfers();
               }
             }}
           >
             {/* Notification Badge */}
-            {(summary?.pending_transfers || 0) > 0 && (
-              <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center shadow-lg animate-pulse">
-                <span className="text-xs font-bold text-white">{pendingTransfersCount || 1}</span>
-              </div>
-            )}
+            {(() => {
+              const totalPending = (summary?.pending_transfers || 0) + (summary?.pending_mfs_transfers || 0);
+              return totalPending > 0 && (
+                <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center shadow-lg animate-pulse">
+                  <span className="text-xs font-bold text-white">{pendingTransfersCount || totalPending}</span>
+                </div>
+              );
+            })()}
             
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-muted-foreground">Pending Transfers</p>
               <div className="relative">
-                <Clock className={cn(
-                  "w-5 h-5 text-orange-400 transition-all",
-                  (summary?.pending_transfers || 0) > 0 && "animate-pulse"
-                )} />
-                {/* Pulsing dot indicator */}
-                {(summary?.pending_transfers || 0) > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full animate-ping" />
-                )}
+                {(() => {
+                  const totalPending = (summary?.pending_transfers || 0) + (summary?.pending_mfs_transfers || 0);
+                  return (
+                    <>
+                      <Clock className={cn(
+                        "w-5 h-5 text-orange-400 transition-all",
+                        totalPending > 0 && "animate-pulse"
+                      )} />
+                      {/* Pulsing dot indicator */}
+                      {totalPending > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full animate-ping" />
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <p className={cn(
               "text-3xl font-display font-bold text-orange-400 transition-all",
-              (summary?.pending_transfers || 0) > 0 && "drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]"
+              (() => {
+                const totalPending = (summary?.pending_transfers || 0) + (summary?.pending_mfs_transfers || 0);
+                return totalPending > 0 && "drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]";
+              })()
             )}>
-              {formatCurrency(summary?.pending_transfers || 0)}
+              {formatCurrency((summary?.pending_transfers || 0) + (summary?.pending_mfs_transfers || 0))}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {(summary?.pending_transfers || 0) > 0 ? "Click to manage • ক্লিক করুন" : "বকেয়া স্থানান্তর"}
+              {(() => {
+                const totalPending = (summary?.pending_transfers || 0) + (summary?.pending_mfs_transfers || 0);
+                return totalPending > 0 ? "Click to manage • ক্লিক করুন" : "বকেয়া স্থানান্তর";
+              })()}
             </p>
         </GlassCard>
         </div>
       )}
 
       {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3 animate-fade-in stagger-2">
-        <Button variant="glow" onClick={() => setExpenseOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Expense
+      <div className="flex flex-wrap gap-2 animate-fade-in stagger-2">
+        <Button variant="glow" size="sm" onClick={() => setExpenseOpen(true)}>
+          <Plus className="w-4 h-4 mr-1.5" />
+          <span className="text-sm">Expense</span>
         </Button>
-        <Button variant="outline" onClick={() => setTransferOpen(true)}>
-          <ArrowRight className="w-4 h-4 mr-2" />
-          Transfer to Bank
+        <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
+          <ArrowRight className="w-4 h-4 mr-1.5" />
+          <span className="text-sm">Cash → Bank</span>
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => setMfsTransferOpen(true)}
+          disabled={mfsAccountsForModals.length === 0}
+          title={mfsAccountsForModals.length === 0 ? "Create an MFS account first" : "Transfer MFS to Bank"}
+        >
+          <ArrowRight className="w-4 h-4 mr-1.5" />
+          <span className="text-sm">MFS → Bank</span>
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setMfsAccountOpen(true)}>
+          <Smartphone className="w-4 h-4 mr-1.5" />
+          <span className="text-sm">Add MFS</span>
         </Button>
         <Link to="/finance/transactions">
-          <Button variant="outline">
-            <Filter className="w-4 h-4 mr-2" />
-            View All Transactions
+          <Button variant="outline" size="sm">
+            <Filter className="w-4 h-4 mr-1.5" />
+            <span className="text-sm">Transactions</span>
           </Button>
         </Link>
         <Link to="/finance/banks">
-          <Button variant="outline">
-            <Building2 className="w-4 h-4 mr-2" />
-            Manage Banks
+          <Button variant="outline" size="sm">
+            <Building2 className="w-4 h-4 mr-1.5" />
+            <span className="text-sm">Banks</span>
           </Button>
         </Link>
       </div>
@@ -933,6 +1034,18 @@ export default function Finance() {
         banks={banksForModals}
         onSuccess={handleRefresh}
       />
+      <AddMfsAccount
+        open={mfsAccountOpen}
+        onOpenChange={setMfsAccountOpen}
+        onSuccess={handleRefresh}
+      />
+      <TransferMfsToBank
+        open={mfsTransferOpen}
+        onOpenChange={setMfsTransferOpen}
+        mfsAccounts={mfsAccountsForModals}
+        banks={banksForModals}
+        onSuccess={handleRefresh}
+      />
 
       {/* Pending Transfers Modal */}
       <Dialog open={pendingTransfersOpen} onOpenChange={setPendingTransfersOpen}>
@@ -940,10 +1053,10 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-orange-400" />
-              Pending Cash Transfers
+              Pending Transfers
             </DialogTitle>
             <DialogDescription>
-              Review and manage pending cash transfers to bank accounts. Complete or cancel transfers as needed.
+              Review and manage pending cash and MFS transfers to bank accounts. Complete or cancel transfers as needed.
             </DialogDescription>
           </DialogHeader>
           
@@ -952,17 +1065,19 @@ export default function Finance() {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
-            ) : pendingTransfers.length > 0 ? (
+            ) : (pendingTransfers.length > 0 || pendingMfsTransfers.length > 0) ? (
               <div className="space-y-3">
+                {/* Cash Transfers */}
                 {pendingTransfers.map((transfer) => {
                   const bank = banks.find((b) => b.id === transfer.to_bank_id);
                   return (
-                    <GlassCard key={transfer.id} className="p-4 border-orange-500/20">
+                    <GlassCard key={`cash-${transfer.id}`} className="p-4 border-orange-500/20">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center gap-2">
+                            <Wallet className="w-4 h-4 text-blue-400" />
                             <Building2 className="w-4 h-4 text-purple-400" />
-                            <span className="font-semibold">{bank?.name || "Unknown Bank"}</span>
+                            <span className="font-semibold">Cash → {bank?.name || "Unknown Bank"}</span>
                             <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
                               <Clock className="w-3 h-3 mr-1" />
                               Pending
@@ -1007,6 +1122,114 @@ export default function Finance() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleCancelTransfer(transfer.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </GlassCard>
+                  );
+                })}
+                
+                {/* MFS Transfers */}
+                {pendingMfsTransfers.map((transfer) => {
+                  const mfsAccount = mfsAccounts.find((m) => m.id === transfer.from_mfs_id);
+                  const bank = banks.find((b) => b.id === transfer.to_bank_id);
+                  const getProviderLabel = (provider: string) => {
+                    switch (provider.toLowerCase()) {
+                      case "bkash": return "bKash";
+                      case "nagad": return "Nagad";
+                      case "rocket": return "Rocket";
+                      default: return provider.toUpperCase();
+                    }
+                  };
+                  return (
+                    <GlassCard key={`mfs-${transfer.id}`} className="p-4 border-teal-500/20">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4 text-teal-400" />
+                            <Building2 className="w-4 h-4 text-purple-400" />
+                            <span className="font-semibold">
+                              {mfsAccount ? `${getProviderLabel(mfsAccount.provider)} → ${bank?.name || "Unknown Bank"}` : "MFS → Bank"}
+                            </span>
+                            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
+                              <Clock className="w-3 h-3 mr-1" />
+                              Pending
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Amount:</span>
+                              <span className="ml-2 font-display font-bold text-orange-400">
+                                {formatCurrency(transfer.amount)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Date:</span>
+                              <span className="ml-2">{formatDate(transfer.created_at, timezone)}</span>
+                            </div>
+                            {transfer.reference && (
+                              <div>
+                                <span className="text-muted-foreground">Reference:</span>
+                                <span className="ml-2 font-mono text-xs">{transfer.reference}</span>
+                              </div>
+                            )}
+                            {transfer.notes && (
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground">Notes:</span>
+                                <span className="ml-2">{transfer.notes}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await financeApi.updateMfsTransfer(transfer.id, { status: "completed" });
+                                toast({
+                                  title: "Transfer Completed",
+                                  description: "MFS transfer has been marked as completed",
+                                });
+                                handleRefresh();
+                                loadPendingTransfers();
+                              } catch (error: any) {
+                                toast({
+                                  title: "Error",
+                                  description: error?.message || "Failed to complete transfer",
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                            className="bg-accent hover:bg-accent/90"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Complete
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await financeApi.updateMfsTransfer(transfer.id, { status: "cancelled" });
+                                toast({
+                                  title: "Transfer Cancelled",
+                                  description: "MFS transfer has been cancelled",
+                                });
+                                handleRefresh();
+                                loadPendingTransfers();
+                              } catch (error: any) {
+                                toast({
+                                  title: "Error",
+                                  description: error?.message || "Failed to cancel transfer",
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
                             className="text-destructive hover:text-destructive"
                           >
                             Cancel

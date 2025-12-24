@@ -706,8 +706,8 @@ export default function Sales() {
                 )}
                 
                 <div className="border-t border-dashed border-border pt-3 space-y-1">
-                  {lastSale.items.map((item: any) => (
-                    <div key={item.itemId} className="flex justify-between">
+                  {lastSale.items.map((item: any, index: number) => (
+                    <div key={`${item.itemId}-${index}`} className="flex justify-between">
                       <span className="flex-1">
                         <span className="font-bold">{item.quantity}x</span> {item.itemName}
                       </span>
