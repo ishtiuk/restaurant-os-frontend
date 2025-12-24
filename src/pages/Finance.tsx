@@ -47,7 +47,6 @@ import {
 } from "recharts";
 import { TransferCashToBank } from "@/components/finance/TransferCashToBank";
 import { AddExpense } from "@/components/finance/AddExpense";
-import { AddMfsAccount } from "@/components/finance/AddMfsAccount";
 import { TransferMfsToBank } from "@/components/finance/TransferMfsToBank";
 import { financeApi, type FinanceSummaryResponse, type TransactionResponse, type BankAccountResponse, type CashTransferResponse, type MfsAccountResponse, type MfsTransferResponse } from "@/lib/api/finance";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
@@ -92,7 +91,6 @@ export default function Finance() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [pendingTransfersOpen, setPendingTransfersOpen] = useState(false);
-  const [mfsAccountOpen, setMfsAccountOpen] = useState(false);
   const [mfsTransferOpen, setMfsTransferOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<FinanceSummaryResponse | null>(null);
@@ -811,38 +809,52 @@ export default function Finance() {
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-2 animate-fade-in stagger-2">
-        <Button variant="glow" size="sm" onClick={() => setExpenseOpen(true)}>
-          <Plus className="w-4 h-4 mr-1.5" />
-          <span className="text-sm">Expense</span>
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
-          <ArrowRight className="w-4 h-4 mr-1.5" />
-          <span className="text-sm">Cash → Bank</span>
+        <Button variant="glow" onClick={() => setExpenseOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          <span>Expense</span>
         </Button>
         <Button 
           variant="outline" 
-          size="sm" 
-          onClick={() => setMfsTransferOpen(true)}
-          disabled={mfsAccountsForModals.length === 0}
-          title={mfsAccountsForModals.length === 0 ? "Create an MFS account first" : "Transfer MFS to Bank"}
+          onClick={() => setTransferOpen(true)}
+          disabled={banksForModals.length === 0}
+          title={banksForModals.length === 0 ? "Create a bank account first" : "Transfer Cash to Bank"}
         >
-          <ArrowRight className="w-4 h-4 mr-1.5" />
-          <span className="text-sm">MFS → Bank</span>
+          <ArrowRight className="w-4 h-4 mr-2" />
+          <span>Cash → Bank</span>
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setMfsAccountOpen(true)}>
-          <Smartphone className="w-4 h-4 mr-1.5" />
-          <span className="text-sm">Add MFS</span>
+        <Button 
+          variant="outline" 
+          onClick={() => setMfsTransferOpen(true)}
+          disabled={mfsAccountsForModals.length === 0 || banksForModals.length === 0}
+          title={
+            mfsAccountsForModals.length === 0 && banksForModals.length === 0
+              ? "Create MFS and bank accounts first"
+              : mfsAccountsForModals.length === 0
+              ? "Create an MFS account first"
+              : banksForModals.length === 0
+              ? "Create a bank account first"
+              : "Transfer MFS to Bank"
+          }
+        >
+          <ArrowRight className="w-4 h-4 mr-2" />
+          <span>MFS → Bank</span>
         </Button>
         <Link to="/finance/transactions">
-          <Button variant="outline" size="sm">
-            <Filter className="w-4 h-4 mr-1.5" />
-            <span className="text-sm">Transactions</span>
+          <Button variant="outline">
+            <Filter className="w-4 h-4 mr-2" />
+            <span>Transactions</span>
           </Button>
         </Link>
         <Link to="/finance/banks">
-          <Button variant="outline" size="sm">
-            <Building2 className="w-4 h-4 mr-1.5" />
-            <span className="text-sm">Banks</span>
+          <Button variant="outline">
+            <Building2 className="w-4 h-4 mr-2" />
+            <span>Manage Banks</span>
+          </Button>
+        </Link>
+        <Link to="/finance/mfs">
+          <Button variant="outline">
+            <Smartphone className="w-4 h-4 mr-2" />
+            <span>Manage MFS</span>
           </Button>
         </Link>
       </div>
@@ -1032,11 +1044,7 @@ export default function Finance() {
         open={expenseOpen}
         onOpenChange={setExpenseOpen}
         banks={banksForModals}
-        onSuccess={handleRefresh}
-      />
-      <AddMfsAccount
-        open={mfsAccountOpen}
-        onOpenChange={setMfsAccountOpen}
+        mfsAccounts={mfsAccountsForModals}
         onSuccess={handleRefresh}
       />
       <TransferMfsToBank

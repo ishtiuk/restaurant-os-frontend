@@ -22,6 +22,7 @@ import Customers from "@/pages/Customers";
 import Finance from "@/pages/Finance";
 import FinanceTransactions from "@/pages/FinanceTransactions";
 import BankAccounts from "@/pages/BankAccounts";
+import MfsAccounts from "@/pages/MfsAccounts";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
@@ -29,7 +30,6 @@ import NotFound from "@/pages/NotFound";
 import Tables from "@/pages/Tables";
 import Staff from "@/pages/Staff";
 import Attendance from "@/pages/Attendance";
-import Vat from "@/pages/Vat";
 import Expenses from "@/pages/Expenses";
 import SalesHistory from "@/pages/SalesHistory";
 import LicenseActivation from "@/pages/LicenseActivation";
@@ -72,8 +72,8 @@ const App = () => (
                         <Route path="/finance" element={<Finance />} />
                         <Route path="/finance/transactions" element={<FinanceTransactions />} />
                         <Route path="/finance/banks" element={<BankAccounts />} />
+                        <Route path="/finance/mfs" element={<MfsAccounts />} />
                         <Route path="/expenses" element={<Expenses />} />
-                        <Route path="/vat" element={<Vat />} />
                         <Route path="/reports" element={<Reports />} />
                         <Route path="/sales-history" element={<SalesHistory />} />
 

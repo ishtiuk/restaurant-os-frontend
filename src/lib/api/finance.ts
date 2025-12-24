@@ -63,6 +63,7 @@ export interface ExpenseResponse {
   description: string | null;
   payment_method: string;
   bank_account_id: string | null;
+  mfs_account_id: string | null;
   date: string;
   created_at: string;
   created_by: string | null;
@@ -86,6 +87,7 @@ export interface ExpenseCreate {
   description?: string;
   payment_method: string;
   bank_account_id?: string;
+  mfs_account_id?: string;
   date?: string;
 }
 
