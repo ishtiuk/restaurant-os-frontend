@@ -498,7 +498,6 @@ export default function Settings() {
     { path: "/suppliers", label: "Suppliers", labelBn: "সরবরাহকারী" },
     { path: "/customers", label: "Customers", labelBn: "গ্রাহক" },
     { path: "/staff", label: "Staff", labelBn: "কর্মী" },
-    { path: "/attendance", label: "Attendance", labelBn: "হাজিরা" },
     { path: "/reports", label: "Reports", labelBn: "রিপোর্ট" },
     { path: "/finance", label: "Finance", labelBn: "আর্থিক" },
     { path: "/expenses", label: "Expenses", labelBn: "খরচ" },

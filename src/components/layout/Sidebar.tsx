@@ -15,7 +15,6 @@ import {
   Utensils,
   LogOut,
   User,
-  Clock,
   History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,7 +39,6 @@ const operationsNavigation = [
   { path: "/suppliers", label: "Suppliers", labelBn: "সরবরাহকারী", icon: Users },
   { path: "/customers", label: "Customers", labelBn: "গ্রাহক", icon: UserCircle },
   { path: "/staff", label: "Staff", labelBn: "কর্মী", icon: User },
-  { path: "/attendance", label: "Attendance", labelBn: "হাজিরা", icon: Clock },
 ];
 
 const analyticsNavigation = [

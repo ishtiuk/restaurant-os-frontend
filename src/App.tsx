@@ -34,7 +34,6 @@ const Admin = lazy(() => import("@/pages/Admin"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const Tables = lazy(() => import("@/pages/Tables"));
 const Staff = lazy(() => import("@/pages/Staff"));
-const Attendance = lazy(() => import("@/pages/Attendance"));
 const Expenses = lazy(() => import("@/pages/Expenses"));
 const SalesHistory = lazy(() => import("@/pages/SalesHistory"));
 const LicenseActivation = lazy(() => import("@/pages/LicenseActivation"));
@@ -143,14 +142,6 @@ const App = () => (
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Staff />
-                            </Suspense>
-                          } 
-                        />
-                        <Route 
-                          path="/attendance" 
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Attendance />
                             </Suspense>
                           } 
                         />
