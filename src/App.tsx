@@ -13,8 +13,9 @@ import { TimezoneProvider } from "@/contexts/TimezoneContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { RequireAuth, RequireRole } from "@/components/auth/RequireAuth";
 
-// Eager load critical pages (login, dashboard) - needed immediately
+// Eager load critical pages (login, license activation) - needed immediately
 import Login from "@/pages/Login";
+import LicenseActivation from "@/pages/LicenseActivation";
 
 // Lazy load all other pages - only load when user navigates to them
 // This significantly reduces initial bundle size and memory usage
@@ -36,7 +37,6 @@ const Tables = lazy(() => import("@/pages/Tables"));
 const Staff = lazy(() => import("@/pages/Staff"));
 const Expenses = lazy(() => import("@/pages/Expenses"));
 const SalesHistory = lazy(() => import("@/pages/SalesHistory"));
-const LicenseActivation = lazy(() => import("@/pages/LicenseActivation"));
 
 // Loading fallback component for lazy-loaded pages
 const PageLoader = () => (
@@ -70,14 +70,7 @@ const App = () => (
                   <Routes>
                     <Route path="/" element={<Login />} />
                     <Route path="/login" element={<Login />} />
-                    <Route 
-                      path="/license-activation" 
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <LicenseActivation />
-                        </Suspense>
-                      } 
-                    />
+                    <Route path="/license-activation" element={<LicenseActivation />} />
 
                     <Route element={<RequireAuth />}>
                       <Route element={<AppLayout />}>

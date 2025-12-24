@@ -18,8 +18,9 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Redirect authenticated users to dashboard
+  // BUT: Don't redirect if we're on license-activation path (user might be redirected here)
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && location.pathname !== "/license-activation") {
       const from = (location.state as { from?: string })?.from || "/dashboard";
       navigate(from, { replace: true });
     }
@@ -44,19 +45,38 @@ export default function Login() {
         navigate(from, { replace: true });
       }, 50);
     } catch (err: any) {
+      // IMPORTANT: Clear any partial auth state before handling error
+      // This prevents the useEffect from redirecting authenticated users
+      
       // Check if it's a license error (402 Payment Required)
-      if (err?.code === "402" || err?.response?.status === 402) {
-        // Redirect to license activation page
+      // Check multiple possible error formats to be robust
+      const isLicenseError = 
+        err?.code === "402" || 
+        err?.code === 402 ||
+        err?.response?.status === 402 ||
+        String(err?.response?.status) === "402" ||
+        err?.message?.toLowerCase().includes("license") ||
+        err?.message?.toLowerCase().includes("activation");
+      
+      if (isLicenseError) {
+        // Clear any auth state that might have been set
+        localStorage.removeItem("restaurant-os.auth.user");
+        
+        // Redirect to license activation page immediately (no delay)
         navigate("/license-activation", { replace: true });
-        toast({
-          title: "License Required",
-          description: err?.message || "Your license has expired. Please activate your license to continue.",
-          variant: "destructive",
-        });
+        
+        // Show toast after navigation to ensure it displays
+        setTimeout(() => {
+          toast({
+            title: "License Required",
+            description: err?.message || err?.response?.data?.detail || "Your license has expired. Please activate your license to continue.",
+            variant: "destructive",
+          });
+        }, 50);
       } else {
         toast({
           title: "Login failed",
-          description: err?.message || "Please check your credentials",
+          description: err?.message || err?.response?.data?.detail || "Please check your credentials",
           variant: "destructive",
         });
       }

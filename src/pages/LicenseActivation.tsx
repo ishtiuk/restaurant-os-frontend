@@ -7,9 +7,20 @@ import { Label } from "@/components/ui/label";
 import { Key, CheckCircle2, XCircle, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { licenseApi } from "@/lib/api/license";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function LicenseActivation() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  
+  // Prevent authenticated users from accessing this page (they should be logged out first)
+  useEffect(() => {
+    if (isAuthenticated) {
+      // If user is authenticated, they shouldn't be here - redirect to dashboard
+      // But this shouldn't happen if login properly clears auth state on 402
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
   const [activationKey, setActivationKey] = useState("");
   const [isActivating, setIsActivating] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
@@ -94,8 +105,13 @@ export default function LicenseActivation() {
     }
   };
 
+  // Early return if authenticated (shouldn't happen, but safety check)
+  if (isAuthenticated) {
+    return null; // Will be redirected by useEffect
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-dark">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-dark" style={{ minHeight: '100vh' }}>
       {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 -left-32 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
