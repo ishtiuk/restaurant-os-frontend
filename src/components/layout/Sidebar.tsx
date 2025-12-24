@@ -70,6 +70,7 @@ export function Sidebar({ className, onClose }: SidebarProps) {
     "/finance",
     "/finance/transactions",
     "/finance/banks",
+    "/finance/mfs",
     "/settings",
   ];
 

@@ -15,7 +15,6 @@ import { RequireAuth, RequireRole } from "@/components/auth/RequireAuth";
 
 // Eager load critical pages (login, dashboard) - needed immediately
 import Login from "@/pages/Login";
-import Index from "@/pages/Index";
 
 // Lazy load all other pages - only load when user navigates to them
 // This significantly reduces initial bundle size and memory usage
@@ -28,6 +27,7 @@ const Customers = lazy(() => import("@/pages/Customers"));
 const Finance = lazy(() => import("@/pages/Finance"));
 const FinanceTransactions = lazy(() => import("@/pages/FinanceTransactions"));
 const BankAccounts = lazy(() => import("@/pages/BankAccounts"));
+const MfsAccounts = lazy(() => import("@/pages/MfsAccounts"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Admin = lazy(() => import("@/pages/Admin"));
@@ -35,7 +35,6 @@ const NotFound = lazy(() => import("@/pages/NotFound"));
 const Tables = lazy(() => import("@/pages/Tables"));
 const Staff = lazy(() => import("@/pages/Staff"));
 const Attendance = lazy(() => import("@/pages/Attendance"));
-const Vat = lazy(() => import("@/pages/Vat"));
 const Expenses = lazy(() => import("@/pages/Expenses"));
 const SalesHistory = lazy(() => import("@/pages/SalesHistory"));
 const LicenseActivation = lazy(() => import("@/pages/LicenseActivation"));
@@ -180,18 +179,18 @@ const App = () => (
                           } 
                         />
                         <Route 
-                          path="/expenses" 
+                          path="/finance/mfs" 
                           element={
                             <Suspense fallback={<PageLoader />}>
-                              <Expenses />
+                              <MfsAccounts />
                             </Suspense>
                           } 
                         />
                         <Route 
-                          path="/vat" 
+                          path="/expenses" 
                           element={
                             <Suspense fallback={<PageLoader />}>
-                              <Vat />
+                              <Expenses />
                             </Suspense>
                           } 
                         />

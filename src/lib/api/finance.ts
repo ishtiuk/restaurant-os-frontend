@@ -6,7 +6,9 @@ export interface FinanceSummaryResponse {
   net_profit: number;
   cash_on_hand: number;
   bank_balance: number;
+  mfs_balance: number;
   pending_transfers: number;
+  pending_mfs_transfers: number;
   period_start: string;
   period_end: string;
 }
@@ -61,6 +63,7 @@ export interface ExpenseResponse {
   description: string | null;
   payment_method: string;
   bank_account_id: string | null;
+  mfs_account_id: string | null;
   date: string;
   created_at: string;
   created_by: string | null;
@@ -84,6 +87,7 @@ export interface ExpenseCreate {
   description?: string;
   payment_method: string;
   bank_account_id?: string;
+  mfs_account_id?: string;
   date?: string;
 }
 
@@ -111,6 +115,73 @@ export interface BankAccountUpdate {
 }
 
 export interface CashTransferUpdate {
+  status?: "pending" | "completed" | "cancelled";
+}
+
+export interface MfsAccountResponse {
+  id: string;
+  provider: "bkash" | "nagad" | "rocket";
+  account_number: string;
+  account_name: string | null;
+  opening_balance: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface MfsBalanceResponse {
+  balance: number;
+}
+
+export interface MfsTransactionResponse {
+  id: string;
+  mfs_account_id: string;
+  type: "deposit" | "withdrawal" | "transfer_out";
+  amount: number;
+  description: string | null;
+  reference_no: string | null;
+  balance_after: number;
+  date: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface MfsTransferResponse {
+  id: string;
+  from_mfs_id: string;
+  to_bank_id: string;
+  amount: number;
+  reference: string | null;
+  notes: string | null;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+  created_by: string | null;
+}
+
+export interface MfsAccountCreate {
+  provider: "bkash" | "nagad" | "rocket";
+  account_number: string;
+  account_name?: string;
+  opening_balance?: number;
+}
+
+export interface MfsAccountUpdate {
+  account_number?: string;
+  account_name?: string;
+  is_active?: boolean;
+}
+
+export interface MfsTransferCreate {
+  from_mfs_id: string;
+  to_bank_id: string;
+  amount: number;
+  reference?: string;
+  notes?: string;
+}
+
+export interface MfsTransferUpdate {
   status?: "pending" | "completed" | "cancelled";
 }
 
@@ -238,6 +309,69 @@ export const financeApi = {
 
   updateCashTransfer(transferId: string, data: CashTransferUpdate): Promise<CashTransferResponse> {
     return apiClient.patch<CashTransferResponse>(`/finance/transfers/${transferId}`, data);
+  },
+
+  // MFS Accounts
+  createMfsAccount(data: MfsAccountCreate): Promise<MfsAccountResponse> {
+    return apiClient.post<MfsAccountResponse>("/finance/mfs", data);
+  },
+
+  listMfsAccounts(provider?: string, isActive?: boolean): Promise<MfsAccountResponse[]> {
+    const params = new URLSearchParams();
+    if (provider) params.append("provider", provider);
+    if (isActive !== undefined) params.append("is_active", String(isActive));
+    const query = params.toString();
+    return apiClient.get<MfsAccountResponse[]>(`/finance/mfs${query ? `?${query}` : ""}`);
+  },
+
+  getMfsAccount(mfsId: string): Promise<MfsAccountResponse> {
+    return apiClient.get<MfsAccountResponse>(`/finance/mfs/${mfsId}`);
+  },
+
+  getMfsBalance(mfsId: string): Promise<MfsBalanceResponse> {
+    return apiClient.get<MfsBalanceResponse>(`/finance/mfs/${mfsId}/balance`);
+  },
+
+  getMfsTransactions(mfsId: string, limit?: number, offset?: number): Promise<MfsTransactionResponse[]> {
+    const params = new URLSearchParams();
+    if (limit) params.append("limit", String(limit));
+    if (offset) params.append("offset", String(offset));
+    const query = params.toString();
+    return apiClient.get<MfsTransactionResponse[]>(`/finance/mfs/${mfsId}/transactions${query ? `?${query}` : ""}`);
+  },
+
+  updateMfsAccount(mfsId: string, data: MfsAccountUpdate): Promise<MfsAccountResponse> {
+    return apiClient.patch<MfsAccountResponse>(`/finance/mfs/${mfsId}`, data);
+  },
+
+  deleteMfsAccount(mfsId: string): Promise<void> {
+    return apiClient.delete<void>(`/finance/mfs/${mfsId}`);
+  },
+
+  // MFS Transfers
+  createMfsTransfer(data: MfsTransferCreate): Promise<MfsTransferResponse> {
+    return apiClient.post<MfsTransferResponse>("/finance/mfs-transfers", data);
+  },
+
+  listMfsTransfers(params?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<MfsTransferResponse[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.append("status", params.status);
+    if (params?.limit) searchParams.append("limit", String(params.limit));
+    if (params?.offset) searchParams.append("offset", String(params.offset));
+    const query = searchParams.toString();
+    return apiClient.get<MfsTransferResponse[]>(`/finance/mfs-transfers${query ? `?${query}` : ""}`);
+  },
+
+  getMfsTransfer(transferId: string): Promise<MfsTransferResponse> {
+    return apiClient.get<MfsTransferResponse>(`/finance/mfs-transfers/${transferId}`);
+  },
+
+  updateMfsTransfer(transferId: string, data: MfsTransferUpdate): Promise<MfsTransferResponse> {
+    return apiClient.patch<MfsTransferResponse>(`/finance/mfs-transfers/${transferId}`, data);
   },
 };
 

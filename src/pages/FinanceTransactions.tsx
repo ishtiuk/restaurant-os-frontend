@@ -39,7 +39,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { AddExpense } from "@/components/finance/AddExpense";
-import { financeApi, type TransactionResponse, type BankAccountResponse } from "@/lib/api/finance";
+import { financeApi, type TransactionResponse, type BankAccountResponse, type MfsAccountResponse } from "@/lib/api/finance";
 import { format, startOfMonth, subDays } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
@@ -100,6 +100,8 @@ export default function FinanceTransactions() {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [banks, setBanks] = useState<BankAccountResponse[]>([]);
+  const [mfsAccounts, setMfsAccounts] = useState<MfsAccountResponse[]>([]);
+  const [mfsBalances, setMfsBalances] = useState<Record<string, number>>({});
   const [totalCount, setTotalCount] = useState(0);
 
   // Reset pagination when filters change
@@ -136,14 +138,34 @@ export default function FinanceTransactions() {
         if (paymentFilter !== "all") params.payment_method = paymentFilter;
         if (statusFilter !== "all") params.status = statusFilter;
 
-        const [transactionsData, banksData] = await Promise.all([
+        const [transactionsData, banksData, mfsAccountsData] = await Promise.all([
           financeApi.getTransactions(params).catch(() => []),
           financeApi.listBankAccounts(true).catch(() => []),
+          financeApi.listMfsAccounts(undefined, true).catch(() => []),
         ]);
 
         setTransactions(transactionsData);
         setTotalCount(transactionsData.length);
         setBanks(banksData);
+        setMfsAccounts(mfsAccountsData || []);
+        
+        // Fetch balances for all MFS accounts
+        if (mfsAccountsData && mfsAccountsData.length > 0) {
+          const mfsBalancePromises = mfsAccountsData.map(async (mfs) => {
+            try {
+              const balance = await financeApi.getMfsBalance(mfs.id);
+              return { id: mfs.id, balance: balance.balance };
+            } catch {
+              return { id: mfs.id, balance: 0 };
+            }
+          });
+          const mfsBalances = await Promise.all(mfsBalancePromises);
+          const mfsBalanceMap: Record<string, number> = {};
+          mfsBalances.forEach((b) => {
+            mfsBalanceMap[b.id] = b.balance;
+          });
+          setMfsBalances(mfsBalanceMap);
+        }
       } catch (error) {
         toast({
           title: "Error",
@@ -574,6 +596,12 @@ export default function FinanceTransactions() {
         open={expenseOpen} 
         onOpenChange={setExpenseOpen} 
         banks={banks.map((b) => ({ id: b.id, name: b.name, balance: 0 }))}
+        mfsAccounts={mfsAccounts.map((mfs) => ({
+          id: mfs.id,
+          provider: mfs.provider,
+          account_number: mfs.account_number,
+          balance: mfsBalances[mfs.id] || 0,
+        }))}
         onSuccess={() => {
           // Reload transactions
           const loadTransactions = async () => {

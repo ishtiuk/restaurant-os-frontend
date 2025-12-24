@@ -50,19 +50,30 @@ interface AddExpenseProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   banks: Array<{ id: string; name: string; balance: number }>;
+  mfsAccounts?: Array<{ id: string; provider: string; account_number: string; balance: number }>;
   onSuccess?: () => void;
 }
 
-export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseProps) {
+export function AddExpense({ open, onOpenChange, banks, mfsAccounts = [], onSuccess }: AddExpenseProps) {
   const { timezone } = useTimezone();
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [bankAccountId, setBankAccountId] = useState("");
+  const [mfsAccountId, setMfsAccountId] = useState("");
   const [date, setDate] = useState(getDateOnly(new Date(), timezone));
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  
+  const getProviderLabel = (provider: string) => {
+    switch (provider.toLowerCase()) {
+      case "bkash": return "bKash";
+      case "nagad": return "Nagad";
+      case "rocket": return "Rocket";
+      default: return provider.toUpperCase();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,6 +117,28 @@ export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseP
       return;
     }
 
+    if (paymentMethod === "online" && !mfsAccountId) {
+      toast({
+        title: "MFS Account Required",
+        description: "Please select an MFS account for online payment",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Validate MFS balance if paying via online
+    if (paymentMethod === "online" && mfsAccountId) {
+      const selectedMfs = mfsAccounts.find((m) => m.id === mfsAccountId);
+      if (selectedMfs && expenseAmount > selectedMfs.balance) {
+        toast({
+          title: "Insufficient Balance",
+          description: `MFS balance (${formatCurrency(selectedMfs.balance)}) is less than expense amount (${formatCurrency(expenseAmount)})`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     if (!date) {
       toast({
         title: "Date Required",
@@ -131,6 +164,7 @@ export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseP
         amount: expenseAmount,
         payment_method: paymentMethod,
         bank_account_id: paymentMethod === "bank_transfer" ? bankAccountId : undefined,
+        mfs_account_id: paymentMethod === "online" ? mfsAccountId : undefined,
         date: dateForApi,
         description: description || undefined,
       };
@@ -147,6 +181,7 @@ export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseP
       setAmount("");
       setPaymentMethod("");
       setBankAccountId("");
+      setMfsAccountId("");
       setDate(getDateOnly(new Date(), timezone));
       setDescription("");
       onOpenChange(false);
@@ -247,6 +282,44 @@ export function AddExpense({ open, onOpenChange, banks, onSuccess }: AddExpenseP
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* MFS Account (conditional) */}
+          {paymentMethod === "online" && (
+            <div className="space-y-2">
+              <Label htmlFor="mfs">MFS Account *</Label>
+              {mfsAccounts.length === 0 ? (
+                <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                  <p className="text-sm text-yellow-400">
+                    No MFS accounts available. Please create an MFS account first.
+                  </p>
+                </div>
+              ) : (
+                <Select value={mfsAccountId} onValueChange={setMfsAccountId}>
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue placeholder="Select MFS account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mfsAccounts.map((mfs) => (
+                      <SelectItem key={mfs.id} value={mfs.id}>
+                        <div className="flex items-center gap-2">
+                          <Smartphone className="w-4 h-4 text-teal-400" />
+                          {getProviderLabel(mfs.provider)} - {mfs.account_number} ({formatCurrency(mfs.balance)})
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {mfsAccountId && (() => {
+                const selectedMfs = mfsAccounts.find((m) => m.id === mfsAccountId);
+                return selectedMfs && (
+                  <p className="text-xs text-muted-foreground">
+                    Available balance: {formatCurrency(selectedMfs.balance)}
+                  </p>
+                );
+              })()}
             </div>
           )}
 
