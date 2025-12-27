@@ -115,6 +115,7 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
     body {
       font-family: 'Courier New', 'Consolas', monospace;
       font-size: ${config.fontSize.body}px;
+      font-weight: bold;
       line-height: 1.3;
       color: #000;
       background: #fff;
@@ -143,12 +144,14 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
     
     .slip-header .restaurant-name-bn {
       font-size: ${config.fontSize.subtitle}px;
+      font-weight: bold;
       margin: 2px 0;
     }
     
     .slip-header .address,
     .slip-header .phone {
       font-size: ${config.fontSize.small}px;
+      font-weight: bold;
       margin: 2px 0;
       color: #333;
     }
@@ -165,6 +168,7 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
       justify-content: space-between;
       padding: 1px 0;
       font-size: ${config.fontSize.body}px;
+      font-weight: bold;
     }
     
     .slip-info-row.highlight {
@@ -174,11 +178,13 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
     
     .slip-info-row .label {
       flex-shrink: 0;
+      font-weight: bold;
     }
     
     .slip-info-row .value {
       text-align: right;
       word-break: break-all;
+      font-weight: bold;
     }
     
     /* Items Section */
@@ -201,6 +207,7 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
       padding: 2px 0;
       border-bottom: 1px dotted #999;
       font-size: ${config.fontSize.body}px;
+      font-weight: bold;
     }
     
     .slip-item:last-child {
@@ -219,12 +226,14 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
       overflow: hidden;
       text-overflow: ellipsis;
       padding-right: 4px;
+      font-weight: bold;
     }
     
     .slip-item-price {
       flex-shrink: 0;
       text-align: right;
       min-width: ${paperSize === '58mm' ? '45px' : '55px'};
+      font-weight: bold;
     }
     
     /* Totals Section */
@@ -239,10 +248,12 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
       justify-content: space-between;
       padding: 1px 0;
       font-size: ${config.fontSize.body}px;
+      font-weight: bold;
     }
     
     .slip-total-row.discount {
       color: #006400;
+      font-weight: bold;
     }
     
     .slip-total-row.grand {
@@ -260,10 +271,12 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
       padding-top: 6px;
       border-top: 2px dashed #000;
       font-size: ${config.fontSize.small}px;
+      font-weight: bold;
     }
     
     .slip-footer p {
       margin: 3px 0;
+      font-weight: bold;
     }
     
     /* KOT Specific Styles */
@@ -298,6 +311,7 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
     
     .kot-table-label {
       font-size: ${config.fontSize.small}px;
+      font-weight: bold;
     }
     
     .kot-table-number {
@@ -308,6 +322,26 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
     .kot-time {
       font-size: ${config.fontSize.small}px;
       text-align: right;
+      font-weight: bold;
+    }
+    
+    .kot-waiter-info {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: ${config.fontSize.small}px;
+      font-weight: bold;
+      border-top: 1px dotted #999;
+      margin-top: 4px;
+      padding-top: 6px;
+    }
+    
+    .kot-waiter-info span:first-child {
+      font-weight: bold;
+    }
+    
+    .kot-waiter-info span:last-child {
+      font-weight: bold;
     }
     
     .kot-items-label {
@@ -322,10 +356,11 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
     
     .kot-item {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       padding: 4px 0;
       border-bottom: 1px dotted #999;
       font-size: ${config.fontSize.body}px;
+      font-weight: bold;
     }
     
     .kot-item:last-child {
@@ -342,6 +377,7 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
     .kot-item-name {
       flex: 1;
       font-size: ${config.fontSize.body + 1}px;
+      font-weight: bold;
     }
     
     .kot-footer {
@@ -350,6 +386,7 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
       padding-top: 6px;
       border-top: 2px dashed #000;
       font-size: ${config.fontSize.small}px;
+      font-weight: bold;
     }
     
     .kot-summary {
@@ -360,9 +397,14 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
       margin-bottom: 6px;
     }
     
+    .kot-footer p {
+      font-weight: bold;
+    }
+    
     /* Delivery Info */
     .delivery-info {
       background: #f0f0f0;
+      font-weight: bold;
       padding: 4px 6px;
       margin: 6px 0;
       border: 1px solid #999;
@@ -378,6 +420,7 @@ const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
     .delivery-info p {
       margin: 1px 0;
       font-size: ${config.fontSize.body}px;
+      font-weight: bold;
     }
     
     /* Order Type Badge */

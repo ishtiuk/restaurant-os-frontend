@@ -11,6 +11,7 @@ import {
   Calendar as CalendarIcon,
   PieChart,
   Loader2,
+  XCircle,
 } from "lucide-react";
 import {
   LineChart,
@@ -26,9 +27,10 @@ import { Calendar } from "@/components/ui/calendar";
 import { subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { getStartOfDay, getEndOfDay, getDateOnly, formatDate } from "@/utils/date";
+import { getStartOfDay, getEndOfDay, getDateOnly, formatDate, formatWithTimezone } from "@/utils/date";
 import { reportsApi, type SalesSummaryResponse, type SalesTrendResponse, type TopProductsResponse, type LowStockResponse } from "@/lib/api/reports";
 import { salesApi, type SaleDto } from "@/lib/api/sales";
+import { tablesApi, type VoidedOrderItemDto } from "@/lib/api/tables";
 import { toast } from "@/hooks/use-toast";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
@@ -59,12 +61,14 @@ export default function Reports() {
   const [salesTrend, setSalesTrend] = useState<SalesTrendResponse | null>(null);
   const [topProducts, setTopProducts] = useState<TopProductsResponse | null>(null);
   const [lowStock, setLowStock] = useState<LowStockResponse | null>(null);
+  const [voidedItems, setVoidedItems] = useState<VoidedOrderItemDto[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [loadingTrend, setLoadingTrend] = useState(false);
   const [loadingTopProducts, setLoadingTopProducts] = useState(false);
   const [loadingLowStock, setLoadingLowStock] = useState(false);
+  const [loadingVoidedItems, setLoadingVoidedItems] = useState(false);
 
   // Get date range based on preset (timezone-aware)
   const getDateRange = (preset: DateRangePreset): { start: Date; end: Date } => {
@@ -217,6 +221,21 @@ export default function Reports() {
       }
       if (top) setTopProducts(top);
       if (low) setLowStock(low);
+      
+      // Load voided items
+      setLoadingVoidedItems(true);
+      try {
+        const voided = await tablesApi.listVoidedItems({
+          start_date: startDateStr,
+          end_date: endDateStr,
+        });
+        setVoidedItems(voided);
+      } catch (err) {
+        console.error("Failed to load voided items:", err);
+        toast({ title: "Failed to load voided items", variant: "destructive" });
+      } finally {
+        setLoadingVoidedItems(false);
+      }
     } catch (error) {
       console.error("Failed to load reports:", error);
       toast({ title: "Failed to load reports", variant: "destructive" });
@@ -595,6 +614,91 @@ export default function Reports() {
           )}
         </GlassCard>
       </div>
+
+      {/* Voided Items Report */}
+      <GlassCard className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <XCircle className="w-5 h-5 text-destructive" />
+            <h2 className="text-xl font-display font-bold">Voided Items Report</h2>
+            {voidedItems.length > 0 && (
+              <Badge variant="destructive">{voidedItems.length}</Badge>
+            )}
+          </div>
+        </div>
+        {loadingVoidedItems ? (
+          <div className="flex items-center justify-center h-48">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : voidedItems.length > 0 ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="p-4 bg-destructive/10 rounded-lg">
+                <p className="text-sm text-muted-foreground">Total Voided Items</p>
+                <p className="text-2xl font-bold text-destructive">{voidedItems.length}</p>
+              </div>
+              <div className="p-4 bg-destructive/10 rounded-lg">
+                <p className="text-sm text-muted-foreground">Total Amount Voided</p>
+                <p className="text-2xl font-bold text-destructive">
+                  {formatCurrency(
+                    voidedItems.reduce((sum, item) => {
+                      const voidedQty = (item.original_quantity || item.quantity) - item.quantity;
+                      return sum + (item.unit_price * voidedQty);
+                    }, 0)
+                  )}
+                </p>
+              </div>
+              <div className="p-4 bg-destructive/10 rounded-lg">
+                <p className="text-sm text-muted-foreground">Void Rate</p>
+                <p className="text-2xl font-bold text-destructive">
+                  {voidedItems.length > 0 ? ((voidedItems.length / (voidedItems.length + 100)) * 100).toFixed(1) : 0}%
+                </p>
+              </div>
+            </div>
+            <div className="rounded-md border border-destructive/20 overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="w-full">
+                <thead className="bg-destructive/10 sticky top-0 z-10">
+                  <tr>
+                    <th className="text-left p-3 text-xs font-semibold">Table</th>
+                    <th className="text-left p-3 text-xs font-semibold">Item Name</th>
+                    <th className="text-right p-3 text-xs font-semibold">Original Qty</th>
+                    <th className="text-right p-3 text-xs font-semibold">Voided Qty</th>
+                    <th className="text-left p-3 text-xs font-semibold">Reason</th>
+                    <th className="text-left p-3 text-xs font-semibold">Waiter</th>
+                    <th className="text-left p-3 text-xs font-semibold">Voided By</th>
+                    <th className="text-left p-3 text-xs font-semibold">Date & Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {voidedItems.map((item, idx) => {
+                    const voidedQty = (item.original_quantity || item.quantity) - item.quantity;
+                    return (
+                      <tr key={idx} className="border-t border-destructive/10 hover:bg-destructive/5">
+                        <td className="p-3 text-sm font-medium">{item.table_no || "N/A"}</td>
+                        <td className="p-3 text-sm line-through text-muted-foreground">{item.item_name}</td>
+                        <td className="p-3 text-sm text-right">{item.original_quantity || item.quantity}</td>
+                        <td className="p-3 text-sm text-right text-destructive font-semibold">-{voidedQty}</td>
+                        <td className="p-3 text-sm text-muted-foreground max-w-[200px] truncate" title={item.void_reason || ""}>
+                          {item.void_reason || "N/A"}
+                        </td>
+                        <td className="p-3 text-xs text-muted-foreground">{item.waiter_name || "N/A"}</td>
+                        <td className="p-3 text-xs text-muted-foreground">{item.voided_by_name || "N/A"}</td>
+                        <td className="p-3 text-xs text-muted-foreground">
+                          {item.voided_at ? formatWithTimezone(item.voided_at, timezone) : "N/A"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-48 text-muted-foreground">
+            No voided items in this period
+          </div>
+        )}
+      </GlassCard>
     </div>
   );
 }

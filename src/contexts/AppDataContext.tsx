@@ -71,7 +71,7 @@ type AppData = {
   ) => Promise<PurchaseOrder>;
   markPurchaseOrderReceived: (poId: string) => Promise<void>;
 
-  saveTableOrder: (tableId: string, items: TableOrder["items"], opts?: { kotItems?: TableOrder["items"] }) => Promise<void>;
+  saveTableOrder: (tableId: string, items: TableOrder["items"], opts?: { kotItems?: TableOrder["items"]; waiterId?: string }) => Promise<void>;
   finalizeTableBill: (
     tableId: string,
     paymentMethod: Sale["paymentMethod"],
@@ -271,6 +271,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               createdAt: o.created_at,
               updatedAt: o.updated_at,
               kots: [],
+              waiterId: o.waiter_id ?? undefined,
+              waiterName: o.waiter_name ?? undefined,
             };
           })
         );
@@ -335,9 +337,58 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const refreshTables = async () => {
     if (!user?.token) return;
     try {
-      const tablesData = await tablesApi.list();
+      // Refresh both tables and orders to maintain consistency
+      const [tablesData, activeOrdersData] = await Promise.all([
+        tablesApi.list(),
+        tablesApi.listActiveOrders(),
+      ]);
+
+      // Map refreshed orders
+      const mappedOrders: TableOrder[] = activeOrdersData.map((o) => {
+        const table = tablesData.find((t) => t.id === o.table_id);
+        return {
+          id: o.id,
+          tableId: o.table_id,
+          tableNo: table?.table_no || o.table_id,
+          items: o.items.map((i) => {
+            const product = items.find((p) => p.id === String(i.product_id));
+            return {
+              itemId: String(i.product_id),
+              itemName: i.item_name,
+              quantity: i.quantity,
+              unitPrice: i.unit_price,
+              discount: i.discount,
+              total: i.total,
+              notes: i.notes ?? undefined,
+              available: 9999,
+              vatRate: product?.vatRate,
+            };
+          }),
+          subtotal: o.subtotal,
+          vatAmount: o.vat_amount,
+          serviceCharge: o.service_charge,
+          discount: o.discount,
+          total: o.total,
+          status: o.status as TableOrder["status"],
+          createdAt: o.created_at,
+          updatedAt: o.updated_at,
+          kots: [],
+          waiterId: o.waiter_id ?? undefined,
+          waiterName: o.waiter_name ?? undefined,
+        };
+      });
+
+      // Update tableOrders with refreshed data
+      setTableOrders(mappedOrders);
+
+      // Map refreshed tables and set currentOrderId based on active orders
       setTables(
-        tablesData.map((t) => ({
+        tablesData.map((t) => {
+          // Find active order for this table
+          const activeOrder = mappedOrders.find(
+            (o) => o.tableId === t.id && o.status !== "completed"
+          );
+          return {
           id: t.id,
           tableNo: t.table_no,
           capacity: t.capacity,
@@ -346,7 +397,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           isActive: t.is_active,
           createdAt: t.created_at,
           updatedAt: t.updated_at,
-        }))
+            currentOrderId: activeOrder?.id,
+          };
+        })
       );
     } catch (err) {
       console.error("Failed to refresh tables", err);
@@ -475,7 +528,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       saveTableOrder: async (tableId, orderItems, opts) => {
         if (user?.token) {
           try {
-            const { kotItems } = opts ?? {};
+            const { kotItems, waiterId } = opts ?? {};
             // In Bangladesh, prices shown to customers are VAT-inclusive
             // But for backend accounting, we need to separate VAT
             const subtotalInclusive = orderItems.reduce((s, i) => s + i.total, 0);
@@ -495,7 +548,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             const total = subtotal + vatAmount;
 
             // Create/update order via API
-            const orderInput = {
+            const orderInput: any = {
               table_id: tableId,
               items: orderItems.map((i) => ({
                 item_id: i.itemId,
@@ -512,6 +565,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               discount: 0,
               total,
             };
+            
+            // Include waiter_id if provided
+            if (waiterId) {
+              orderInput.waiter_id = waiterId;
+            }
 
             const created = await tablesApi.createOrder(orderInput);
 
@@ -597,6 +655,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 createdAt: o.created_at,
                 updatedAt: o.updated_at,
                 kots: [],
+                waiterId: o.waiter_id ?? undefined,
+                waiterName: o.waiter_name ?? undefined,
               };
             });
 
@@ -751,6 +811,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                   createdAt: o.created_at,
                   updatedAt: o.updated_at,
                   kots: [],
+                  waiterId: o.waiter_id ?? undefined,
+                  waiterName: o.waiter_name ?? undefined,
                 };
               });
 
@@ -891,6 +953,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 createdAt: o.created_at,
                 updatedAt: o.updated_at,
                 kots: [],
+                waiterId: o.waiter_id ?? undefined,
+                waiterName: o.waiter_name ?? undefined,
               };
             });
 
@@ -1014,6 +1078,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 createdAt: o.created_at,
                 updatedAt: o.updated_at,
                 kots: [],
+                waiterId: o.waiter_id ?? undefined,
+                waiterName: o.waiter_name ?? undefined,
               };
             });
 
@@ -1141,11 +1207,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       createStaffPayment: async (input) => {
         if (user?.token) {
           try {
-            const paymentInput = {
+            const paymentInput: import("@/lib/api/staff").StaffPaymentCreateInput = {
               staff_id: input.staffId,
               amount: input.amount,
               type: input.type,
-              payment_method: input.paymentMethod,
+              payment_method: input.paymentMethod as "cash" | "bank_transfer" | "check" | "online" | undefined,
               date: input.date || todayISO(),
               description: input.description,
               reference_no: undefined,

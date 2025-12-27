@@ -9,6 +9,7 @@ interface KotSlipProps {
   tableNo: string;
   items: CartItem[];
   time: Date | string;
+  waiterName?: string;
 }
 
 export const KotSlip: React.FC<KotSlipProps> = ({
@@ -16,6 +17,7 @@ export const KotSlip: React.FC<KotSlipProps> = ({
   tableNo,
   items,
   time,
+  waiterName,
 }) => {
   const settings = getPrintSettingsSync();
   const { timezone } = useTimezone();
@@ -46,6 +48,14 @@ export const KotSlip: React.FC<KotSlipProps> = ({
           <p style={{ fontWeight: 'bold' }}>{formattedTime}</p>
         </div>
       </div>
+
+      {/* Waiter Info */}
+      {waiterName && (
+        <div className="kot-waiter-info">
+          <span>Waiter:</span>
+          <span>{waiterName}</span>
+        </div>
+      )}
 
       {/* Items List */}
       <div className="slip-items">

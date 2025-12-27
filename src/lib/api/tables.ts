@@ -21,6 +21,12 @@ export interface OrderItemDto {
   total: number;
   notes?: string | null;
   quantity_sent: number;
+  is_voided?: boolean;
+  voided_at?: string | null;
+  voided_by?: string | null;
+  void_reason?: string | null;
+  original_quantity?: number | null;
+  voided_by_name?: string | null; // Added for convenience
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +43,8 @@ export interface TableOrderDto {
   created_at: string;
   updated_at: string;
   items: OrderItemDto[];
+  waiter_id?: string | null;
+  waiter_name?: string | null;
 }
 
 export interface KOTItemDto {
@@ -89,6 +97,7 @@ export interface TableOrderCreateInput {
   service_charge?: number;
   discount?: number;
   total: number;
+  waiter_id?: string;
 }
 
 export interface KOTItemCreateInput {
@@ -114,6 +123,38 @@ export interface BulkCreateTablesInput {
   count: number;
   default_capacity?: number;
   location?: string;
+}
+
+export interface UpdateWaiterInput {
+  waiter_id?: string | null;
+}
+
+export interface VoidOrderItemInput {
+  reason: string;
+  new_quantity?: number | null;
+}
+
+export interface VoidedOrderItemDto {
+  id: string;
+  product_id: number;
+  item_name: string;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  total: number;
+  notes?: string | null;
+  quantity_sent: number;
+  is_voided: boolean;
+  voided_at?: string | null;
+  voided_by?: string | null;
+  void_reason?: string | null;
+  original_quantity?: number | null;
+  created_at: string;
+  updated_at: string;
+  order_id?: string; // Added for reports
+  table_no?: string; // Added for reports
+  voided_by_name?: string; // Added for reports
+  waiter_name?: string; // Added for reports
 }
 
 export const tablesApi = {
@@ -150,6 +191,20 @@ export const tablesApi = {
   },
   bulkCreate(input: BulkCreateTablesInput): Promise<TableDto[]> {
     return apiClient.post("/tables/bulk-create", input);
+  },
+  updateWaiter(orderId: string, input: UpdateWaiterInput): Promise<TableOrderDto> {
+    return apiClient.patch(`/tables/orders/${orderId}/waiter`, input);
+  },
+  voidOrderItem(orderId: string, itemId: string, input: VoidOrderItemInput): Promise<OrderItemDto> {
+    return apiClient.patch(`/tables/orders/${orderId}/items/${itemId}/void`, input);
+  },
+  listVoidedItems(params?: { order_id?: string; start_date?: string; end_date?: string }): Promise<VoidedOrderItemDto[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.order_id) queryParams.append('order_id', params.order_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    const query = queryParams.toString();
+    return apiClient.get(`/tables/orders/voided-items${query ? `?${query}` : ''}`);
   },
 };
 
