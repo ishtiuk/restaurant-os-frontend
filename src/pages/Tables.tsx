@@ -1,15 +1,19 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { RestaurantTable, CartItem, PaymentMethod } from "@/types";
+import { RestaurantTable, CartItem, PaymentMethod, Staff } from "@/types";
 import { useAppData } from "@/contexts/AppDataContext";
 import { KotSlip } from "@/components/print/KotSlip";
 import { TableBillReceipt } from "@/components/print/TableBillReceipt";
 import { printContent } from "@/utils/printUtils";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { formatWithTimezone, formatDate, formatTime } from "@/utils/date";
+import { staffApi } from "@/lib/api/staff";
+import { tablesApi } from "@/lib/api/tables";
+import { useAuth } from "@/contexts/AuthContext";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Users,
   Plus,
@@ -26,6 +30,9 @@ import {
   X,
   CheckCircle2,
   Printer,
+  User,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -34,6 +41,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,7 +67,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { tablesApi } from "@/lib/api/tables";
 import { Label } from "@/components/ui/label";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
@@ -114,8 +128,22 @@ const getStatusBadge = (status: RestaurantTable["status"]) => {
   }
 };
 
+// Voided item interface
+interface VoidedItem {
+  itemId: string;
+  itemName: string;
+  originalQuantity: number;
+  voidedQuantity: number;
+  reason: string;
+  voidedBy: string;
+  voidedAt: string;
+  tableNo?: string; // Table number where item was voided
+  orderId?: string; // Order ID where item was voided
+}
+
 export default function Tables() {
   const { timezone } = useTimezone();
+  const { user } = useAuth();
   const {
     items,
     categories,
@@ -144,6 +172,47 @@ export default function Tables() {
   const [newTable, setNewTable] = useState({ tableNo: "", capacity: 4, location: "" });
   const [isCreatingTable, setIsCreatingTable] = useState(false);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+
+  // Feature 1: Waiter Assignment
+  const [waiters, setWaiters] = useState<Staff[]>([]);
+  const [selectedWaiterId, setSelectedWaiterId] = useState<string | null>(null);
+  const [loadingWaiters, setLoadingWaiters] = useState(false);
+  const [updatingWaiter, setUpdatingWaiter] = useState(false);
+
+  // Feature 3: Void Flow
+  const [showVoidReasonDialog, setShowVoidReasonDialog] = useState(false);
+  const [pendingVoid, setPendingVoid] = useState<{ itemId: string; itemName: string; action: 'reduce' | 'delete'; newQuantity?: number } | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidedItems, setVoidedItems] = useState<VoidedItem[]>([]); // Local to order modal
+  const [allVoidedItems, setAllVoidedItems] = useState<VoidedItem[]>([]); // Global across all tables
+
+  // Fetch waiters on mount
+  useEffect(() => {
+    const fetchWaiters = async () => {
+      setLoadingWaiters(true);
+      try {
+        const response = await staffApi.list({ role: "waiter", is_active: true });
+        setWaiters(response.map(s => ({
+          id: s.id,
+          name: s.name,
+          nameBn: s.name_bn ?? undefined,
+          phone: s.phone,
+          email: s.email ?? undefined,
+          role: s.role as Staff["role"],
+          salary: s.salary,
+          joiningDate: s.joining_date ?? new Date().toISOString(),
+          isActive: s.is_active,
+          emergencyContact: s.emergency_contact ?? undefined,
+          address: s.address ?? undefined,
+        })));
+      } catch (err) {
+        console.error("Failed to fetch waiters", err);
+      } finally {
+        setLoadingWaiters(false);
+      }
+    };
+    fetchWaiters();
+  }, []);
 
   const currentOrder = useMemo(() => {
     if (!selectedTable) return null;
@@ -175,6 +244,59 @@ export default function Tables() {
     return order;
   }, [selectedTable, tableOrders]);
 
+  // Sync selectedWaiterId with currentOrder when it changes (after refresh)
+  useEffect(() => {
+    if (currentOrder && showOrderDialog) {
+      // Only update if different to avoid unnecessary re-renders
+      // This ensures the waiter name is updated after refresh
+      if (currentOrder.waiterId !== selectedWaiterId) {
+        setSelectedWaiterId(currentOrder.waiterId ?? null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOrder?.waiterId, currentOrder?.waiterName, showOrderDialog]);
+
+  // Load voided items from order when order dialog opens
+  useEffect(() => {
+    if (currentOrder && showOrderDialog) {
+      // Fetch the latest order data to get voided items from backend
+      const loadVoidedItems = async () => {
+        try {
+          const latestOrder = await tablesApi.getOrder(currentOrder.id);
+          // Extract voided items from order items
+          const voidedItemsFromOrder: VoidedItem[] = latestOrder.items
+            .filter(item => item.is_voided === true)
+            .map(item => {
+              const originalQty = item.original_quantity ?? item.quantity;
+              const currentQty = item.quantity;
+              const voidedQty = originalQty - currentQty;
+              
+              return {
+                itemId: String(item.product_id),
+                itemName: item.item_name,
+                originalQuantity: originalQty,
+                voidedQuantity: voidedQty,
+                reason: item.void_reason || "No reason provided",
+                voidedBy: item.voided_by_name || user?.name || "Unknown",
+                voidedAt: item.voided_at || new Date().toISOString(),
+                tableNo: currentOrder.tableNo,
+                orderId: currentOrder.id,
+              };
+            });
+          setVoidedItems(voidedItemsFromOrder);
+        } catch (error) {
+          console.error("Failed to load voided items from order:", error);
+          // If fetch fails, set empty array
+          setVoidedItems([]);
+        }
+      };
+      loadVoidedItems();
+    } else {
+      // Reset voided items when dialog closes
+      setVoidedItems([]);
+    }
+  }, [currentOrder?.id, showOrderDialog, user?.name]);
+
   const primeCartFromOrder = (itemsToUse: CartItem[] | undefined) => {
     const safeItems = itemsToUse ?? [];
     setCart(safeItems);
@@ -183,11 +305,14 @@ export default function Tables() {
 
   const handleTableClick = async (table: RestaurantTable) => {
     setSelectedTable(table);
+    setVoidedItems([]); // Reset voided items
+    
     if (table.status === "empty" || table.status === "reserved") {
       // For empty tables, just open the dialog with empty cart
       // Order will be created when user adds items and saves
       setCart([]);
       setBaselineItems([]);
+      setSelectedWaiterId(null); // Reset waiter selection for new tables
       setShowOrderDialog(true);
       return;
     }
@@ -197,15 +322,28 @@ export default function Tables() {
       const existingOrder = tableOrders.find((o) => o.id === table.currentOrderId);
       if (existingOrder) {
         primeCartFromOrder(existingOrder.items);
+        // Load waiter_id from existing order if available
+        if (existingOrder.waiterId) {
+          setSelectedWaiterId(existingOrder.waiterId);
+        } else {
+          setSelectedWaiterId(null);
+        }
       } else {
         // Try to ensure session exists (might have been created elsewhere)
         try {
           const session = await ensureTableSession(table.id);
           primeCartFromOrder(session.items);
+          // Load waiter_id from session if available
+          if (session.waiterId) {
+            setSelectedWaiterId(session.waiterId);
+          } else {
+            setSelectedWaiterId(null);
+          }
         } catch (err) {
           // If no order exists, start with empty cart
           setCart([]);
           setBaselineItems([]);
+          setSelectedWaiterId(null);
         }
       }
       setShowOrderDialog(true);
@@ -215,6 +353,12 @@ export default function Tables() {
     if (table.status === "billing") {
       const order = tableOrders.find((o) => o.id === table.currentOrderId);
       primeCartFromOrder(order?.items);
+      // Load waiter_id from order if available
+      if (order?.waiterId) {
+        setSelectedWaiterId(order.waiterId);
+      } else {
+        setSelectedWaiterId(null);
+      }
       setBillPayment("cash");
       setShowBillDialog(true);
     }
@@ -304,17 +448,32 @@ export default function Tables() {
     });
   };
 
+  // Feature 3: Modified updateQuantity to support void flow
   const updateQuantity = (itemId: string, delta: number) => {
+    const cartItem = cart.find(c => c.itemId === itemId);
+    if (!cartItem) return;
+    
+    const newQty = cartItem.quantity + delta;
+    const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
+    
+    // If reducing below baseline (items already sent to kitchen), show void reason dialog
+    if (newQty < baselineQty && delta < 0) {
+      setPendingVoid({
+        itemId,
+        itemName: cartItem.itemName,
+        action: 'reduce',
+        newQuantity: newQty,
+      });
+      setVoidReason("");
+      setShowVoidReasonDialog(true);
+      return;
+    }
+    
+    // Normal quantity update
     setCart((prev) =>
       prev
         .map((c) => {
           if (c.itemId === itemId) {
-            const newQty = c.quantity + delta;
-            const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
-            if (newQty < baselineQty) {
-              toast({ title: "Cannot reduce sent items", description: "Adjust in billing instead.", variant: "destructive" });
-              return c;
-            }
             if (newQty <= 0) return null;
             // Check stock limit for packaged items when increasing quantity
             if (delta > 0 && c.available < 9999 && newQty > c.available) {
@@ -333,14 +492,152 @@ export default function Tables() {
     );
   };
 
+  // Feature 3: Modified removeFromCart to support void flow
   const removeFromCart = (itemId: string) => {
+    const cartItem = cart.find(c => c.itemId === itemId);
+    if (!cartItem) return;
+    
     const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
+    
+    // If item was sent to kitchen, show void reason dialog
     if (baselineQty > 0) {
-      toast({ title: "Cannot remove sent items", description: "Finalize in billing.", variant: "destructive" });
+      setPendingVoid({
+        itemId,
+        itemName: cartItem.itemName,
+        action: 'delete',
+        newQuantity: 0,
+      });
+      setVoidReason("");
+      setShowVoidReasonDialog(true);
       return;
     }
+    
+    // Normal removal for items not yet sent
     setCart((prev) => prev.filter((c) => c.itemId !== itemId));
   };
+
+  // Feature 3: Handle void confirmation
+  const handleVoidConfirm = async () => {
+    if (!pendingVoid || voidReason.trim().length < 10) {
+      toast({
+        title: "Reason required",
+        description: "Please provide a detailed reason (at least 10 characters)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentOrder?.id) {
+      toast({
+        title: "No active order",
+        description: "Cannot void item without an active order",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const cartItem = cart.find(c => c.itemId === pendingVoid.itemId);
+    if (!cartItem) return;
+
+    // Fetch the latest order to get order item IDs
+    let orderItemId: string | null = null;
+    try {
+      const latestOrder = await tablesApi.getOrder(currentOrder.id);
+      const backendOrderItem = latestOrder.items.find(i => String(i.product_id) === pendingVoid.itemId);
+      if (!backendOrderItem || !backendOrderItem.id) {
+        toast({
+          title: "Item not found",
+          description: "Could not find item in order",
+          variant: "destructive",
+        });
+        return;
+      }
+      orderItemId = backendOrderItem.id;
+    } catch (error: any) {
+      toast({
+        title: "Failed to fetch order",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Call backend API to void the item
+      await tablesApi.voidOrderItem(currentOrder.id, orderItemId, {
+        reason: voidReason,
+        new_quantity: pendingVoid.action === 'delete' ? 0 : pendingVoid.newQuantity ?? null,
+      });
+
+      // Refresh order data
+      await refreshTables();
+
+    const baselineQty = baselineItems.find((b) => b.itemId === pendingVoid.itemId)?.quantity ?? 0;
+    const voidedQuantity = pendingVoid.action === 'delete' 
+      ? baselineQty 
+      : baselineQty - (pendingVoid.newQuantity ?? 0);
+
+      // Add to voided items list (both local and global) for UI display
+    const newVoidedItem: VoidedItem = {
+      itemId: pendingVoid.itemId,
+      itemName: pendingVoid.itemName,
+      originalQuantity: baselineQty,
+      voidedQuantity,
+      reason: voidReason,
+        voidedBy: user?.name || "Current User",
+      voidedAt: new Date().toISOString(),
+        tableNo: selectedTable?.tableNo || "Unknown",
+        orderId: currentOrder.id,
+    };
+    setVoidedItems(prev => [...prev, newVoidedItem]);
+      setAllVoidedItems(prev => [...prev, newVoidedItem]);
+
+    // Update cart
+    if (pendingVoid.action === 'delete') {
+      setCart((prev) => prev.filter((c) => c.itemId !== pendingVoid.itemId));
+      setBaselineItems((prev) => prev.filter((b) => b.itemId !== pendingVoid.itemId));
+    } else if (pendingVoid.newQuantity !== undefined) {
+      setCart((prev) =>
+        prev.map((c) =>
+          c.itemId === pendingVoid.itemId
+            ? { ...c, quantity: pendingVoid.newQuantity!, total: pendingVoid.newQuantity! * c.unitPrice }
+            : c
+        )
+      );
+      setBaselineItems((prev) =>
+        prev.map((b) =>
+          b.itemId === pendingVoid.itemId
+            ? { ...b, quantity: pendingVoid.newQuantity!, total: pendingVoid.newQuantity! * b.unitPrice }
+            : b
+        )
+      );
+    }
+
+    toast({
+      title: "Item voided",
+      description: `${pendingVoid.itemName} has been voided`,
+    });
+
+    // Reset void dialog state
+    setShowVoidReasonDialog(false);
+    setPendingVoid(null);
+    setVoidReason("");
+    } catch (error: any) {
+      toast({
+        title: "Failed to void item",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Void reason suggestions
+  const voidReasonSuggestions = [
+    "Customer changed mind",
+    "Waiter mistake",
+    "Customer behavior",
+    "Item unavailable",
+  ];
 
   // In Bangladesh, prices shown to customers are VAT-inclusive
   // But for backend accounting, we need to separate VAT
@@ -376,12 +673,97 @@ export default function Tables() {
       .filter(Boolean) as CartItem[];
   };
 
+  // Handle waiter change - update order if it exists
+  const handleWaiterChange = async (newWaiterId: string) => {
+    // Prevent multiple simultaneous updates
+    if (updatingWaiter) {
+      return;
+    }
+
+    const previousWaiterId = selectedWaiterId;
+    
+    // Don't update if selecting the same waiter
+    if (newWaiterId === previousWaiterId) {
+      return;
+    }
+    
+    // Only update via API if there's an existing order
+    if (currentOrder) {
+      setUpdatingWaiter(true);
+      try {
+        // Validate waiter exists in our list
+        const selectedWaiter = waiters.find((w) => w.id === newWaiterId);
+        if (newWaiterId && !selectedWaiter) {
+          throw new Error("Selected waiter not found");
+        }
+
+        // Update optimistically
+        setSelectedWaiterId(newWaiterId);
+        
+        // Verify order still exists before updating
+        if (!currentOrder.id) {
+          throw new Error("Order ID is missing");
+        }
+
+        await tablesApi.updateWaiter(currentOrder.id, {
+          waiter_id: newWaiterId || null,
+        });
+        
+        // Refresh tables and orders to get updated data
+        await refreshTables();
+        
+        // Find the selected waiter name for the toast
+        const waiterName = selectedWaiter ? selectedWaiter.name : "Unassigned";
+        
+        toast({
+          title: "Waiter updated",
+          description: `${waiterName} assigned to ${selectedTable?.tableNo}`,
+        });
+      } catch (error: any) {
+        // Revert selection on error
+        setSelectedWaiterId(previousWaiterId);
+        
+        // Extract error message
+        let errorMessage = "Please try again";
+        if (error?.response?.data?.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error?.message) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+        
+        toast({
+          title: "Failed to update waiter",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } finally {
+        setUpdatingWaiter(false);
+      }
+    } else {
+      // For new orders, just update local state
+      setSelectedWaiterId(newWaiterId);
+    }
+  };
+
+  // Feature 1: Validate waiter selection before KOT
   const handleSendKot = async () => {
     if (cart.length === 0) {
       toast({ title: "Cart is empty", variant: "destructive" });
       return;
     }
     if (!selectedTable) return;
+
+    // Waiter validation
+    if (!selectedWaiterId) {
+      toast({ 
+        title: "Waiter required", 
+        description: "Please assign a waiter before sending to kitchen",
+        variant: "destructive" 
+      });
+      return;
+    }
 
     const deltaItems = getDeltaItems();
     if (deltaItems.length === 0) {
@@ -390,7 +772,7 @@ export default function Tables() {
     }
 
     const mergedItems = cart.map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
-    await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems });
+    await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems, waiterId: selectedWaiterId ?? undefined });
     setBaselineItems(mergedItems);
 
     // Show KOT print dialog
@@ -410,10 +792,21 @@ export default function Tables() {
     });
   };
 
+  // Feature 1: Validate waiter selection before billing
   const handleGoToBilling = async () => {
     if (!selectedTable) return;
     if (cart.length === 0 && baselineItems.length === 0) {
       toast({ title: "No order yet", variant: "destructive" });
+      return;
+    }
+
+    // Waiter validation (only if there are items to bill)
+    if ((cart.length > 0 || baselineItems.length > 0) && !selectedWaiterId) {
+      toast({ 
+        title: "Waiter required", 
+        description: "Please assign a waiter before proceeding to billing",
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -461,6 +854,8 @@ export default function Tables() {
         setSelectedTable(null);
         setBillDiscount(0);
         setBillServiceCharge(false);
+        setSelectedWaiterId(null);
+        setVoidedItems([]);
       })
       .catch(() => toast({ title: "Unable to finalize bill", variant: "destructive" }))
       .finally(() => setBillLoading(false));
@@ -510,6 +905,9 @@ export default function Tables() {
   const occupiedCount = tables.filter((t) => t.status === "occupied").length;
   const billingCount = tables.filter((t) => t.status === "billing").length;
   const emptyCount = tables.filter((t) => t.status === "empty").length;
+
+  // Get selected waiter name
+  const selectedWaiterName = waiters.find(w => w.id === selectedWaiterId)?.name;
 
   return (
     <div className="space-y-6">
@@ -573,6 +971,16 @@ export default function Tables() {
                     <p className={`text-xs font-medium ${getTimeColorClass(order.createdAt)}`}>
                       ⏱️ {getElapsedTime(order.createdAt)}
                     </p>
+                    {/* Void indicator badge */}
+                    {(() => {
+                      const orderVoids = allVoidedItems.filter(v => v.orderId === order.id);
+                      return orderVoids.length > 0 ? (
+                        <Badge variant="destructive" className="mt-1 text-xs">
+                          <XCircle className="w-3 h-3 mr-1" />
+                          {orderVoids.length} void{orderVoids.length > 1 ? 's' : ''}
+                        </Badge>
+                      ) : null;
+                    })()}
                   </div>
                 )}
               </div>
@@ -587,6 +995,12 @@ export default function Tables() {
           <DialogHeader>
             <DialogTitle className="font-display gradient-text">
               {selectedTable?.tableNo} - {selectedTable?.status === "occupied" ? "Update Order" : "New Order"}
+              {selectedWaiterName && (
+                <Badge variant="outline" className="ml-2 text-xs">
+                  <User className="w-3 h-3 mr-1" />
+                  {selectedWaiterName}
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription>অর্ডার যোগ করুন • Items will persist to this table</DialogDescription>
           </DialogHeader>
@@ -594,6 +1008,46 @@ export default function Tables() {
           <div className="flex gap-4 h-[60vh]">
             {/* Items Selection */}
             <div className="flex-1 flex flex-col min-h-0">
+              {/* Feature 1: Waiter Selection */}
+              <div className="mb-3 p-3 rounded-lg bg-muted/30 border border-border">
+                <div className="flex items-center gap-3">
+                  <User className="w-5 h-5 text-muted-foreground" />
+                  <div className="flex-1 flex items-center gap-3">
+                    <Label className="text-sm font-medium whitespace-nowrap">Assign Waiter *</Label>
+                    <Select 
+                      value={selectedWaiterId ?? ""} 
+                      onValueChange={handleWaiterChange}
+                      disabled={updatingWaiter}
+                    >
+                      <SelectTrigger className="bg-background" disabled={updatingWaiter}>
+                        <SelectValue placeholder={updatingWaiter ? "Updating..." : "Select a waiter..."} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loadingWaiters ? (
+                          <SelectItem value="loading" disabled>Loading waiters...</SelectItem>
+                        ) : waiters.length === 0 ? (
+                          <SelectItem value="none" disabled>No active waiters found</SelectItem>
+                        ) : (
+                          waiters.map((waiter) => (
+                            <SelectItem 
+                              key={waiter.id} 
+                              value={waiter.id}
+                              disabled={waiter.id === selectedWaiterId}
+                            >
+                              {waiter.name} {waiter.nameBn ? `(${waiter.nameBn})` : ""}
+                              {waiter.id === selectedWaiterId && " (Current)"}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {!selectedWaiterId && cart.length > 0 && (
+                  <p className="text-xs text-destructive mt-2">⚠️ Waiter must be assigned before KOT or billing</p>
+                )}
+              </div>
+
               <div className="flex gap-2 mb-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -657,28 +1111,88 @@ export default function Tables() {
                     <p className="text-sm">No items added</p>
                   </div>
                 ) : (
-                  cart.map((item) => (
-                    <div key={item.itemId} className="p-2 rounded-lg bg-muted/30">
-                      <div className="flex justify-between items-start mb-1">
-                        <p className="font-medium text-sm truncate flex-1">{item.itemName}</p>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFromCart(item.itemId)}>
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, -1)}>
-                            <Minus className="w-3 h-3" />
-                          </Button>
-                          <span className="w-6 text-center text-sm">{item.quantity}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
-                            <Plus className="w-3 h-3" />
-                          </Button>
+                  <>
+                    {cart.map((item) => {
+                      const baselineQty = baselineItems.find((b) => b.itemId === item.itemId)?.quantity ?? 0;
+                      const isSentItem = baselineQty > 0;
+                      
+                      return (
+                        <div key={item.itemId} className="p-2 rounded-lg bg-muted/30">
+                          <div className="flex justify-between items-start mb-1">
+                            <p className="font-medium text-sm truncate flex-1">
+                              {item.itemName}
+                              {isSentItem && (
+                                <Badge variant="outline" className="ml-1 text-xs">Sent</Badge>
+                              )}
+                            </p>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFromCart(item.itemId)}>
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, -1)}>
+                                <Minus className="w-3 h-3" />
+                              </Button>
+                              <span className="w-6 text-center text-sm">{item.quantity}</span>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
+                                <Plus className="w-3 h-3" />
+                              </Button>
+                            </div>
+                            <span className="text-sm font-semibold">{formatCurrency(item.total)}</span>
+                          </div>
                         </div>
-                        <span className="text-sm font-semibold">{formatCurrency(item.total)}</span>
+                      );
+                    })}
+
+                    {/* Feature 3: Voided Items Section */}
+                    {voidedItems.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-destructive/30">
+                        <h5 className="text-sm font-semibold text-destructive flex items-center gap-1 mb-3">
+                          <XCircle className="w-4 h-4" />
+                          Voided Items ({voidedItems.length})
+                        </h5>
+                        <div className="rounded-md border border-destructive/20 overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-destructive/10 hover:bg-destructive/15">
+                                <TableHead className="w-[200px] text-xs font-semibold">Item Name</TableHead>
+                                <TableHead className="w-[80px] text-xs font-semibold text-center">Original Qty</TableHead>
+                                <TableHead className="w-[80px] text-xs font-semibold text-center">Voided Qty</TableHead>
+                                <TableHead className="text-xs font-semibold">Reason</TableHead>
+                                <TableHead className="w-[120px] text-xs font-semibold">Voided By</TableHead>
+                                <TableHead className="w-[120px] text-xs font-semibold">Time</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                        {voidedItems.map((voided, idx) => (
+                                <TableRow key={idx} className="hover:bg-destructive/5">
+                                  <TableCell className="font-medium text-sm line-through text-muted-foreground">
+                                    {voided.itemName}
+                                  </TableCell>
+                                  <TableCell className="text-center text-sm">
+                                    {voided.originalQuantity}
+                                  </TableCell>
+                                  <TableCell className="text-center text-sm text-destructive font-semibold">
+                                    -{voided.voidedQuantity}
+                                  </TableCell>
+                                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={voided.reason}>
+                                    {voided.reason}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    {voided.voidedBy}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    {formatTime(new Date(voided.voidedAt), timezone)}
+                                  </TableCell>
+                                </TableRow>
+                        ))}
+                            </TableBody>
+                          </Table>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    )}
+                  </>
                 )}
               </div>
 
@@ -698,7 +1212,12 @@ export default function Tables() {
                 </div>
               </div>
 
-              <Button variant="glow" className="mt-3" onClick={handleSendKot} disabled={!hasDeltaItems}>
+              <Button 
+                variant="glow" 
+                className="mt-3" 
+                onClick={handleSendKot} 
+                disabled={!hasDeltaItems || !selectedWaiterId}
+              >
                 <Check className="w-4 h-4 mr-2" />
                 Send to Kitchen (KOT)
               </Button>
@@ -706,6 +1225,7 @@ export default function Tables() {
                 variant="outline"
                 className="mt-2"
                 onClick={handleGoToBilling}
+                disabled={cart.length === 0 && baselineItems.length === 0}
               >
                 Go to Billing
               </Button>
@@ -713,6 +1233,70 @@ export default function Tables() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Feature 3: Void Reason Dialog */}
+      <AlertDialog open={showVoidReasonDialog} onOpenChange={setShowVoidReasonDialog}>
+        <AlertDialogContent className="glass-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Void Item - Reason Required
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>
+                  You are about to {pendingVoid?.action === 'delete' ? 'remove' : 'reduce quantity of'}{' '}
+                  <strong>{pendingVoid?.itemName}</strong> that has already been sent to the kitchen.
+                </p>
+                
+                <div className="flex flex-wrap gap-2">
+                  {voidReasonSuggestions.map((suggestion) => (
+                    <Button
+                      key={suggestion}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVoidReason(suggestion)}
+                      className={voidReason === suggestion ? "border-primary" : ""}
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
+                
+                <div>
+                  <Label>Reason (minimum 10 characters) *</Label>
+                  <Textarea
+                    value={voidReason}
+                    onChange={(e) => setVoidReason(e.target.value)}
+                    placeholder="Enter detailed reason for voiding this item..."
+                    className="mt-1"
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {voidReason.length}/10 characters
+                  </p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setPendingVoid(null);
+              setVoidReason("");
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleVoidConfirm}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={voidReason.trim().length < 10}
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              Confirm Void
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Bill Dialog */}
       <Dialog open={showBillDialog} onOpenChange={setShowBillDialog}>
@@ -983,6 +1567,7 @@ export default function Tables() {
                   tableNo={selectedTable.tableNo}
                   items={lastKot.items}
                   time={lastKot.time}
+                  waiterName={selectedWaiterName ?? undefined}
                 />
               </div>
               
@@ -1002,12 +1587,18 @@ export default function Tables() {
                     <span>Time:</span>
                     <span>{formatDate(typeof lastKot.time === 'string' ? new Date(lastKot.time) : lastKot.time, timezone)}</span>
                   </div>
+                  {selectedWaiterName && (
+                    <div className="flex justify-between text-sm">
+                      <span>Waiter:</span>
+                      <span>{selectedWaiterName}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t-2 border-dashed border-border pt-3 mb-3">
                   <p className="font-bold mb-2 text-xs uppercase tracking-wider">Items:</p>
                   {lastKot.items.map((item, idx) => (
-                    <div key={idx} className="mb-2 flex items-start gap-2">
+                    <div key={idx} className="mb-2 flex items-center gap-2">
                       <span className="font-bold text-lg min-w-[40px]">{item.quantity}x</span>
                       <span className="flex-1">{item.itemName}</span>
                     </div>

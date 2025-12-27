@@ -345,16 +345,6 @@ export default function SalesHistoryPage() {
           <p className="text-muted-foreground">বিক্রয় ইতিহাস • Transaction Records</p>
         </div>
         <div className="flex gap-2">
-          {/* Hidden VAT Mode Toggle - Appears on hover, or triple-click title */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleVatMode}
-            className="opacity-0 hover:opacity-100 transition-opacity"
-            title="Toggle VAT Mode (or triple-click 'Sales History' title)"
-          >
-            <EyeOff className="w-4 h-4" />
-          </Button>
           <Button variant="outline" onClick={handleExport} disabled={filteredSales.length === 0}>
             <Download className="w-4 h-4 mr-2" />
             Export

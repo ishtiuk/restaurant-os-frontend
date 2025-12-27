@@ -181,6 +181,8 @@ export interface TableOrder {
   createdAt: string;
   updatedAt: string;
   kots?: KitchenTicket[];
+  waiterId?: string;
+  waiterName?: string;
 }
 
 // Staff & Attendance
