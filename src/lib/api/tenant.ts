@@ -15,6 +15,8 @@ export interface TenantSettingsDto {
   footer_text?: string | null;
   timezone: string; // IANA timezone (e.g., Asia/Dhaka, America/New_York)
   is_active: boolean;
+  owner_email?: string | null; // Owner email for void notifications
+  void_email_notifications_enabled: boolean; // Enable/disable void email notifications
   created_at: string;
 }
 
@@ -30,6 +32,8 @@ export interface TenantSettingsUpdateInput {
   paper_size?: "thermal" | "thermal58" | "a4";
   footer_text?: string;
   timezone?: string; // IANA timezone (e.g., Asia/Dhaka, America/New_York)
+  owner_email?: string; // Owner email for void notifications
+  void_email_notifications_enabled?: boolean; // Enable/disable void email notifications
 }
 
 export const tenantApi = {

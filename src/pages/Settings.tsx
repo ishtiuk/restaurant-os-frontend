@@ -43,6 +43,7 @@ import {
   Lock,
   UtensilsCrossed,
   Clock,
+  Mail,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
@@ -85,6 +86,10 @@ export default function Settings() {
     invoicePrefix: "INV-",
     paperSize: "thermal" as "thermal" | "thermal58",
     footerText: "",
+  });
+  const [emailNotificationSettings, setEmailNotificationSettings] = useState({
+    ownerEmail: "",
+    voidEmailNotificationsEnabled: false,
   });
   const [deleteCategoryDialogOpen, setDeleteCategoryDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -146,6 +151,10 @@ export default function Settings() {
           paperSize: (settings.paper_size === "thermal58" ? "thermal58" : "thermal"),
           footerText: settings.footer_text || "",
         });
+        setEmailNotificationSettings({
+          ownerEmail: settings.owner_email || "",
+          voidEmailNotificationsEnabled: settings.void_email_notifications_enabled || false,
+        });
         
         // Sync timezone from backend (TimezoneContext will also fetch, but this ensures sync)
         if (settings.timezone) {
@@ -192,6 +201,8 @@ export default function Settings() {
         invoice_prefix: invoiceSettings.invoicePrefix || undefined,
         paper_size: invoiceSettings.paperSize,
         footer_text: invoiceSettings.footerText || undefined,
+        owner_email: emailNotificationSettings.ownerEmail || undefined,
+        void_email_notifications_enabled: emailNotificationSettings.voidEmailNotificationsEnabled,
       });
       toast({
         title: "Settings saved!",
@@ -225,6 +236,10 @@ export default function Settings() {
         invoicePrefix: updated.invoice_prefix || "INV-",
         paperSize: (updated.paper_size === "thermal58" ? "thermal58" : "thermal"),
         footerText: updated.footer_text || "",
+      });
+      setEmailNotificationSettings({
+        ownerEmail: updated.owner_email || "",
+        voidEmailNotificationsEnabled: updated.void_email_notifications_enabled || false,
       });
     } catch (err: any) {
       toast({
@@ -560,6 +575,16 @@ export default function Settings() {
             <Building2 className="h-4 w-4" />
             Business
           </TabsTrigger>
+          <TabsTrigger value="system" className="gap-2">
+            <Receipt className="h-4 w-4" />
+            System
+          </TabsTrigger>
+          {(user?.role === "owner" || user?.role === "superadmin") && (
+            <TabsTrigger value="notifications" className="gap-2">
+              <Mail className="h-4 w-4" />
+              Notifications
+            </TabsTrigger>
+          )}
           <TabsTrigger value="users" className="gap-2">
             <Users className="h-4 w-4" />
             Users
@@ -795,8 +820,28 @@ export default function Settings() {
           </div>
         </GlassCard>
 
+        {/* Save Button for Business Tab */}
+        <div className="flex justify-end">
+          <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
+            {isSavingSettings ? (
+              <>
+                <Clock className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
+        </TabsContent>
+
+        {/* System Tab */}
+        <TabsContent value="system" className="space-y-6">
       {/* Invoice Settings */}
-      <GlassCard className="p-6 animate-fade-in stagger-2">
+      <GlassCard className="p-6 animate-fade-in stagger-1">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center">
             <Receipt className="w-5 h-5 text-secondary" />
@@ -870,7 +915,7 @@ export default function Settings() {
       </GlassCard>
 
       {/* Timezone Settings */}
-      <GlassCard className="p-6 animate-fade-in stagger-3">
+      <GlassCard className="p-6 animate-fade-in stagger-2">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
             <Clock className="w-5 h-5 text-blue-500" />
@@ -905,7 +950,7 @@ export default function Settings() {
       </GlassCard>
 
       {/* Localization */}
-      <GlassCard className="p-6 animate-fade-in stagger-4">
+      <GlassCard className="p-6 animate-fade-in stagger-3">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
             <Globe className="w-5 h-5 text-accent" />
@@ -969,7 +1014,7 @@ export default function Settings() {
         </div>
       </GlassCard>
 
-        {/* Save Button for Business Tab */}
+        {/* Save Button for System Tab */}
         <div className="flex justify-end">
           <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
             {isSavingSettings ? (
@@ -986,6 +1031,98 @@ export default function Settings() {
           </Button>
         </div>
         </TabsContent>
+
+        {/* Notifications Tab - Only visible to owner/admin */}
+        {(user?.role === "owner" || user?.role === "superadmin") && (
+          <TabsContent value="notifications" className="space-y-6">
+      {/* Email Notifications */}
+      <GlassCard className="p-6 animate-fade-in stagger-1">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+            <Mail className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold">Email Notifications</h3>
+            <p className="text-sm text-muted-foreground">ইমেইল বিজ্ঞপ্তি • Fraud prevention alerts</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="ownerEmail">Owner Email Address</Label>
+            <Input
+              id="ownerEmail"
+              type="email"
+              value={emailNotificationSettings.ownerEmail}
+              onChange={(e) =>
+                setEmailNotificationSettings((prev) => ({
+                  ...prev,
+                  ownerEmail: e.target.value,
+                }))
+              }
+              placeholder="owner@restaurant.com"
+              className="bg-muted/50"
+              disabled={isLoadingSettings}
+            />
+            <p className="text-xs text-muted-foreground">
+              Email address where void notifications will be sent
+            </p>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
+            <div>
+              <Label htmlFor="voidEmailNotifications" className="text-base font-medium">
+                Enable Void Email Notifications
+              </Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Receive instant email alerts when items are voided
+              </p>
+            </div>
+            <Switch
+              id="voidEmailNotifications"
+              checked={emailNotificationSettings.voidEmailNotificationsEnabled}
+              onCheckedChange={(checked) =>
+                setEmailNotificationSettings((prev) => ({
+                  ...prev,
+                  voidEmailNotificationsEnabled: checked,
+                }))
+              }
+              disabled={isLoadingSettings || !emailNotificationSettings.ownerEmail}
+            />
+          </div>
+          {emailNotificationSettings.voidEmailNotificationsEnabled && !emailNotificationSettings.ownerEmail && (
+            <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+              <p className="text-sm text-warning">
+                Please enter an owner email address to enable notifications
+              </p>
+            </div>
+          )}
+          <div className="p-3 rounded-lg bg-muted/30 border border-border/60">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              Email notifications help prevent fraud by alerting you immediately when managers void items.
+            </p>
+          </div>
+        </div>
+      </GlassCard>
+
+        {/* Save Button for Notifications Tab */}
+        <div className="flex justify-end">
+          <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
+            {isSavingSettings ? (
+              <>
+                <Clock className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
+        </TabsContent>
+        )}
 
         {/* Users Tab */}
         <TabsContent value="users" className="space-y-6">

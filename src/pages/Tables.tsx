@@ -1252,9 +1252,9 @@ export default function Tables() {
                   const activeCartItems = cart.filter((item) => item.quantity > 0);
                   if (activeCartItems.length === 0) {
                     return (
-                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                        <UtensilsCrossed className="w-8 h-8 mb-2 opacity-50" />
-                        <p className="text-sm">No items added</p>
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                    <UtensilsCrossed className="w-8 h-8 mb-2 opacity-50" />
+                    <p className="text-sm">No items added</p>
                         {/* Show Clear Table button only when all items are voided */}
                         {currentOrder && voidedItems.length > 0 && (
                           <Button
@@ -1267,11 +1267,11 @@ export default function Tables() {
                             Clear Table
                           </Button>
                         )}
-                      </div>
+                  </div>
                     );
                   }
                   return (
-                    <>
+                  <>
                       {activeCartItems.map((item) => {
                       const baselineQty = baselineItems.find((b) => b.itemId === item.itemId)?.quantity ?? 0;
                       const isSentItem = baselineQty > 0;
@@ -1318,13 +1318,13 @@ export default function Tables() {
                               ) : (
                                 // Normal quantity controls - works for all items when void management is disabled
                                 <>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, -1)}>
-                                    <Minus className="w-3 h-3" />
-                                  </Button>
-                                  <span className="w-6 text-center text-sm">{item.quantity}</span>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
-                                    <Plus className="w-3 h-3" />
-                                  </Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, -1)}>
+                                <Minus className="w-3 h-3" />
+                              </Button>
+                              <span className="w-6 text-center text-sm">{item.quantity}</span>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
+                                <Plus className="w-3 h-3" />
+                              </Button>
                                 </>
                               )}
                             </div>
@@ -1944,71 +1944,71 @@ export default function Tables() {
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-2 text-base">
-                  <UtensilsCrossed className="w-5 h-5 text-primary" />
-                  <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
-                </div>
-                <div className="bg-muted/30 rounded-lg p-4 space-y-2">
-                  {currentOrder && (() => {
-                    // Calculate VAT from order items
-                    const calculatedVat = currentOrder.vatAmount > 0 
-                      ? currentOrder.vatAmount 
-                      : currentOrder.items.reduce((sum, item) => {
-                          if (!item.vatRate || item.vatRate === 0) return sum;
-                          const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
-                          return sum + itemVat;
-                        }, 0);
-                    const displayVat = Math.round(calculatedVat);
-                    
-                    // Calculate VAT-exclusive subtotal
-                    const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
-                    const displaySubtotal = Math.round(itemsTotal - calculatedVat);
-                    
-                    // Service charge is calculated on VAT-inclusive amount (itemsTotal)
-                    // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
-                    const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
-                    
-                    // Total = Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
-                    const calculatedTotal = displaySubtotal + displayVat + serviceChargeAmount - billDiscount;
-                    
-                    return (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">Total Amount:</span>
-                          <span className="text-2xl font-display font-bold text-primary">
-                            {formatCurrency(calculatedTotal)}
-                          </span>
-                        </div>
+              <div className="flex items-center gap-2 text-base">
+                <UtensilsCrossed className="w-5 h-5 text-primary" />
+                <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                {currentOrder && (() => {
+                  // Calculate VAT from order items
+                  const calculatedVat = currentOrder.vatAmount > 0 
+                    ? currentOrder.vatAmount 
+                    : currentOrder.items.reduce((sum, item) => {
+                        if (!item.vatRate || item.vatRate === 0) return sum;
+                        const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                        return sum + itemVat;
+                      }, 0);
+                  const displayVat = Math.round(calculatedVat);
+                  
+                  // Calculate VAT-exclusive subtotal
+                  const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+                  const displaySubtotal = Math.round(itemsTotal - calculatedVat);
+                  
+                  // Service charge is calculated on VAT-inclusive amount (itemsTotal)
+                  // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
+                  const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
+                  
+                  // Total = Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
+                  const calculatedTotal = displaySubtotal + displayVat + serviceChargeAmount - billDiscount;
+                  
+                  return (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Total Amount:</span>
+                        <span className="text-2xl font-display font-bold text-primary">
+                          {formatCurrency(calculatedTotal)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal:</span>
+                        <span>{formatCurrency(displaySubtotal)}</span>
+                      </div>
+                      {displayVat > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Subtotal:</span>
-                          <span>{formatCurrency(displaySubtotal)}</span>
+                          <span className="text-muted-foreground">VAT:</span>
+                          <span>{formatCurrency(displayVat)}</span>
                         </div>
-                        {displayVat > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">VAT:</span>
-                            <span>{formatCurrency(displayVat)}</span>
-                          </div>
-                        )}
-                        {serviceChargeAmount > 0 && (
-                          <div className="flex justify-between text-sm text-primary">
-                            <span>Service Charge:</span>
-                            <span>+{formatCurrency(serviceChargeAmount)}</span>
-                          </div>
-                        )}
-                        {billDiscount > 0 && (
-                          <div className="flex justify-between text-sm text-accent">
-                            <span>Discount:</span>
-                            <span>-{formatCurrency(billDiscount)}</span>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-                <div className="flex items-start gap-2 pt-2">
-                  <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
+                      )}
+                      {serviceChargeAmount > 0 && (
+                        <div className="flex justify-between text-sm text-primary">
+                          <span>Service Charge:</span>
+                          <span>+{formatCurrency(serviceChargeAmount)}</span>
+                        </div>
+                      )}
+                      {billDiscount > 0 && (
+                        <div className="flex justify-between text-sm text-accent">
+                          <span>Discount:</span>
+                          <span>-{formatCurrency(billDiscount)}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="flex items-start gap-2 pt-2">
+                <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
                   <div className="text-sm">
-                    Table will be marked as <span className="font-semibold text-accent">free</span> after payment is processed.
+                  Table will be marked as <span className="font-semibold text-accent">free</span> after payment is processed.
                   </div>
                 </div>
               </div>
