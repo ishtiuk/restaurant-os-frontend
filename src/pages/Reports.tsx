@@ -32,6 +32,7 @@ import { reportsApi, type SalesSummaryResponse, type SalesTrendResponse, type To
 import { salesApi, type SaleDto } from "@/lib/api/sales";
 import { tablesApi, type VoidedOrderItemDto } from "@/lib/api/tables";
 import { toast } from "@/hooks/use-toast";
+import { isFeatureEnabled } from "@/utils/features";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -222,19 +223,21 @@ export default function Reports() {
       if (top) setTopProducts(top);
       if (low) setLowStock(low);
       
-      // Load voided items
-      setLoadingVoidedItems(true);
-      try {
-        const voided = await tablesApi.listVoidedItems({
-          start_date: startDateStr,
-          end_date: endDateStr,
-        });
-        setVoidedItems(voided);
-      } catch (err) {
-        console.error("Failed to load voided items:", err);
-        toast({ title: "Failed to load voided items", variant: "destructive" });
-      } finally {
-        setLoadingVoidedItems(false);
+      // Load voided items (only if feature is enabled)
+      if (isFeatureEnabled("void_management")) {
+        setLoadingVoidedItems(true);
+        try {
+          const voided = await tablesApi.listVoidedItems({
+            start_date: startDateStr,
+            end_date: endDateStr,
+          });
+          setVoidedItems(voided);
+        } catch (err) {
+          console.error("Failed to load voided items:", err);
+          toast({ title: "Failed to load voided items", variant: "destructive" });
+        } finally {
+          setLoadingVoidedItems(false);
+        }
       }
     } catch (error) {
       console.error("Failed to load reports:", error);
@@ -615,7 +618,8 @@ export default function Reports() {
         </GlassCard>
       </div>
 
-      {/* Voided Items Report */}
+      {/* Voided Items Report - Only show if void_management feature is enabled */}
+      {isFeatureEnabled("void_management") && (
       <GlassCard className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -642,7 +646,8 @@ export default function Reports() {
                 <p className="text-2xl font-bold text-destructive">
                   {formatCurrency(
                     voidedItems.reduce((sum, item) => {
-                      const voidedQty = (item.original_quantity || item.quantity) - item.quantity;
+                      // Use voided_quantity if available, otherwise calculate from original_quantity and quantity
+                      const voidedQty = item.voided_quantity ?? ((item.original_quantity || 0) - (item.quantity || 0));
                       return sum + (item.unit_price * voidedQty);
                     }, 0)
                   )}
@@ -671,12 +676,13 @@ export default function Reports() {
                 </thead>
                 <tbody>
                   {voidedItems.map((item, idx) => {
-                    const voidedQty = (item.original_quantity || item.quantity) - item.quantity;
+                    // Use voided_quantity if available, otherwise calculate from original_quantity and quantity
+                    const voidedQty = item.voided_quantity ?? ((item.original_quantity || 0) - (item.quantity || 0));
                     return (
                       <tr key={idx} className="border-t border-destructive/10 hover:bg-destructive/5">
                         <td className="p-3 text-sm font-medium">{item.table_no || "N/A"}</td>
                         <td className="p-3 text-sm line-through text-muted-foreground">{item.item_name}</td>
-                        <td className="p-3 text-sm text-right">{item.original_quantity || item.quantity}</td>
+                        <td className="p-3 text-sm text-right">{item.original_quantity || 0}</td>
                         <td className="p-3 text-sm text-right text-destructive font-semibold">-{voidedQty}</td>
                         <td className="p-3 text-sm text-muted-foreground max-w-[200px] truncate" title={item.void_reason || ""}>
                           {item.void_reason || "N/A"}
@@ -699,6 +705,7 @@ export default function Reports() {
           </div>
         )}
       </GlassCard>
+      )}
     </div>
   );
 }

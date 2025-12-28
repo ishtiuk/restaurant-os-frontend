@@ -26,34 +26,32 @@ import {
   RotateCcw,
 } from "lucide-react";
 
-// All available features in the system
+// All available features in the system (real features from the app)
 const ALL_FEATURES = [
-  { id: "pos_basic", name: "Basic POS", category: "POS" },
-  { id: "pos_advanced", name: "Advanced POS", category: "POS" },
-  { id: "inventory", name: "Inventory Management", category: "Operations" },
-  { id: "tables", name: "Table Management", category: "Operations" },
-  { id: "kitchen_display", name: "Kitchen Display System", category: "Operations" },
-  { id: "customers", name: "Customer Management", category: "CRM" },
-  { id: "loyalty", name: "Loyalty & Rewards", category: "CRM" },
-  { id: "analytics_basic", name: "Basic Analytics", category: "Reports" },
-  { id: "analytics_full", name: "Full Analytics", category: "Reports" },
-  { id: "vat_reports", name: "VAT Reports", category: "Reports" },
-  { id: "multi_branch", name: "Multi-Branch Support", category: "Enterprise" },
-  { id: "api_access", name: "API Access", category: "Enterprise" },
-  { id: "white_label", name: "White-label Option", category: "Enterprise" },
-  { id: "custom_integrations", name: "Custom Integrations", category: "Enterprise" },
+  { id: "dashboard", name: "Dashboard", category: "Main" },
+  { id: "pos_sales", name: "POS Sales", category: "Main" },
+  { id: "tables", name: "Tables", category: "Main" },
+  { id: "items", name: "Items", category: "Main" },
+  { id: "purchases", name: "Purchases", category: "Operations" },
+  { id: "suppliers", name: "Suppliers", category: "Operations" },
+  { id: "staff", name: "Staff", category: "Operations" },
+  { id: "customers", name: "Customers", category: "Operations" },
+  { id: "reports", name: "Reports", category: "Analytics" },
+  { id: "sales_history", name: "Sales History", category: "Analytics" },
+  { id: "finance", name: "Finance", category: "Analytics" },
+  { id: "void_management", name: "Void Management", category: "Operations" },
 ] as const;
 
 // Default features by plan
 const PLAN_FEATURES: Record<string, string[]> = {
-  starter: ["pos_basic", "inventory", "analytics_basic"],
-  professional: ["pos_basic", "pos_advanced", "inventory", "tables", "customers", "analytics_basic", "analytics_full", "vat_reports"],
+  basic: ["dashboard", "pos_sales", "items", "reports", "sales_history"],
+  professional: ["dashboard", "pos_sales", "tables", "items", "purchases", "suppliers", "staff", "reports", "sales_history", "finance"],
   enterprise: ALL_FEATURES.map(f => f.id),
 };
 
 const FEATURE_CATEGORIES = [...new Set(ALL_FEATURES.map(f => f.category))];
 
-type TenantPlan = "starter" | "professional" | "enterprise";
+type TenantPlan = "basic" | "professional" | "enterprise";
 
 type UITenant = AdminTenant & {
   plan: TenantPlan;
@@ -66,7 +64,7 @@ type UIAdminUser = AdminUser & {
   uiRole: "admin" | "manager";
 };
 
-const planOptions: TenantPlan[] = ["starter", "professional", "enterprise"];
+const planOptions: TenantPlan[] = ["basic", "professional", "enterprise"];
 
 export default function Admin() {
   const { user } = useAuth();
@@ -113,8 +111,8 @@ export default function Admin() {
       ]);
       const mappedTenants: UITenant[] = tenantRes.map((t) => ({
         ...t,
-        plan: "starter", // default; can be extended later
-        enabledFeatures: [...PLAN_FEATURES["starter"]],
+        plan: "basic", // default; can be extended later
+        enabledFeatures: [...PLAN_FEATURES["basic"]],
       }));
       const mappedUsers: UIAdminUser[] = userRes.map((u) => ({
         ...u,
@@ -162,7 +160,7 @@ export default function Admin() {
       });
     } else {
       setEditingTenant(null);
-      setTenantForm({ name: "", plan: "starter", isActive: true, note: "" });
+      setTenantForm({ name: "", plan: "basic", isActive: true, note: "" });
     }
     setTenantModalOpen(true);
   };
@@ -341,7 +339,7 @@ export default function Admin() {
 
   const getPlanBadgeVariant = (plan: TenantPlan) => {
     switch (plan) {
-      case "starter": return "outline";
+      case "basic": return "outline";
       case "professional": return "secondary";
       case "enterprise": return "default";
     }
@@ -613,7 +611,7 @@ export default function Admin() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {ALL_FEATURES.filter(f => f.category === category).map((feature) => {
                     const isEnabled = selectedFeatures.includes(feature.id);
-                    const isPlanDefault = PLAN_FEATURES[featureEditTenant?.plan || "starter"].includes(feature.id);
+                    const isPlanDefault = PLAN_FEATURES[featureEditTenant?.plan || "basic"].includes(feature.id);
                     return (
                       <div
                         key={feature.id}

@@ -149,6 +149,7 @@ export interface VoidedOrderItemDto {
   voided_by?: string | null;
   void_reason?: string | null;
   original_quantity?: number | null;
+  voided_quantity?: number; // Explicit voided quantity field
   created_at: string;
   updated_at: string;
   order_id?: string; // Added for reports
@@ -205,6 +206,9 @@ export const tablesApi = {
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     const query = queryParams.toString();
     return apiClient.get(`/tables/orders/voided-items${query ? `?${query}` : ''}`);
+  },
+  cancelOrder(orderId: string): Promise<void> {
+    return apiClient.delete(`/tables/orders/${orderId}`);
   },
 };
 

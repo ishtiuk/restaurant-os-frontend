@@ -149,6 +149,12 @@ export interface DashboardStats {
 export interface CartItem extends SaleItem {
   available: number;
   vatRate?: number; // VAT rate from product
+  // Void tracking fields
+  isVoided?: boolean;
+  voidedAt?: string;
+  voidedBy?: string;
+  voidReason?: string;
+  originalQuantity?: number;
 }
 
 export interface KitchenTicket {

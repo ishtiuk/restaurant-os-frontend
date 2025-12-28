@@ -105,6 +105,7 @@ type AppData = {
   
   completeSale: (input: Omit<Sale, "id">) => Promise<Sale>;
   refreshTables: () => Promise<void>;
+  refreshItems: () => Promise<void>;
 };
 
 const AppDataContext = createContext<AppData | undefined>(undefined);
@@ -260,6 +261,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                   notes: i.notes ?? undefined,
                   available: 9999,
                   vatRate: product?.vat_rate != null ? Number(product.vat_rate) : undefined,
+                  // Void tracking fields
+                  isVoided: i.is_voided ?? false,
+                  voidedAt: i.voided_at ?? undefined,
+                  voidedBy: i.voided_by ?? undefined,
+                  voidReason: i.void_reason ?? undefined,
+                  originalQuantity: i.original_quantity ?? undefined,
                 };
               }),
               subtotal: o.subtotal,
@@ -362,6 +369,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
               notes: i.notes ?? undefined,
               available: 9999,
               vatRate: product?.vatRate,
+              // Void tracking fields
+              isVoided: i.is_voided ?? false,
+              voidedAt: i.voided_at ?? undefined,
+              voidedBy: i.voided_by ?? undefined,
+              voidReason: i.void_reason ?? undefined,
+              originalQuantity: i.original_quantity ?? undefined,
             };
           }),
           subtotal: o.subtotal,
@@ -422,6 +435,38 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       );
     } catch (err) {
       console.error("Failed to refresh categories", err);
+    }
+  };
+
+  const refreshItems = async () => {
+    if (!user?.token) return;
+    try {
+      const refreshedItems = await productsApi.list();
+      setItems(
+        refreshedItems.map((p) => ({
+          id: String(p.id),
+          name: p.name,
+          nameBn: p.name_bn ?? undefined,
+          sku: p.sku,
+          categoryId: p.category_id,
+          price: Number(p.price),
+          cost: Number(p.cost),
+          stockQty: Number(p.stock_qty ?? 0),
+          unit: (p.unit as Item["unit"]) || "pcs",
+          imageUrl: p.image_url
+            ? p.image_url.startsWith("http")
+              ? p.image_url
+              : `${API_ORIGIN}${p.image_url}`
+            : undefined,
+          isActive: Boolean(p.is_active),
+          isPackaged: Boolean(p.is_packaged),
+          vatRate: p.vat_rate != null ? Number(p.vat_rate) : undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to refresh items", err);
     }
   };
 
@@ -529,12 +574,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         if (user?.token) {
           try {
             const { kotItems, waiterId } = opts ?? {};
+            // Filter out items with quantity 0 (voided items) - safety check
+            const validItems = orderItems.filter((item) => item.quantity > 0);
+            if (validItems.length === 0) {
+              throw new Error("Cannot create order with all items voided (quantity 0)");
+            }
             // In Bangladesh, prices shown to customers are VAT-inclusive
             // But for backend accounting, we need to separate VAT
-            const subtotalInclusive = orderItems.reduce((s, i) => s + i.total, 0);
+            const subtotalInclusive = validItems.reduce((s, i) => s + i.total, 0);
             // Calculate VAT from each item's VAT rate
             // Extract VAT from VAT-inclusive prices: vat = (price * qty) * (vatRate / (100 + vatRate))
-            const calculatedVat = orderItems.reduce((sum, item) => {
+            const calculatedVat = validItems.reduce((sum, item) => {
               const cartItem = items.find((ci) => ci.id === item.itemId);
               const vatRate = (cartItem as any)?.vatRate;
               if (!vatRate || vatRate === 0) return sum;
@@ -550,7 +600,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             // Create/update order via API
             const orderInput: any = {
               table_id: tableId,
-              items: orderItems.map((i) => ({
+              items: validItems.map((i) => ({
                 item_id: i.itemId,
                 item_name: i.itemName,
                 quantity: i.quantity,
@@ -1721,6 +1771,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
       refreshCategories,
       refreshTables,
+      refreshItems,
     }),
     [
       attendance,
@@ -1739,6 +1790,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       vatEntries,
       refreshCategories,
       refreshTables,
+      refreshItems,
     ]
   );
 

@@ -13,6 +13,7 @@ import { formatWithTimezone, formatDate, formatTime } from "@/utils/date";
 import { staffApi } from "@/lib/api/staff";
 import { tablesApi } from "@/lib/api/tables";
 import { useAuth } from "@/contexts/AuthContext";
+import { isFeatureEnabled } from "@/utils/features";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Users,
@@ -154,6 +155,7 @@ export default function Tables() {
     ensureTableSession,
     markTableBilling,
     refreshTables,
+    refreshItems,
   } = useAppData();
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(null);
   const [showOrderDialog, setShowOrderDialog] = useState(false);
@@ -172,6 +174,7 @@ export default function Tables() {
   const [newTable, setNewTable] = useState({ tableNo: "", capacity: 4, location: "" });
   const [isCreatingTable, setIsCreatingTable] = useState(false);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  const [showClearTableConfirm, setShowClearTableConfirm] = useState(false);
 
   // Feature 1: Waiter Assignment
   const [waiters, setWaiters] = useState<Staff[]>([]);
@@ -256,33 +259,32 @@ export default function Tables() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrder?.waiterId, currentOrder?.waiterName, showOrderDialog]);
 
-  // Load voided items from order when order dialog opens
+  // Load voided items from order when order dialog opens (only if feature is enabled)
   useEffect(() => {
+    if (!isFeatureEnabled("void_management")) {
+      setVoidedItems([]);
+      return;
+    }
     if (currentOrder && showOrderDialog) {
-      // Fetch the latest order data to get voided items from backend
+      // Fetch voided items from the voided_items API
       const loadVoidedItems = async () => {
         try {
-          const latestOrder = await tablesApi.getOrder(currentOrder.id);
-          // Extract voided items from order items
-          const voidedItemsFromOrder: VoidedItem[] = latestOrder.items
-            .filter(item => item.is_voided === true)
-            .map(item => {
-              const originalQty = item.original_quantity ?? item.quantity;
-              const currentQty = item.quantity;
-              const voidedQty = originalQty - currentQty;
-              
-              return {
-                itemId: String(item.product_id),
-                itemName: item.item_name,
-                originalQuantity: originalQty,
-                voidedQuantity: voidedQty,
-                reason: item.void_reason || "No reason provided",
-                voidedBy: item.voided_by_name || user?.name || "Unknown",
-                voidedAt: item.voided_at || new Date().toISOString(),
-                tableNo: currentOrder.tableNo,
-                orderId: currentOrder.id,
-              };
-            });
+          const voidedItemsData = await tablesApi.listVoidedItems({
+            order_id: currentOrder.id,
+          });
+          
+          // Map to VoidedItem format
+          const voidedItemsFromOrder: VoidedItem[] = voidedItemsData.map(item => ({
+            itemId: String(item.product_id),
+            itemName: item.item_name,
+            originalQuantity: item.original_quantity ?? 0,
+            voidedQuantity: item.quantity, // This is the voided quantity (negative in UI)
+            reason: item.void_reason || "No reason provided",
+            voidedBy: item.voided_by_name || user?.name || "Unknown",
+            voidedAt: item.voided_at || new Date().toISOString(),
+            tableNo: item.table_no || currentOrder.tableNo,
+            orderId: item.order_id || currentOrder.id,
+          }));
           setVoidedItems(voidedItemsFromOrder);
         } catch (error) {
           console.error("Failed to load voided items from order:", error);
@@ -448,6 +450,52 @@ export default function Tables() {
     });
   };
 
+  // Feature 3: Void handlers - only work if void management is enabled
+  const handleVoidReduce = (itemId: string) => {
+    if (!isFeatureEnabled("void_management")) {
+      updateQuantity(itemId, -1);
+      return;
+    }
+    const cartItem = cart.find(c => c.itemId === itemId);
+    if (!cartItem) return;
+    const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
+    const newQty = cartItem.quantity - 1;
+    if (newQty < baselineQty) {
+      setPendingVoid({
+        itemId,
+        itemName: cartItem.itemName,
+        action: 'reduce',
+        newQuantity: newQty,
+      });
+      setVoidReason("");
+      setShowVoidReasonDialog(true);
+    } else {
+      updateQuantity(itemId, -1);
+    }
+  };
+
+  const handleVoidDelete = (itemId: string) => {
+    if (!isFeatureEnabled("void_management")) {
+      removeFromCart(itemId);
+      return;
+    }
+    const cartItem = cart.find(c => c.itemId === itemId);
+    if (!cartItem) return;
+    const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
+    if (baselineQty > 0) {
+      setPendingVoid({
+        itemId,
+        itemName: cartItem.itemName,
+        action: 'delete',
+        newQuantity: 0,
+      });
+      setVoidReason("");
+      setShowVoidReasonDialog(true);
+    } else {
+      removeFromCart(itemId);
+    }
+  };
+
   // Feature 3: Modified updateQuantity to support void flow
   const updateQuantity = (itemId: string, delta: number) => {
     const cartItem = cart.find(c => c.itemId === itemId);
@@ -456,8 +504,9 @@ export default function Tables() {
     const newQty = cartItem.quantity + delta;
     const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
     
-    // If reducing below baseline (items already sent to kitchen), show void reason dialog
-    if (newQty < baselineQty && delta < 0) {
+    // If reducing below baseline (items already sent to kitchen) AND void management is enabled, show void reason dialog
+    // Otherwise, allow normal quantity reduction (even if it goes below baseline)
+    if (newQty < baselineQty && delta < 0 && isFeatureEnabled("void_management")) {
       setPendingVoid({
         itemId,
         itemName: cartItem.itemName,
@@ -499,8 +548,9 @@ export default function Tables() {
     
     const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
     
-    // If item was sent to kitchen, show void reason dialog
-    if (baselineQty > 0) {
+    // If item was sent to kitchen and void management is enabled, show void reason dialog
+    // Otherwise, allow normal removal (even if item was sent)
+    if (baselineQty > 0 && isFeatureEnabled("void_management")) {
       setPendingVoid({
         itemId,
         itemName: cartItem.itemName,
@@ -518,6 +568,19 @@ export default function Tables() {
 
   // Feature 3: Handle void confirmation
   const handleVoidConfirm = async () => {
+    // Early return if void management is disabled - should not reach here, but safety check
+    if (!isFeatureEnabled("void_management")) {
+      toast({
+        title: "Void management disabled",
+        description: "This feature is not available for your tenant",
+        variant: "destructive",
+      });
+      setShowVoidReasonDialog(false);
+      setPendingVoid(null);
+      setVoidReason("");
+      return;
+    }
+
     if (!pendingVoid || voidReason.trim().length < 10) {
       toast({
         title: "Reason required",
@@ -569,8 +632,19 @@ export default function Tables() {
         new_quantity: pendingVoid.action === 'delete' ? 0 : pendingVoid.newQuantity ?? null,
       });
 
-      // Refresh order data
+      // Refresh order data to get updated void status
+      // This will update tableOrders with the latest data including void status
       await refreshTables();
+      
+      // Always refresh items after voiding to get updated stock
+      // Stock restoration happens in backend for packaged items that were sent to kitchen
+      if (refreshItems) {
+        try {
+          await refreshItems();
+        } catch (err) {
+          console.error("Failed to refresh items after void", err);
+        }
+      }
 
     const baselineQty = baselineItems.find((b) => b.itemId === pendingVoid.itemId)?.quantity ?? 0;
     const voidedQuantity = pendingVoid.action === 'delete' 
@@ -771,7 +845,10 @@ export default function Tables() {
       return;
     }
 
-    const mergedItems = cart.map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
+    // Filter out items with quantity 0 (voided items) before sending to backend
+    const mergedItems = cart
+      .filter((item) => item.quantity > 0) // Exclude voided items (quantity 0)
+      .map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
     await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems, waiterId: selectedWaiterId ?? undefined });
     setBaselineItems(mergedItems);
 
@@ -812,7 +889,10 @@ export default function Tables() {
 
     const deltaItems = getDeltaItems();
     if (deltaItems.length > 0) {
-      const mergedItems = cart.map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
+      // Filter out items with quantity 0 (voided items) before sending to backend
+      const mergedItems = cart
+        .filter((item) => item.quantity > 0) // Exclude voided items (quantity 0)
+        .map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
       await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems });
       setBaselineItems(mergedItems);
     }
@@ -825,11 +905,35 @@ export default function Tables() {
 
   const handleFinalizeBill = () => {
     if (!selectedTable || !currentOrder) return;
+    
+    // Check if all items are voided (cart is empty and no active items)
+    const activeItems = currentOrder.items.filter(item => item.quantity > 0);
+    if (activeItems.length === 0) {
+      toast({
+        title: "Cannot finalize bill",
+        description: "All items have been voided. Please clear the table instead.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setShowFinalizeConfirm(true);
   };
 
   const confirmFinalizeBill = () => {
     if (!selectedTable || !currentOrder) return;
+    
+    // Double-check: prevent finalizing if all items are voided
+    const activeItems = currentOrder.items.filter(item => item.quantity > 0);
+    if (activeItems.length === 0) {
+      toast({
+        title: "Cannot finalize bill",
+        description: "All items have been voided. Please clear the table instead.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setShowFinalizeConfirm(false);
     setBillLoading(true);
     
@@ -859,6 +963,43 @@ export default function Tables() {
       })
       .catch(() => toast({ title: "Unable to finalize bill", variant: "destructive" }))
       .finally(() => setBillLoading(false));
+  };
+
+  const handleClearTable = () => {
+    if (!selectedTable || !currentOrder) return;
+    setShowClearTableConfirm(true);
+  };
+
+  const confirmClearTable = async () => {
+    if (!selectedTable || !currentOrder) return;
+    setShowClearTableConfirm(false);
+    
+    try {
+      await tablesApi.cancelOrder(currentOrder.id);
+      toast({
+        title: `✅ Table ${selectedTable.tableNo} cleared`,
+        description: "Order cancelled and table reset to empty",
+      });
+      
+      // Refresh tables to get updated status
+      await refreshTables();
+      
+      // Close dialogs and reset state
+      setShowOrderDialog(false);
+      setShowBillDialog(false);
+      setCart([]);
+      setBaselineItems([]);
+      setSelectedTable(null);
+      setSelectedWaiterId(null);
+      setVoidedItems([]);
+      setAllVoidedItems([]);
+    } catch (error: any) {
+      toast({
+        title: "Failed to clear table",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAddTable = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -971,13 +1112,14 @@ export default function Tables() {
                     <p className={`text-xs font-medium ${getTimeColorClass(order.createdAt)}`}>
                       ⏱️ {getElapsedTime(order.createdAt)}
                     </p>
-                    {/* Void indicator badge */}
-                    {(() => {
-                      const orderVoids = allVoidedItems.filter(v => v.orderId === order.id);
-                      return orderVoids.length > 0 ? (
+                    {/* Void indicator badge - Only show if feature is enabled */}
+                    {isFeatureEnabled("void_management") && (() => {
+                      // Calculate void count from order items (from backend data)
+                      const voidCount = order.items.filter(item => item.isVoided === true).length;
+                      return voidCount > 0 ? (
                         <Badge variant="destructive" className="mt-1 text-xs">
                           <XCircle className="w-3 h-3 mr-1" />
-                          {orderVoids.length} void{orderVoids.length > 1 ? 's' : ''}
+                          {voidCount} void{voidCount > 1 ? 's' : ''}
                         </Badge>
                       ) : null;
                     })()}
@@ -1079,8 +1221,8 @@ export default function Tables() {
                     onClick={() => addToCart(item)}
                     className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors relative"
                   >
-                    <p className="font-medium text-sm truncate">{item.name}</p>
-                    <p className="text-primary font-semibold">{formatCurrency(item.price)}</p>
+                    <div className="font-medium text-sm truncate">{item.name}</div>
+                    <div className="text-primary font-semibold">{formatCurrency(item.price)}</div>
                     {/* Stock Badge - Bottom Right Corner */}
                     <div className="absolute bottom-2 right-2">
                       {item.isPackaged ? (
@@ -1105,39 +1247,86 @@ export default function Tables() {
             <div className="w-72 flex flex-col border-l border-border pl-4">
               <h4 className="font-semibold mb-3">Order Items</h4>
               <div className="flex-1 overflow-auto space-y-2 custom-scrollbar">
-                {cart.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <UtensilsCrossed className="w-8 h-8 mb-2 opacity-50" />
-                    <p className="text-sm">No items added</p>
-                  </div>
-                ) : (
-                  <>
-                    {cart.map((item) => {
+                {(() => {
+                  // Filter out items with quantity 0 (voided items) from display
+                  const activeCartItems = cart.filter((item) => item.quantity > 0);
+                  if (activeCartItems.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <UtensilsCrossed className="w-8 h-8 mb-2 opacity-50" />
+                        <p className="text-sm">No items added</p>
+                        {/* Show Clear Table button only when all items are voided */}
+                        {currentOrder && voidedItems.length > 0 && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="mt-4"
+                            onClick={handleClearTable}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Clear Table
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <>
+                      {activeCartItems.map((item) => {
                       const baselineQty = baselineItems.find((b) => b.itemId === item.itemId)?.quantity ?? 0;
                       const isSentItem = baselineQty > 0;
                       
                       return (
                         <div key={item.itemId} className="p-2 rounded-lg bg-muted/30">
                           <div className="flex justify-between items-start mb-1">
-                            <p className="font-medium text-sm truncate flex-1">
-                              {item.itemName}
+                            <div className="font-medium text-sm truncate flex-1 flex items-center gap-1">
+                              <span>{item.itemName}</span>
                               {isSentItem && (
-                                <Badge variant="outline" className="ml-1 text-xs">Sent</Badge>
+                                <Badge variant="outline" className="text-xs">Sent</Badge>
                               )}
-                            </p>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFromCart(item.itemId)}>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6" 
+                              onClick={() => {
+                                // Only use void handler if feature is enabled AND item is sent to kitchen
+                                if (isFeatureEnabled("void_management") && isSentItem) {
+                                  handleVoidDelete(item.itemId);
+                                } else {
+                                  // Normal removal - works even for sent items when void management is disabled
+                                  removeFromCart(item.itemId);
+                                }
+                              }}
+                            >
                               <X className="w-3 h-3" />
                             </Button>
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, -1)}>
-                                <Minus className="w-3 h-3" />
-                              </Button>
-                              <span className="w-6 text-center text-sm">{item.quantity}</span>
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
-                                <Plus className="w-3 h-3" />
-                              </Button>
+                              {isFeatureEnabled("void_management") && isSentItem ? (
+                                // If void management is enabled and item is sent, use void handlers
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleVoidReduce(item.itemId)}>
+                                    <Minus className="w-3 h-3" />
+                                  </Button>
+                                  <span className="w-6 text-center text-sm">{item.quantity}</span>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
+                                    <Plus className="w-3 h-3" />
+                                  </Button>
+                                </>
+                              ) : (
+                                // Normal quantity controls - works for all items when void management is disabled
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, -1)}>
+                                    <Minus className="w-3 h-3" />
+                                  </Button>
+                                  <span className="w-6 text-center text-sm">{item.quantity}</span>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
+                                    <Plus className="w-3 h-3" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                             <span className="text-sm font-semibold">{formatCurrency(item.total)}</span>
                           </div>
@@ -1145,8 +1334,8 @@ export default function Tables() {
                       );
                     })}
 
-                    {/* Feature 3: Voided Items Section */}
-                    {voidedItems.length > 0 && (
+                    {/* Feature 3: Voided Items Section - Only show if feature is enabled */}
+                    {isFeatureEnabled("void_management") && voidedItems.length > 0 && (
                       <div className="mt-4 pt-3 border-t border-destructive/30">
                         <h5 className="text-sm font-semibold text-destructive flex items-center gap-1 mb-3">
                           <XCircle className="w-4 h-4" />
@@ -1193,7 +1382,8 @@ export default function Tables() {
                       </div>
                     )}
                   </>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Totals */}
@@ -1244,10 +1434,10 @@ export default function Tables() {
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4">
-                <p>
+                <div>
                   You are about to {pendingVoid?.action === 'delete' ? 'remove' : 'reduce quantity of'}{' '}
                   <strong>{pendingVoid?.itemName}</strong> that has already been sent to the kitchen.
-                </p>
+                </div>
                 
                 <div className="flex flex-wrap gap-2">
                   {voidReasonSuggestions.map((suggestion) => (
@@ -1272,9 +1462,9 @@ export default function Tables() {
                     className="mt-1"
                     rows={3}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <div className="text-xs text-muted-foreground mt-1">
                     {voidReason.length}/10 characters
-                  </p>
+                  </div>
                 </div>
               </div>
             </AlertDialogDescription>
@@ -1710,6 +1900,41 @@ export default function Tables() {
         </DialogContent>
       </Dialog>
 
+      {/* Clear Table Confirmation Dialog */}
+      <AlertDialog open={showClearTableConfirm} onOpenChange={setShowClearTableConfirm}>
+        <AlertDialogContent className="glass-card border-2 border-destructive/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display gradient-text text-xl flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              Clear Table?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2 text-base">
+                  <UtensilsCrossed className="w-5 h-5 text-destructive" />
+                  <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  This will cancel the current order and reset the table to empty. All order data will be permanently deleted.
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowClearTableConfirm(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmClearTable}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Clear Table
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Finalize Bill Confirmation Dialog */}
       <AlertDialog open={showFinalizeConfirm} onOpenChange={setShowFinalizeConfirm}>
         <AlertDialogContent className="glass-card border-2 border-primary/30">
@@ -1717,73 +1942,75 @@ export default function Tables() {
             <AlertDialogTitle className="font-display gradient-text text-xl">
               Finalize Bill?
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3 pt-2">
-              <div className="flex items-center gap-2 text-base">
-                <UtensilsCrossed className="w-5 h-5 text-primary" />
-                <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
-              </div>
-              <div className="bg-muted/30 rounded-lg p-4 space-y-2">
-                {currentOrder && (() => {
-                  // Calculate VAT from order items
-                  const calculatedVat = currentOrder.vatAmount > 0 
-                    ? currentOrder.vatAmount 
-                    : currentOrder.items.reduce((sum, item) => {
-                        if (!item.vatRate || item.vatRate === 0) return sum;
-                        const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
-                        return sum + itemVat;
-                      }, 0);
-                  const displayVat = Math.round(calculatedVat);
-                  
-                  // Calculate VAT-exclusive subtotal
-                  const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
-                  const displaySubtotal = Math.round(itemsTotal - calculatedVat);
-                  
-                  // Service charge is calculated on VAT-inclusive amount (itemsTotal)
-                  // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
-                  const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
-                  
-                  // Total = Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
-                  const calculatedTotal = displaySubtotal + displayVat + serviceChargeAmount - billDiscount;
-                  
-                  return (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Total Amount:</span>
-                        <span className="text-2xl font-display font-bold text-primary">
-                          {formatCurrency(calculatedTotal)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal:</span>
-                        <span>{formatCurrency(displaySubtotal)}</span>
-                      </div>
-                      {displayVat > 0 && (
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2 text-base">
+                  <UtensilsCrossed className="w-5 h-5 text-primary" />
+                  <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                  {currentOrder && (() => {
+                    // Calculate VAT from order items
+                    const calculatedVat = currentOrder.vatAmount > 0 
+                      ? currentOrder.vatAmount 
+                      : currentOrder.items.reduce((sum, item) => {
+                          if (!item.vatRate || item.vatRate === 0) return sum;
+                          const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                          return sum + itemVat;
+                        }, 0);
+                    const displayVat = Math.round(calculatedVat);
+                    
+                    // Calculate VAT-exclusive subtotal
+                    const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+                    const displaySubtotal = Math.round(itemsTotal - calculatedVat);
+                    
+                    // Service charge is calculated on VAT-inclusive amount (itemsTotal)
+                    // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
+                    const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
+                    
+                    // Total = Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
+                    const calculatedTotal = displaySubtotal + displayVat + serviceChargeAmount - billDiscount;
+                    
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Total Amount:</span>
+                          <span className="text-2xl font-display font-bold text-primary">
+                            {formatCurrency(calculatedTotal)}
+                          </span>
+                        </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">VAT:</span>
-                          <span>{formatCurrency(displayVat)}</span>
+                          <span className="text-muted-foreground">Subtotal:</span>
+                          <span>{formatCurrency(displaySubtotal)}</span>
                         </div>
-                      )}
-                      {serviceChargeAmount > 0 && (
-                        <div className="flex justify-between text-sm text-primary">
-                          <span>Service Charge:</span>
-                          <span>+{formatCurrency(serviceChargeAmount)}</span>
-                        </div>
-                      )}
-                      {billDiscount > 0 && (
-                        <div className="flex justify-between text-sm text-accent">
-                          <span>Discount:</span>
-                          <span>-{formatCurrency(billDiscount)}</span>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-              <div className="flex items-start gap-2 pt-2">
-                <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-                <p className="text-sm">
-                  Table will be marked as <span className="font-semibold text-accent">free</span> after payment is processed.
-                </p>
+                        {displayVat > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">VAT:</span>
+                            <span>{formatCurrency(displayVat)}</span>
+                          </div>
+                        )}
+                        {serviceChargeAmount > 0 && (
+                          <div className="flex justify-between text-sm text-primary">
+                            <span>Service Charge:</span>
+                            <span>+{formatCurrency(serviceChargeAmount)}</span>
+                          </div>
+                        )}
+                        {billDiscount > 0 && (
+                          <div className="flex justify-between text-sm text-accent">
+                            <span>Discount:</span>
+                            <span>-{formatCurrency(billDiscount)}</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                <div className="flex items-start gap-2 pt-2">
+                  <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
+                  <div className="text-sm">
+                    Table will be marked as <span className="font-semibold text-accent">free</span> after payment is processed.
+                  </div>
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
