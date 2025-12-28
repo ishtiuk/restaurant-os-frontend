@@ -23,6 +23,7 @@ import {
   History,
   Download,
   EyeOff,
+  Printer,
 } from "lucide-react";
 import {
   Dialog,
@@ -42,7 +43,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { useTimezone } from "@/contexts/TimezoneContext";
-import { formatWithTimezone, getDateOnly } from "@/utils/date";
+import { formatWithTimezone, getDateOnly, getStartOfDay, getEndOfDay } from "@/utils/date";
+import { DailySalesReport } from "@/components/print/DailySalesReport";
+import { printContent } from "@/utils/printUtils";
+import ReactDOM from "react-dom/client";
 
 const formatCurrency = (amount: number) => `৳${amount.toLocaleString("bn-BD")}`;
 
@@ -250,6 +254,96 @@ export default function SalesHistoryPage() {
     );
   };
 
+  const handlePrintTodaySales = async () => {
+    try {
+      setLoading(true);
+      
+      // Get today's date in timezone
+      const today = new Date();
+      const todayDateStr = getDateOnly(today, timezone);
+      const startOfToday = getStartOfDay(today, timezone);
+      const endOfToday = getEndOfDay(today, timezone);
+      
+      // Fetch all sales in batches (API limit is 1000)
+      const allSales: Sale[] = [];
+      let offset = 0;
+      const limit = 1000;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const response = await salesApi.list(limit, offset);
+        const batchSales = response.data.map(mapSaleDtoToSale);
+        allSales.push(...batchSales);
+        
+        // Check if we've fetched all sales
+        if (batchSales.length < limit || allSales.length >= response.total) {
+          hasMore = false;
+        } else {
+          offset += limit;
+        }
+      }
+      
+      // Filter sales for today
+      const todaySales = allSales.filter((sale) => {
+        const saleDate = new Date(sale.createdAt);
+        return saleDate >= startOfToday && saleDate <= endOfToday;
+      });
+      
+      if (todaySales.length === 0) {
+        toast({
+          title: "No Sales Today",
+          description: "There are no sales for today to print.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+      
+      // Create a temporary container for the print component
+      const printContainer = document.createElement("div");
+      printContainer.id = "daily-sales-report-print";
+      printContainer.style.position = "absolute";
+      printContainer.style.left = "-9999px";
+      document.body.appendChild(printContainer);
+      
+      // Render the print component
+      const root = ReactDOM.createRoot(printContainer);
+      root.render(
+        <DailySalesReport 
+          sales={todaySales} 
+          date={todayDateStr}
+          timezone={timezone}
+        />
+      );
+      
+      // Wait for render then print
+      setTimeout(() => {
+        printContent("daily-sales-report-print", { title: "Daily Sales Report" });
+        
+        // Clean up after printing
+        setTimeout(() => {
+          root.unmount();
+          document.body.removeChild(printContainer);
+        }, 2000);
+      }, 100);
+      
+      toast({
+        title: "Printing Today's Sales",
+        description: `Printing ${todaySales.length} sales for today.`,
+      });
+      
+      setLoading(false);
+    } catch (error) {
+      console.error("Failed to print today's sales:", error);
+      toast({
+        title: "Print Failed",
+        description: "Failed to fetch and print today's sales. Please try again.",
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
+  };
+
   const handleExport = () => {
     if (filteredSales.length === 0) {
       toast({
@@ -345,6 +439,10 @@ export default function SalesHistoryPage() {
           <p className="text-muted-foreground">বিক্রয় ইতিহাস • Transaction Records</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handlePrintTodaySales} disabled={loading}>
+            <Printer className="w-4 h-4 mr-2" />
+            Print Today's Sales
+          </Button>
           <Button variant="outline" onClick={handleExport} disabled={filteredSales.length === 0}>
             <Download className="w-4 h-4 mr-2" />
             Export
