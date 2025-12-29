@@ -44,6 +44,7 @@ import {
   UtensilsCrossed,
   Clock,
   Mail,
+  Printer,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
@@ -54,7 +55,7 @@ import { usersApi, type StaffUser, type StaffRole } from "@/lib/api/users";
 import { useAuth } from "@/contexts/AuthContext";
 import { tablesApi } from "@/lib/api/tables";
 import { tenantApi, type TenantSettingsDto } from "@/lib/api/tenant";
-import { savePrintSettings } from "@/utils/printUtils";
+import { savePrintSettings, getAvailablePrinters, type PrintSettings } from "@/utils/printUtils";
 
 export default function Settings() {
   const { staff, categories, addCategory, removeCategory, refreshCategories, tables, refreshTables } = useAppData();
@@ -91,6 +92,12 @@ export default function Settings() {
     ownerEmail: "",
     voidEmailNotificationsEnabled: false,
   });
+  const [printerSettings, setPrinterSettings] = useState({
+    printerName: "",
+    silentPrint: true,
+  });
+  const [availablePrinters, setAvailablePrinters] = useState<Array<{ name: string; displayName: string }>>([]);
+  const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [deleteCategoryDialogOpen, setDeleteCategoryDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
@@ -130,6 +137,26 @@ export default function Settings() {
     }
   }, [tables]);
 
+  // Load available printers (Electron only)
+  useEffect(() => {
+    const loadPrinters = async () => {
+      setIsLoadingPrinters(true);
+      try {
+        const printers = await getAvailablePrinters();
+        setAvailablePrinters(printers);
+      } catch (error) {
+        console.error('Failed to load printers:', error);
+      } finally {
+        setIsLoadingPrinters(false);
+      }
+    };
+    
+    // Only try to load printers if Electron is available
+    if (typeof window !== 'undefined' && ((window as any).electron || (window as any).require)) {
+      loadPrinters();
+    }
+  }, []);
+
   useEffect(() => {
     // Load tenant settings
     const loadSettings = async () => {
@@ -160,6 +187,13 @@ export default function Settings() {
         if (settings.timezone) {
           setTimezone(settings.timezone);
         }
+        
+        // Load printer settings from localStorage
+        const printSettings = savePrintSettings({}); // Get current print settings
+        setPrinterSettings({
+          printerName: printSettings.printerName || '',
+          silentPrint: printSettings.silentPrint !== false, // Default to true
+        });
         
         // Sync to localStorage for print system
         savePrintSettings({
@@ -221,6 +255,8 @@ export default function Settings() {
         restaurantNameBn: updated.name_bn || '',
         address: updated.address || '',
         phone: updated.phone || '',
+        printerName: printerSettings.printerName || '',
+        silentPrint: printerSettings.silentPrint,
       });
       
       // Also update business profile state
@@ -904,12 +940,100 @@ export default function Settings() {
               disabled={isLoadingSettings}
             />
           </div>
+          
+          {/* Printer Settings (Electron only) */}
+          {(typeof window !== 'undefined' && ((window as any).electron || (window as any).require)) && (
+            <>
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label>Printer Selection</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setIsLoadingPrinters(true);
+                      try {
+                        const printers = await getAvailablePrinters();
+                        setAvailablePrinters(printers);
+                        toast({
+                          title: "Printers refreshed",
+                          description: `Found ${printers.length} printer${printers.length !== 1 ? 's' : ''}.`,
+                        });
+                      } catch (error) {
+                        toast({
+                          title: "Failed to refresh printers",
+                          description: "Could not load printer list. Please try again.",
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setIsLoadingPrinters(false);
+                      }
+                    }}
+                    disabled={isLoadingPrinters}
+                  >
+                    {isLoadingPrinters ? "Loading..." : "Refresh Printers"}
+                  </Button>
+                </div>
+                <Select
+                  value={printerSettings.printerName || "default"}
+                  onValueChange={(value) => {
+                    setPrinterSettings((prev) => ({ ...prev, printerName: value === "default" ? "" : value }));
+                  }}
+                  disabled={isLoadingSettings || isLoadingPrinters}
+                >
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue placeholder="Select printer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">
+                      <div className="flex flex-col">
+                        <span>Default Printer</span>
+                        <span className="text-xs text-muted-foreground">Use system default printer</span>
+                      </div>
+                    </SelectItem>
+                    {availablePrinters.map((printer) => (
+                      <SelectItem key={printer.name} value={printer.name}>
+                        {printer.displayName || printer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {availablePrinters.length === 0 && !isLoadingPrinters && (
+                  <p className="text-xs text-muted-foreground">
+                    No printers found. Click "Refresh Printers" to scan for available printers.
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Silent Printing</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Print directly without showing print dialog (Electron only)
+                    </p>
+                  </div>
+                  <Switch
+                    checked={printerSettings.silentPrint}
+                    onCheckedChange={(checked) => {
+                      setPrinterSettings((prev) => ({ ...prev, silentPrint: checked }));
+                    }}
+                    disabled={isLoadingSettings}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
         
         <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/60">
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Receipt className="w-4 h-4" />
             All receipts (POS, KOT, Table Bills) will use the selected thermal paper size for consistent printing.
+            {(typeof window !== 'undefined' && ((window as any).electron || (window as any).require)) && (
+              <span className="ml-2">• Silent printing enabled: Slips will print automatically without dialog.</span>
+            )}
           </p>
         </div>
       </GlassCard>

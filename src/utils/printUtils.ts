@@ -11,6 +11,9 @@ export interface PrintSettings {
   restaurantNameBn: string;
   address: string;
   phone: string;
+  // Printer settings for Electron
+  printerName?: string; // Name of the printer to use (if empty, uses default)
+  silentPrint: boolean; // Whether to print silently without dialog (Electron only)
 }
 
 // Default settings - can be overridden from Settings page
@@ -22,6 +25,8 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   restaurantNameBn: 'রেস্টুরেন্ট ওএস',
   address: '123 Restaurant Street, Dhaka',
   phone: '01700-000000',
+  printerName: '', // Empty = use default printer
+  silentPrint: true, // Silent printing enabled by default in Electron
 };
 
 // Paper size configurations
@@ -442,7 +447,50 @@ interface PrintOptions {
   paperSize?: ThermalPaperSize;
 }
 
-export const printContent = (elementId: string, options: PrintOptions = {}) => {
+// Import ElectronAPI type
+import type { ElectronAPI } from '@/types/electron';
+
+// Check if running in Electron
+const isElectron = (): boolean => {
+  return typeof window !== 'undefined' && (
+    (window as any).electron !== undefined ||
+    (window as any).require !== undefined ||
+    navigator.userAgent.toLowerCase().indexOf('electron') > -1
+  );
+};
+
+// Get Electron API
+const getElectronAPI = (): ElectronAPI | null => {
+  if (!isElectron()) return null;
+  
+  // Try window.electron (exposed via preload script)
+  if ((window as any).electron) {
+    return (window as any).electron as ElectronAPI;
+  }
+  
+  // Try window.require (if contextIsolation is disabled - not recommended)
+  if ((window as any).require) {
+    try {
+      const electron = (window as any).require('electron');
+      if (electron && electron.ipcRenderer) {
+        return {
+          print: (htmlContent: string, options: { silent?: boolean; printerName?: string; paperSize?: string }) => {
+            return electron.ipcRenderer.invoke('print', { htmlContent, ...options });
+          },
+          getPrinters: () => {
+            return electron.ipcRenderer.invoke('get-printers');
+          },
+        };
+      }
+    } catch (e) {
+      console.warn('Could not access Electron API:', e);
+    }
+  }
+  
+  return null;
+};
+
+export const printContent = async (elementId: string, options: PrintOptions = {}) => {
   const element = document.getElementById(elementId);
   if (!element) {
     console.error(`Element with id "${elementId}" not found`);
@@ -469,7 +517,24 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
     </html>
   `;
 
-  // Use iframe approach for more reliable printing
+  // Check if running in Electron and silent printing is enabled
+  const electronAPI = getElectronAPI();
+  if (electronAPI && settings.silentPrint) {
+    try {
+      // Use Electron's silent printing API
+      await electronAPI.print(htmlContent, {
+        silent: true,
+        printerName: settings.printerName || undefined,
+        paperSize: paperSize,
+      });
+      return; // Successfully printed via Electron
+    } catch (error) {
+      console.error('Electron print failed, falling back to browser print:', error);
+      // Fall through to browser print method
+    }
+  }
+
+  // Fallback: Use browser print dialog (or iframe approach)
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';
   iframe.style.right = '0';
@@ -505,6 +570,20 @@ export const printContent = (elementId: string, options: PrintOptions = {}) => {
       document.body.removeChild(iframe);
     }, 1000);
   }, 250);
+};
+
+// Get available printers (Electron only)
+export const getAvailablePrinters = async (): Promise<Array<{ name: string; displayName: string }>> => {
+  const electronAPI = getElectronAPI();
+  if (electronAPI) {
+    try {
+      return await electronAPI.getPrinters();
+    } catch (error) {
+      console.error('Failed to get printers:', error);
+      return [];
+    }
+  }
+  return [];
 };
 
 export const formatCurrencyForPrint = (amount: number): string => {
