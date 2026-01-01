@@ -13,9 +13,10 @@ import { TimezoneProvider } from "@/contexts/TimezoneContext";
 import { AppDataProvider } from "@/contexts/AppDataContext";
 import { RequireAuth, RequireRole } from "@/components/auth/RequireAuth";
 
-// Eager load critical pages (login, license activation) - needed immediately
+// Eager load critical pages (login, license activation, homepage) - needed immediately
 import Login from "@/pages/Login";
 import LicenseActivation from "@/pages/LicenseActivation";
+import HomePage from "@/pages/HomePage";
 
 // Lazy load all other pages - only load when user navigates to them
 // This significantly reduces initial bundle size and memory usage
@@ -68,7 +69,7 @@ const App = () => (
                   }}
                 >
                   <Routes>
-                    <Route path="/" element={<Login />} />
+                    <Route path="/" element={<HomePage />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/license-activation" element={<LicenseActivation />} />
 
