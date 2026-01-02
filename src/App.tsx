@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { LicenseProvider } from "@/contexts/LicenseContext";
+
 import { PermissionsProvider } from "@/contexts/PermissionsContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { TimezoneProvider } from "@/contexts/TimezoneContext";
@@ -15,7 +15,7 @@ import { RequireAuth, RequireRole } from "@/components/auth/RequireAuth";
 
 // Eager load critical pages (login, license activation, homepage) - needed immediately
 import Login from "@/pages/Login";
-import LicenseActivation from "@/pages/LicenseActivation";
+
 import HomePage from "@/pages/HomePage";
 
 // Lazy load all other pages - only load when user navigates to them
@@ -57,11 +57,11 @@ const App = () => (
       <TimezoneProvider>
         <TenantProvider>
           <AppDataProvider>
-            <LicenseProvider>
-              <PermissionsProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <Sonner />
+
+            <PermissionsProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
                 <BrowserRouter
                   future={{
                     v7_startTransition: true,
@@ -71,169 +71,169 @@ const App = () => (
                   <Routes>
                     <Route path="/" element={<HomePage />} />
                     <Route path="/login" element={<Login />} />
-                    <Route path="/license-activation" element={<LicenseActivation />} />
+
 
                     <Route element={<RequireAuth />}>
                       <Route element={<AppLayout />}>
-                        <Route 
-                          path="/dashboard" 
+                        <Route
+                          path="/dashboard"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Dashboard />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/items" 
+                        <Route
+                          path="/items"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Items />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/sales" 
+                        <Route
+                          path="/sales"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Sales />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/tables" 
+                        <Route
+                          path="/tables"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Tables />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/purchases" 
+                        <Route
+                          path="/purchases"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Purchases />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/suppliers" 
+                        <Route
+                          path="/suppliers"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Suppliers />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/customers" 
+                        <Route
+                          path="/customers"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Customers />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/staff" 
+                        <Route
+                          path="/staff"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Staff />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/finance" 
+                        <Route
+                          path="/finance"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Finance />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/finance/transactions" 
+                        <Route
+                          path="/finance/transactions"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <FinanceTransactions />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/finance/banks" 
+                        <Route
+                          path="/finance/banks"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <BankAccounts />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/finance/mfs" 
+                        <Route
+                          path="/finance/mfs"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <MfsAccounts />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/expenses" 
+                        <Route
+                          path="/expenses"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Expenses />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/reports" 
+                        <Route
+                          path="/reports"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <Reports />
                             </Suspense>
-                          } 
+                          }
                         />
-                        <Route 
-                          path="/sales-history" 
+                        <Route
+                          path="/sales-history"
                           element={
                             <Suspense fallback={<PageLoader />}>
                               <SalesHistory />
                             </Suspense>
-                          } 
+                          }
                         />
 
                         {/* Settings is available to restaurant owner and superadmin */}
                         <Route element={<RequireRole role={["owner", "superadmin"]} />}>
-                          <Route 
-                            path="/settings" 
+                          <Route
+                            path="/settings"
                             element={
                               <Suspense fallback={<PageLoader />}>
                                 <Settings />
                               </Suspense>
-                            } 
+                            }
                           />
                         </Route>
 
                         <Route element={<RequireRole role="superadmin" />}>
-                          <Route 
-                            path="/admin" 
+                          <Route
+                            path="/admin"
                             element={
                               <Suspense fallback={<PageLoader />}>
                                 <Admin />
                               </Suspense>
-                            } 
+                            }
                           />
                         </Route>
                       </Route>
                     </Route>
 
-                    <Route 
-                      path="*" 
+                    <Route
+                      path="*"
                       element={
                         <Suspense fallback={<PageLoader />}>
                           <NotFound />
                         </Suspense>
-                      } 
+                      }
                     />
                   </Routes>
-                  </BrowserRouter>
-                </TooltipProvider>
-              </PermissionsProvider>
-            </LicenseProvider>
+                </BrowserRouter>
+              </TooltipProvider>
+            </PermissionsProvider>
+
           </AppDataProvider>
         </TenantProvider>
       </TimezoneProvider>

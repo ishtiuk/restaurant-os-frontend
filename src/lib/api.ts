@@ -6,14 +6,14 @@
 const getApiBaseUrl = (): string => {
   // Check if we're served from backend (same origin)
   const origin = window.location.origin;
-  const isServedFromBackend = 
-    origin === "http://localhost:8001" || 
+  const isServedFromBackend =
+    origin === "http://localhost:8001" ||
     origin === "http://127.0.0.1:8001";
-  
+
   // Use env var if set, otherwise use relative path when served from backend
   const envUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
   if (envUrl) return envUrl;
-  
+
   return isServedFromBackend ? "/api" : "http://localhost:8001/api";
 };
 
@@ -94,12 +94,8 @@ class ApiClient {
     }
 
     if (!res.ok) {
-      // Handle 402 Payment Required - License expired/invalid
-      if (res.status === 402) {
-        // Don't redirect automatically - let the calling component handle it
-        // This allows login page to show activation screen
-      }
-      
+
+
       // Handle 401 Unauthorized - token is invalid or user doesn't exist
       // Don't trigger logout on login endpoint (login failures are expected)
       if (res.status === 401 && !endpoint.includes("/auth/login")) {
@@ -107,10 +103,10 @@ class ApiClient {
         this.token = null;
         this.tenantId = null;
         localStorage.removeItem("restaurant-os.auth.user");
-        
+
         // Dispatch custom event to trigger logout in AuthContext
         window.dispatchEvent(new CustomEvent("auth:logout"));
-        
+
         // Redirect to login page (only if not already there and not on login page)
         const currentPath = window.location.pathname;
         if (currentPath !== "/login" && currentPath !== "/") {
@@ -118,7 +114,7 @@ class ApiClient {
           window.location.href = "/login";
         }
       }
-      
+
       let message = "An error occurred";
       if (data?.detail) {
         if (typeof data.detail === "string") message = data.detail;

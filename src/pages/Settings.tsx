@@ -50,7 +50,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAppData } from "@/contexts/AppDataContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { formatWithTimezone, formatDate } from "@/utils/date";
-import { useLicense, LICENSE_STORAGE_KEY, parseLicenseToken } from "@/contexts/LicenseContext";
+
 import { usersApi, type StaffUser, type StaffRole } from "@/lib/api/users";
 import { useAuth } from "@/contexts/AuthContext";
 import { tablesApi } from "@/lib/api/tables";
@@ -59,14 +59,14 @@ import { savePrintSettings, getAvailablePrinters, type PrintSettings } from "@/u
 
 export default function Settings() {
   const { staff, categories, addCategory, removeCategory, refreshCategories, tables, refreshTables } = useAppData();
-  const { license, refreshFromStorage } = useLicense();
+
   const { user } = useAuth();
   const { timezone, setTimezone } = useTimezone();
   const [language, setLanguage] = useState("en");
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [newCategory, setNewCategory] = useState({ name: "", nameBn: "", icon: "🍽️" });
-  const [licenseInput, setLicenseInput] = useState("");
+
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<StaffUser | null>(null);
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
@@ -150,7 +150,7 @@ export default function Settings() {
         setIsLoadingPrinters(false);
       }
     };
-    
+
     // Only try to load printers if Electron is available
     if (typeof window !== 'undefined' && ((window as any).electron || (window as any).require)) {
       loadPrinters();
@@ -182,19 +182,19 @@ export default function Settings() {
           ownerEmail: settings.owner_email || "",
           voidEmailNotificationsEnabled: settings.void_email_notifications_enabled || false,
         });
-        
+
         // Sync timezone from backend (TimezoneContext will also fetch, but this ensures sync)
         if (settings.timezone) {
           setTimezone(settings.timezone);
         }
-        
+
         // Load printer settings from localStorage
         const printSettings = savePrintSettings({}); // Get current print settings
         setPrinterSettings({
           printerName: printSettings.printerName || '',
           silentPrint: printSettings.silentPrint !== false, // Default to true
         });
-        
+
         // Sync to localStorage for print system
         savePrintSettings({
           paperSize: settings.paper_size === 'thermal58' ? '58mm' : '80mm',
@@ -245,7 +245,7 @@ export default function Settings() {
       // Reload settings to get updated values
       const updated = await tenantApi.getSettings();
       setTenantSettings(updated);
-      
+
       // Sync print settings to localStorage for immediate use by print system
       savePrintSettings({
         paperSize: updated.paper_size === 'thermal58' ? '58mm' : '80mm',
@@ -258,7 +258,7 @@ export default function Settings() {
         printerName: printerSettings.printerName || '',
         silentPrint: printerSettings.silentPrint,
       });
-      
+
       // Also update business profile state
       setBusinessProfile({
         name: updated.name || "",
@@ -336,59 +336,7 @@ export default function Settings() {
     }
   };
 
-  const handleActivateLicense = () => {
-    const token = licenseInput.trim();
-    if (!token) {
-      toast({
-        title: "Activation code required",
-        description: "Paste the activation code you received.",
-        variant: "destructive",
-      });
-      return;
-    }
 
-    const parsed = parseLicenseToken(token);
-
-    if (parsed.status === "invalid") {
-      toast({
-        title: "Invalid activation code",
-        description: parsed.error || "Please check the code and try again.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (parsed.status === "expired") {
-      toast({
-        title: "Activation code expired",
-        description: "Please contact your provider for a new code.",
-        variant: "destructive",
-      });
-      // Still store it so we can show expiry info
-      try {
-        localStorage.setItem(LICENSE_STORAGE_KEY, token);
-      } catch {
-        // ignore
-      }
-      refreshFromStorage();
-      return;
-    }
-
-    try {
-      localStorage.setItem(LICENSE_STORAGE_KEY, token);
-    } catch {
-      // ignore storage failure
-    }
-
-    toast({
-      title: "Subscription activated",
-      description: parsed.validUntil
-        ? `Valid until ${formatWithTimezone(parsed.validUntil, timezone)}`
-        : "Activation successful.",
-    });
-    setLicenseInput("");
-    refreshFromStorage();
-  };
 
   const handleAddCategory = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -423,9 +371,9 @@ export default function Settings() {
     if (!categoryToDelete) return;
     try {
       await removeCategory(categoryToDelete.id);
-      toast({ 
-        title: "Category deleted", 
-        description: `"${categoryToDelete.name}" has been removed successfully.` 
+      toast({
+        title: "Category deleted",
+        description: `"${categoryToDelete.name}" has been removed successfully.`
       });
       setDeleteCategoryDialogOpen(false);
       setCategoryToDelete(null);
@@ -433,15 +381,15 @@ export default function Settings() {
       // Handle 409 error (category has items) or other errors
       const errorMessage = err?.response?.data?.detail || err?.message || "Failed to delete category";
       const isConflictError = err?.response?.status === 409 || errorMessage.toLowerCase().includes("products are using it");
-      
+
       toast({
         title: isConflictError ? "Cannot delete category" : "Error",
-        description: isConflictError 
+        description: isConflictError
           ? `"${categoryToDelete.name}" cannot be deleted because it contains items. Please remove or reassign all items in this category first.`
           : errorMessage,
         variant: "destructive",
       });
-      
+
       // Don't close the dialog on error so user can see the message
       // They can manually close it or try again
     }
@@ -452,19 +400,19 @@ export default function Settings() {
     const formData = new FormData(e.currentTarget);
     try {
       const created = await usersApi.create({
-      name: formData.get("name") as string,
+        name: formData.get("name") as string,
         name_bn: (formData.get("nameBn") as string) || undefined,
-      email: formData.get("email") as string,
-      phone: formData.get("phone") as string,
+        email: formData.get("email") as string,
+        phone: formData.get("phone") as string,
         role: formData.get("role") as StaffRole,
         password: formData.get("password") as string,
       });
       setUsers((prev) => [created, ...prev]);
-    setIsAddUserModalOpen(false);
-    toast({
-      title: "User created!",
+      setIsAddUserModalOpen(false);
+      toast({
+        title: "User created!",
         description: `${created.name} has been added as ${created.role}.`,
-    });
+      });
     } catch (err: any) {
       toast({
         title: "Failed to create user",
@@ -481,9 +429,9 @@ export default function Settings() {
       .update(userId, { is_active: !target.is_active })
       .then((updated) => {
         setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-    toast({
-      title: "User status updated",
-      description: "User access has been modified.",
+        toast({
+          title: "User status updated",
+          description: "User access has been modified.",
         });
       })
       .catch((err: any) => {
@@ -492,7 +440,7 @@ export default function Settings() {
           description: err?.message || "Please try again.",
           variant: "destructive",
         });
-    });
+      });
   };
 
   const handleRemoveUser = (userId: string) => {
@@ -506,11 +454,11 @@ export default function Settings() {
     if (!userToDelete) return;
     usersApi.remove(userToDelete)
       .then(() => {
-      setUsers(prev => prev.filter(u => u.id !== userToDelete));
-      toast({
-        title: "User removed",
-        description: "User has been deleted from the system.",
-      });
+        setUsers(prev => prev.filter(u => u.id !== userToDelete));
+        toast({
+          title: "User removed",
+          description: "User has been deleted from the system.",
+        });
       })
       .catch((err: any) => {
         toast({
@@ -630,622 +578,622 @@ export default function Settings() {
         {/* Business Tab */}
         <TabsContent value="business" className="space-y-6">
 
-      {/* Business Profile */}
-      <GlassCard className="p-6 animate-fade-in stagger-1">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-semibold">Business Profile</h3>
-            <p className="text-sm text-muted-foreground">ব্যবসার তথ্য</p>
-          </div>
-        </div>
+          {/* Business Profile */}
+          <GlassCard className="p-6 animate-fade-in stagger-1">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Business Profile</h3>
+                <p className="text-sm text-muted-foreground">ব্যবসার তথ্য</p>
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Restaurant Name</Label>
-            <Input
-              value={businessProfile.name}
-              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, name: e.target.value }))}
-              placeholder="Enter restaurant name"
-              className="bg-muted/50"
-              disabled={isLoadingSettings}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Restaurant Name (Bengali)</Label>
-            <Input
-              value={businessProfile.nameBn}
-              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, nameBn: e.target.value }))}
-              placeholder="রেস্টুরেন্টের নাম"
-              className="bg-muted/50 font-bengali"
-              disabled={isLoadingSettings}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Phone Number</Label>
-            <Input
-              value={businessProfile.phone}
-              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, phone: e.target.value }))}
-              placeholder="Enter phone number"
-              className="bg-muted/50"
-              disabled={isLoadingSettings}
-            />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Address</Label>
-            <Input
-              value={businessProfile.address}
-              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, address: e.target.value }))}
-              placeholder="Enter address"
-              className="bg-muted/50"
-              disabled={isLoadingSettings}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>VAT Registration No.</Label>
-            <Input
-              value={businessProfile.vatRegistrationNo}
-              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, vatRegistrationNo: e.target.value }))}
-              placeholder="Enter VAT registration number"
-              className="bg-muted/50"
-              disabled={isLoadingSettings}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Trade License</Label>
-            <Input
-              value={businessProfile.tradeLicense}
-              onChange={(e) => setBusinessProfile((prev) => ({ ...prev, tradeLicense: e.target.value }))}
-              placeholder="Enter trade license number"
-              className="bg-muted/50"
-              disabled={isLoadingSettings}
-            />
-          </div>
-        </div>
-      </GlassCard>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Restaurant Name</Label>
+                <Input
+                  value={businessProfile.name}
+                  onChange={(e) => setBusinessProfile((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter restaurant name"
+                  className="bg-muted/50"
+                  disabled={isLoadingSettings}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Restaurant Name (Bengali)</Label>
+                <Input
+                  value={businessProfile.nameBn}
+                  onChange={(e) => setBusinessProfile((prev) => ({ ...prev, nameBn: e.target.value }))}
+                  placeholder="রেস্টুরেন্টের নাম"
+                  className="bg-muted/50 font-bengali"
+                  disabled={isLoadingSettings}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone Number</Label>
+                <Input
+                  value={businessProfile.phone}
+                  onChange={(e) => setBusinessProfile((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="Enter phone number"
+                  className="bg-muted/50"
+                  disabled={isLoadingSettings}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Address</Label>
+                <Input
+                  value={businessProfile.address}
+                  onChange={(e) => setBusinessProfile((prev) => ({ ...prev, address: e.target.value }))}
+                  placeholder="Enter address"
+                  className="bg-muted/50"
+                  disabled={isLoadingSettings}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>VAT Registration No.</Label>
+                <Input
+                  value={businessProfile.vatRegistrationNo}
+                  onChange={(e) => setBusinessProfile((prev) => ({ ...prev, vatRegistrationNo: e.target.value }))}
+                  placeholder="Enter VAT registration number"
+                  className="bg-muted/50"
+                  disabled={isLoadingSettings}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Trade License</Label>
+                <Input
+                  value={businessProfile.tradeLicense}
+                  onChange={(e) => setBusinessProfile((prev) => ({ ...prev, tradeLicense: e.target.value }))}
+                  placeholder="Enter trade license number"
+                  className="bg-muted/50"
+                  disabled={isLoadingSettings}
+                />
+              </div>
+            </div>
+          </GlassCard>
 
-      {/* Table Management */}
-      <GlassCard className="p-6 animate-fade-in stagger-2">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-            <UtensilsCrossed className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-semibold">Table Management</h3>
-            <p className="text-sm text-muted-foreground">টেবিল ব্যবস্থাপনা • Configure restaurant tables</p>
-          </div>
-        </div>
+          {/* Table Management */}
+          <GlassCard className="p-6 animate-fade-in stagger-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                <UtensilsCrossed className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Table Management</h3>
+                <p className="text-sm text-muted-foreground">টেবিল ব্যবস্থাপনা • Configure restaurant tables</p>
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="numberOfTables">Number of Tables</Label>
-            <Input
-              id="numberOfTables"
-              type="number"
-              min="1"
-              max="100"
-              value={numberOfTables || ""}
-              onChange={(e) => setNumberOfTables(parseInt(e.target.value) || 0)}
-              placeholder="Enter number of tables"
-              className="bg-muted/50"
-            />
-            <p className="text-xs text-muted-foreground">
-              Current: {tables.length} table{tables.length !== 1 ? "s" : ""}. Enter the total number of tables you want.
-            </p>
-          </div>
-          <div className="space-y-2 flex items-end">
-            <Button
-              variant="glow"
-              onClick={handleCreateTables}
-              disabled={isCreatingTables || !numberOfTables || numberOfTables <= tables.length}
-              className="w-full"
-            >
-              {isCreatingTables ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="numberOfTables">Number of Tables</Label>
+                <Input
+                  id="numberOfTables"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={numberOfTables || ""}
+                  onChange={(e) => setNumberOfTables(parseInt(e.target.value) || 0)}
+                  placeholder="Enter number of tables"
+                  className="bg-muted/50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Current: {tables.length} table{tables.length !== 1 ? "s" : ""}. Enter the total number of tables you want.
+                </p>
+              </div>
+              <div className="space-y-2 flex items-end">
+                <Button
+                  variant="glow"
+                  onClick={handleCreateTables}
+                  disabled={isCreatingTables || !numberOfTables || numberOfTables <= tables.length}
+                  className="w-full"
+                >
+                  {isCreatingTables ? (
+                    <>
+                      <Clock className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Tables
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            {numberOfTables > 0 && numberOfTables <= tables.length && (
+              <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/60">
+                <p className="text-sm text-muted-foreground">
+                  You already have {tables.length} table{tables.length !== 1 ? "s" : ""}. Increase the number above to create more tables.
+                </p>
+              </div>
+            )}
+          </GlassCard>
+
+          {/* Categories Management */}
+          <GlassCard className="p-6 animate-fade-in stagger-2">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                  <Tag className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Menu Categories</h3>
+                  <p className="text-sm text-muted-foreground">Create and manage item categories</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  await refreshCategories();
+                  toast({
+                    title: "Categories refreshed",
+                    description: "Item counts have been updated.",
+                  });
+                }}
+              >
+                <Clock className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Add category form */}
+              <div className="space-y-3">
+                <Label>Category Name *</Label>
+                <Input
+                  value={newCategory.name}
+                  onChange={(e) => setNewCategory((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Beverages"
+                  className="bg-muted/50"
+                />
+                <Label>Category Name (Bengali)</Label>
+                <Input
+                  value={newCategory.nameBn}
+                  onChange={(e) => setNewCategory((prev) => ({ ...prev, nameBn: e.target.value }))}
+                  placeholder="e.g. পানীয়"
+                  className="bg-muted/50 font-bengali"
+                />
+                <Label>Icon</Label>
+                <Input
+                  value={newCategory.icon}
+                  onChange={(e) => setNewCategory((prev) => ({ ...prev, icon: e.target.value }))}
+                  placeholder="🍽️"
+                  className="bg-muted/50"
+                />
+                <Button variant="glow" onClick={(e) => handleAddCategory(e as any)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Category
+                </Button>
+              </div>
+
+              {/* Categories list */}
+              <div className="lg:col-span-2 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {categories.map((cat) => (
+                    <div key={cat.id} className="p-3 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-lg">
+                          {cat.icon || "🍽️"}
+                        </div>
+                        <div>
+                          <p className="font-semibold">{cat.name}</p>
+                          {cat.nameBn && <p className="text-xs text-muted-foreground font-bengali">{cat.nameBn}</p>}
+                          <p className="text-xs text-muted-foreground">{cat.itemCount ?? 0} items</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                          title="Delete category"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* Save Button for Business Tab */}
+          <div className="flex justify-end">
+            <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
+              {isSavingSettings ? (
                 <>
                   <Clock className="w-4 h-4 mr-2 animate-spin" />
-                  Creating...
+                  Saving...
                 </>
               ) : (
                 <>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Tables
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
                 </>
               )}
             </Button>
           </div>
-        </div>
-        {numberOfTables > 0 && numberOfTables <= tables.length && (
-          <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/60">
-            <p className="text-sm text-muted-foreground">
-              You already have {tables.length} table{tables.length !== 1 ? "s" : ""}. Increase the number above to create more tables.
-            </p>
-          </div>
-        )}
-      </GlassCard>
-
-        {/* Categories Management */}
-        <GlassCard className="p-6 animate-fade-in stagger-2">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                <Tag className="w-5 h-5 text-accent" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Menu Categories</h3>
-                <p className="text-sm text-muted-foreground">Create and manage item categories</p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                await refreshCategories();
-                toast({
-                  title: "Categories refreshed",
-                  description: "Item counts have been updated.",
-                });
-              }}
-            >
-              <Clock className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Add category form */}
-            <div className="space-y-3">
-              <Label>Category Name *</Label>
-              <Input
-                value={newCategory.name}
-                onChange={(e) => setNewCategory((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g. Beverages"
-                className="bg-muted/50"
-              />
-              <Label>Category Name (Bengali)</Label>
-              <Input
-                value={newCategory.nameBn}
-                onChange={(e) => setNewCategory((prev) => ({ ...prev, nameBn: e.target.value }))}
-                placeholder="e.g. পানীয়"
-                className="bg-muted/50 font-bengali"
-              />
-              <Label>Icon</Label>
-              <Input
-                value={newCategory.icon}
-                onChange={(e) => setNewCategory((prev) => ({ ...prev, icon: e.target.value }))}
-                placeholder="🍽️"
-                className="bg-muted/50"
-              />
-              <Button variant="glow" onClick={(e) => handleAddCategory(e as any)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Category
-              </Button>
-            </div>
-
-            {/* Categories list */}
-            <div className="lg:col-span-2 space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {categories.map((cat) => (
-                  <div key={cat.id} className="p-3 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-lg">
-                        {cat.icon || "🍽️"}
-                      </div>
-                      <div>
-                        <p className="font-semibold">{cat.name}</p>
-                        {cat.nameBn && <p className="text-xs text-muted-foreground font-bengali">{cat.nameBn}</p>}
-                        <p className="text-xs text-muted-foreground">{cat.itemCount ?? 0} items</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => handleDeleteCategory(cat.id, cat.name)}
-                        title="Delete category"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </GlassCard>
-
-        {/* Save Button for Business Tab */}
-        <div className="flex justify-end">
-          <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
-            {isSavingSettings ? (
-              <>
-                <Clock className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Save Changes
-              </>
-            )}
-          </Button>
-        </div>
         </TabsContent>
 
         {/* System Tab */}
         <TabsContent value="system" className="space-y-6">
-      {/* Invoice Settings */}
-      <GlassCard className="p-6 animate-fade-in stagger-1">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center">
-            <Receipt className="w-5 h-5 text-secondary" />
-          </div>
-          <div>
-            <h3 className="font-semibold">Invoice & Print Settings</h3>
-            <p className="text-sm text-muted-foreground">চালান ও প্রিন্ট সেটিংস • Thermal Printer Configuration</p>
-          </div>
-        </div>
+          {/* Invoice Settings */}
+          <GlassCard className="p-6 animate-fade-in stagger-1">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center">
+                <Receipt className="w-5 h-5 text-secondary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Invoice & Print Settings</h3>
+                <p className="text-sm text-muted-foreground">চালান ও প্রিন্ট সেটিংস • Thermal Printer Configuration</p>
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Invoice Prefix</Label>
-            <Input
-              value={invoiceSettings.invoicePrefix}
-              onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, invoicePrefix: e.target.value }))}
-              placeholder="INV-"
-              className="bg-muted/50"
-              disabled={isLoadingSettings}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Paper Size</Label>
-            <Select
-              value={invoiceSettings.paperSize}
-              onValueChange={(value) => {
-                setInvoiceSettings((prev) => ({ ...prev, paperSize: value as "thermal" | "thermal58" }));
-              }}
-              disabled={isLoadingSettings}
-            >
-              <SelectTrigger className="bg-muted/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="thermal">
-                  <div className="flex flex-col">
-                    <span>Thermal 80mm</span>
-                    <span className="text-xs text-muted-foreground">Standard thermal receipt</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="thermal58">
-                  <div className="flex flex-col">
-                    <span>Thermal 58mm</span>
-                    <span className="text-xs text-muted-foreground">Compact thermal receipt</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Only thermal paper sizes are supported for POS receipts and KOT slips.
-            </p>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Footer Text</Label>
-            <Input
-              value={invoiceSettings.footerText}
-              onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, footerText: e.target.value }))}
-              placeholder="ধন্যবাদ, আবার আসবেন"
-              className="bg-muted/50"
-              disabled={isLoadingSettings}
-            />
-          </div>
-          
-          {/* Printer Settings (Electron only) */}
-          {(typeof window !== 'undefined' && ((window as any).electron || (window as any).require)) && (
-            <>
-              <div className="space-y-2 md:col-span-2">
-                <div className="flex items-center justify-between">
-                  <Label>Printer Selection</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      setIsLoadingPrinters(true);
-                      try {
-                        const printers = await getAvailablePrinters();
-                        setAvailablePrinters(printers);
-                        toast({
-                          title: "Printers refreshed",
-                          description: `Found ${printers.length} printer${printers.length !== 1 ? 's' : ''}.`,
-                        });
-                      } catch (error) {
-                        toast({
-                          title: "Failed to refresh printers",
-                          description: "Could not load printer list. Please try again.",
-                          variant: "destructive",
-                        });
-                      } finally {
-                        setIsLoadingPrinters(false);
-                      }
-                    }}
-                    disabled={isLoadingPrinters}
-                  >
-                    {isLoadingPrinters ? "Loading..." : "Refresh Printers"}
-                  </Button>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Invoice Prefix</Label>
+                <Input
+                  value={invoiceSettings.invoicePrefix}
+                  onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, invoicePrefix: e.target.value }))}
+                  placeholder="INV-"
+                  className="bg-muted/50"
+                  disabled={isLoadingSettings}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Paper Size</Label>
                 <Select
-                  value={printerSettings.printerName || "default"}
+                  value={invoiceSettings.paperSize}
                   onValueChange={(value) => {
-                    setPrinterSettings((prev) => ({ ...prev, printerName: value === "default" ? "" : value }));
+                    setInvoiceSettings((prev) => ({ ...prev, paperSize: value as "thermal" | "thermal58" }));
                   }}
-                  disabled={isLoadingSettings || isLoadingPrinters}
+                  disabled={isLoadingSettings}
                 >
                   <SelectTrigger className="bg-muted/50">
-                    <SelectValue placeholder="Select printer..." />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">
+                    <SelectItem value="thermal">
                       <div className="flex flex-col">
-                        <span>Default Printer</span>
-                        <span className="text-xs text-muted-foreground">Use system default printer</span>
+                        <span>Thermal 80mm</span>
+                        <span className="text-xs text-muted-foreground">Standard thermal receipt</span>
                       </div>
                     </SelectItem>
-                    {availablePrinters.map((printer) => (
-                      <SelectItem key={printer.name} value={printer.name}>
-                        {printer.displayName || printer.name}
+                    <SelectItem value="thermal58">
+                      <div className="flex flex-col">
+                        <span>Thermal 58mm</span>
+                        <span className="text-xs text-muted-foreground">Compact thermal receipt</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Only thermal paper sizes are supported for POS receipts and KOT slips.
+                </p>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Footer Text</Label>
+                <Input
+                  value={invoiceSettings.footerText}
+                  onChange={(e) => setInvoiceSettings((prev) => ({ ...prev, footerText: e.target.value }))}
+                  placeholder="ধন্যবাদ, আবার আসবেন"
+                  className="bg-muted/50"
+                  disabled={isLoadingSettings}
+                />
+              </div>
+
+              {/* Printer Settings (Electron only) */}
+              {(typeof window !== 'undefined' && ((window as any).electron || (window as any).require)) && (
+                <>
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Printer Selection</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          setIsLoadingPrinters(true);
+                          try {
+                            const printers = await getAvailablePrinters();
+                            setAvailablePrinters(printers);
+                            toast({
+                              title: "Printers refreshed",
+                              description: `Found ${printers.length} printer${printers.length !== 1 ? 's' : ''}.`,
+                            });
+                          } catch (error) {
+                            toast({
+                              title: "Failed to refresh printers",
+                              description: "Could not load printer list. Please try again.",
+                              variant: "destructive",
+                            });
+                          } finally {
+                            setIsLoadingPrinters(false);
+                          }
+                        }}
+                        disabled={isLoadingPrinters}
+                      >
+                        {isLoadingPrinters ? "Loading..." : "Refresh Printers"}
+                      </Button>
+                    </div>
+                    <Select
+                      value={printerSettings.printerName || "default"}
+                      onValueChange={(value) => {
+                        setPrinterSettings((prev) => ({ ...prev, printerName: value === "default" ? "" : value }));
+                      }}
+                      disabled={isLoadingSettings || isLoadingPrinters}
+                    >
+                      <SelectTrigger className="bg-muted/50">
+                        <SelectValue placeholder="Select printer..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">
+                          <div className="flex flex-col">
+                            <span>Default Printer</span>
+                            <span className="text-xs text-muted-foreground">Use system default printer</span>
+                          </div>
+                        </SelectItem>
+                        {availablePrinters.map((printer) => (
+                          <SelectItem key={printer.name} value={printer.name}>
+                            {printer.displayName || printer.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {availablePrinters.length === 0 && !isLoadingPrinters && (
+                      <p className="text-xs text-muted-foreground">
+                        No printers found. Click "Refresh Printers" to scan for available printers.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Silent Printing</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Print directly without showing print dialog (Electron only)
+                        </p>
+                      </div>
+                      <Switch
+                        checked={printerSettings.silentPrint}
+                        onCheckedChange={(checked) => {
+                          setPrinterSettings((prev) => ({ ...prev, silentPrint: checked }));
+                        }}
+                        disabled={isLoadingSettings}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/60">
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <Receipt className="w-4 h-4" />
+                All receipts (POS, KOT, Table Bills) will use the selected thermal paper size for consistent printing.
+                {(typeof window !== 'undefined' && ((window as any).electron || (window as any).require)) && (
+                  <span className="ml-2">• Silent printing enabled: Slips will print automatically without dialog.</span>
+                )}
+              </p>
+            </div>
+          </GlassCard>
+
+          {/* Timezone Settings */}
+          <GlassCard className="p-6 animate-fade-in stagger-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Timezone Settings</h3>
+                <p className="text-sm text-muted-foreground">সময় অঞ্চল • Configure timezone for date/time display</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Select Timezone</Label>
+                <Select value={timezone} onValueChange={setTimezone}>
+                  <SelectTrigger className="bg-muted/50 w-full md:w-[300px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONES.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {availablePrinters.length === 0 && !isLoadingPrinters && (
-                  <p className="text-xs text-muted-foreground">
-                    No printers found. Click "Refresh Printers" to scan for available printers.
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  All dates and times throughout the application will be displayed in the selected timezone.
+                  This does not affect data storage - all data remains in UTC.
+                </p>
               </div>
-              
-              <div className="space-y-2 md:col-span-2">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Silent Printing</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Print directly without showing print dialog (Electron only)
-                    </p>
-                  </div>
-                  <Switch
-                    checked={printerSettings.silentPrint}
-                    onCheckedChange={(checked) => {
-                      setPrinterSettings((prev) => ({ ...prev, silentPrint: checked }));
-                    }}
-                    disabled={isLoadingSettings}
-                  />
-                </div>
+            </div>
+          </GlassCard>
+
+          {/* Localization */}
+          <GlassCard className="p-6 animate-fade-in stagger-3">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                <Globe className="w-5 h-5 text-accent" />
               </div>
-            </>
-          )}
-        </div>
-        
-        <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/60">
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <Receipt className="w-4 h-4" />
-            All receipts (POS, KOT, Table Bills) will use the selected thermal paper size for consistent printing.
-            {(typeof window !== 'undefined' && ((window as any).electron || (window as any).require)) && (
-              <span className="ml-2">• Silent printing enabled: Slips will print automatically without dialog.</span>
-            )}
-          </p>
-        </div>
-      </GlassCard>
+              <div>
+                <h3 className="font-semibold">Localization</h3>
+                <p className="text-sm text-muted-foreground">স্থানীয়করণ</p>
+              </div>
+            </div>
 
-      {/* Timezone Settings */}
-      <GlassCard className="p-6 animate-fade-in stagger-2">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-            <Clock className="w-5 h-5 text-blue-500" />
-          </div>
-          <div>
-            <h3 className="font-semibold">Timezone Settings</h3>
-            <p className="text-sm text-muted-foreground">সময় অঞ্চল • Configure timezone for date/time display</p>
-          </div>
-        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Select defaultValue="bdt">
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bdt">৳ BDT (Bangladeshi Taka)</SelectItem>
+                    <SelectItem value="usd">$ USD (US Dollar)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Language</Label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="bn">বাংলা (Bengali)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Date Format</Label>
+                <Select defaultValue="dd-mm-yyyy">
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dd-mm-yyyy">DD-MM-YYYY</SelectItem>
+                    <SelectItem value="mm-dd-yyyy">MM-DD-YYYY</SelectItem>
+                    <SelectItem value="yyyy-mm-dd">YYYY-MM-DD</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Number Format</Label>
+                <Select defaultValue="bn">
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bn">Bengali (১,২৩,৪৫৬)</SelectItem>
+                    <SelectItem value="en">English (1,23,456)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </GlassCard>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Select Timezone</Label>
-            <Select value={timezone} onValueChange={setTimezone}>
-              <SelectTrigger className="bg-muted/50 w-full md:w-[300px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              All dates and times throughout the application will be displayed in the selected timezone. 
-              This does not affect data storage - all data remains in UTC.
-            </p>
+          {/* Save Button for System Tab */}
+          <div className="flex justify-end">
+            <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
+              {isSavingSettings ? (
+                <>
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
           </div>
-        </div>
-      </GlassCard>
-
-      {/* Localization */}
-      <GlassCard className="p-6 animate-fade-in stagger-3">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-            <Globe className="w-5 h-5 text-accent" />
-          </div>
-          <div>
-            <h3 className="font-semibold">Localization</h3>
-            <p className="text-sm text-muted-foreground">স্থানীয়করণ</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Currency</Label>
-            <Select defaultValue="bdt">
-              <SelectTrigger className="bg-muted/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bdt">৳ BDT (Bangladeshi Taka)</SelectItem>
-                <SelectItem value="usd">$ USD (US Dollar)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Language</Label>
-            <Select value={language} onValueChange={setLanguage}>
-              <SelectTrigger className="bg-muted/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="bn">বাংলা (Bengali)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Date Format</Label>
-            <Select defaultValue="dd-mm-yyyy">
-              <SelectTrigger className="bg-muted/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dd-mm-yyyy">DD-MM-YYYY</SelectItem>
-                <SelectItem value="mm-dd-yyyy">MM-DD-YYYY</SelectItem>
-                <SelectItem value="yyyy-mm-dd">YYYY-MM-DD</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Number Format</Label>
-            <Select defaultValue="bn">
-              <SelectTrigger className="bg-muted/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bn">Bengali (১,২৩,৪৫৬)</SelectItem>
-                <SelectItem value="en">English (1,23,456)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </GlassCard>
-
-        {/* Save Button for System Tab */}
-        <div className="flex justify-end">
-          <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
-            {isSavingSettings ? (
-              <>
-                <Clock className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Save Changes
-              </>
-            )}
-          </Button>
-        </div>
         </TabsContent>
 
         {/* Notifications Tab - Only visible to owner/admin */}
         {(user?.role === "owner" || user?.role === "superadmin") && (
           <TabsContent value="notifications" className="space-y-6">
-      {/* Email Notifications */}
-      <GlassCard className="p-6 animate-fade-in stagger-1">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-            <Mail className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-semibold">Email Notifications</h3>
-            <p className="text-sm text-muted-foreground">ইমেইল বিজ্ঞপ্তি • Fraud prevention alerts</p>
-          </div>
-        </div>
+            {/* Email Notifications */}
+            <GlassCard className="p-6 animate-fade-in stagger-1">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Email Notifications</h3>
+                  <p className="text-sm text-muted-foreground">ইমেইল বিজ্ঞপ্তি • Fraud prevention alerts</p>
+                </div>
+              </div>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="ownerEmail">Owner Email Address</Label>
-            <Input
-              id="ownerEmail"
-              type="email"
-              value={emailNotificationSettings.ownerEmail}
-              onChange={(e) =>
-                setEmailNotificationSettings((prev) => ({
-                  ...prev,
-                  ownerEmail: e.target.value,
-                }))
-              }
-              placeholder="owner@restaurant.com"
-              className="bg-muted/50"
-              disabled={isLoadingSettings}
-            />
-            <p className="text-xs text-muted-foreground">
-              Email address where void notifications will be sent
-            </p>
-          </div>
-          <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
-            <div>
-              <Label htmlFor="voidEmailNotifications" className="text-base font-medium">
-                Enable Void Email Notifications
-              </Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                Receive instant email alerts when items are voided
-              </p>
-            </div>
-            <Switch
-              id="voidEmailNotifications"
-              checked={emailNotificationSettings.voidEmailNotificationsEnabled}
-              onCheckedChange={(checked) =>
-                setEmailNotificationSettings((prev) => ({
-                  ...prev,
-                  voidEmailNotificationsEnabled: checked,
-                }))
-              }
-              disabled={isLoadingSettings || !emailNotificationSettings.ownerEmail}
-            />
-          </div>
-          {emailNotificationSettings.voidEmailNotificationsEnabled && !emailNotificationSettings.ownerEmail && (
-            <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
-              <p className="text-sm text-warning">
-                Please enter an owner email address to enable notifications
-              </p>
-            </div>
-          )}
-          <div className="p-3 rounded-lg bg-muted/30 border border-border/60">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Mail className="w-4 h-4" />
-              Email notifications help prevent fraud by alerting you immediately when managers void items.
-            </p>
-          </div>
-        </div>
-      </GlassCard>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ownerEmail">Owner Email Address</Label>
+                  <Input
+                    id="ownerEmail"
+                    type="email"
+                    value={emailNotificationSettings.ownerEmail}
+                    onChange={(e) =>
+                      setEmailNotificationSettings((prev) => ({
+                        ...prev,
+                        ownerEmail: e.target.value,
+                      }))
+                    }
+                    placeholder="owner@restaurant.com"
+                    className="bg-muted/50"
+                    disabled={isLoadingSettings}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Email address where void notifications will be sent
+                  </p>
+                </div>
+                <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
+                  <div>
+                    <Label htmlFor="voidEmailNotifications" className="text-base font-medium">
+                      Enable Void Email Notifications
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Receive instant email alerts when items are voided
+                    </p>
+                  </div>
+                  <Switch
+                    id="voidEmailNotifications"
+                    checked={emailNotificationSettings.voidEmailNotificationsEnabled}
+                    onCheckedChange={(checked) =>
+                      setEmailNotificationSettings((prev) => ({
+                        ...prev,
+                        voidEmailNotificationsEnabled: checked,
+                      }))
+                    }
+                    disabled={isLoadingSettings || !emailNotificationSettings.ownerEmail}
+                  />
+                </div>
+                {emailNotificationSettings.voidEmailNotificationsEnabled && !emailNotificationSettings.ownerEmail && (
+                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                    <p className="text-sm text-warning">
+                      Please enter an owner email address to enable notifications
+                    </p>
+                  </div>
+                )}
+                <div className="p-3 rounded-lg bg-muted/30 border border-border/60">
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Email notifications help prevent fraud by alerting you immediately when managers void items.
+                  </p>
+                </div>
+              </div>
+            </GlassCard>
 
-        {/* Save Button for Notifications Tab */}
-        <div className="flex justify-end">
-          <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
-            {isSavingSettings ? (
-              <>
-                <Clock className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Save Changes
-              </>
-            )}
-          </Button>
-        </div>
-        </TabsContent>
+            {/* Save Button for Notifications Tab */}
+            <div className="flex justify-end">
+              <Button variant="glow" size="lg" onClick={handleSave} disabled={isSavingSettings || isLoadingSettings}>
+                {isSavingSettings ? (
+                  <>
+                    <Clock className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
+          </TabsContent>
         )}
 
         {/* Users Tab */}
@@ -1271,11 +1219,10 @@ export default function Settings() {
               {users.map((user) => (
                 <div
                   key={user.id}
-                  className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                    user.is_active
+                  className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${user.is_active
                       ? "bg-muted/30 border-border"
                       : "bg-muted/10 border-border/50 opacity-60"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-full bg-gradient-hero flex items-center justify-center text-primary-foreground font-bold text-lg">
@@ -1455,7 +1402,7 @@ export default function Settings() {
             </div>
             <div className="pt-4 border-t border-border">
               <p className="text-xs text-muted-foreground">
-                <strong>Note:</strong> Users will only see pages they have access to in the sidebar. 
+                <strong>Note:</strong> Users will only see pages they have access to in the sidebar.
                 If a user tries to access a restricted page directly, they will be redirected to the dashboard.
               </p>
             </div>
@@ -1542,9 +1489,9 @@ export default function Settings() {
             </p>
             <p className="text-sm text-muted-foreground">
               Powered by{" "}
-              <a 
-                href="https://archextech.netlify.app/" 
-                target="_blank" 
+              <a
+                href="https://archextech.netlify.app/"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline font-medium transition-colors"
               >
