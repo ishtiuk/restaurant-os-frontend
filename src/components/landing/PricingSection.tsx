@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { Check } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Check, Sparkles } from "lucide-react";
 
 const pricingPlans = [
   {
@@ -55,49 +56,59 @@ const pricingPlans = [
 
 export function PricingSection() {
   return (
-    <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center space-y-4 mb-16">
-          <h2 className="text-3xl sm:text-4xl font-display font-bold gradient-text">
-            Simple, Transparent Pricing
+    <section id="pricing" className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+      
+      <div className="max-w-7xl mx-auto relative">
+        <div className="text-center space-y-4 mb-12 sm:mb-16">
+          <Badge variant="glass" className="px-4 py-1.5">Pricing</Badge>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tight">
+            <span className="gradient-text">Simple, Transparent</span> Pricing
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-muted-foreground max-w-2xl mx-auto text-base sm:text-lg">
             Choose the plan that fits your restaurant's needs. All plans include free updates and basic support.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
+        <div className="grid md:grid-cols-3 gap-6 lg:gap-8 items-start">
           {pricingPlans.map((plan, index) => (
             <GlassCard
               key={plan.name}
-              className={`p-6 relative animate-fade-in ${
+              className={`p-6 sm:p-8 relative animate-fade-in hover-lift ${
                 plan.highlighted 
-                  ? "ring-2 ring-primary glow-primary pt-10" 
+                  ? "ring-2 ring-primary/50 md:-mt-4 md:mb-4" 
                   : ""
               }`}
               style={{ animationDelay: `${index * 100}ms` }}
             >
+              {/* Popular badge */}
               {plan.highlighted && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-primary-foreground text-sm font-medium rounded-full">
-                  Most Popular
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-primary text-primary-foreground px-4 py-1 shadow-lg shadow-primary/25">
+                    <Sparkles className="w-3 h-3 mr-1.5" />
+                    Most Popular
+                  </Badge>
                 </div>
               )}
 
-              <div className="text-center mb-6">
+              <div className={`text-center mb-6 sm:mb-8 ${plan.highlighted ? 'pt-4' : ''}`}>
                 <h3 className="text-xl font-display font-bold text-foreground mb-2">
                   {plan.name}
                 </h3>
-                <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                  <span className="text-muted-foreground">{plan.period}</span>
+                <div className="flex items-baseline justify-center gap-1 mb-3">
+                  <span className="text-4xl sm:text-5xl font-bold text-foreground tracking-tight">{plan.price}</span>
+                  <span className="text-muted-foreground text-sm">{plan.period}</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">{plan.description}</p>
+                <p className="text-sm text-muted-foreground">{plan.description}</p>
               </div>
 
-              <ul className="space-y-3 mb-6">
+              <ul className="space-y-3 mb-6 sm:mb-8">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-3">
-                    <Check className="w-5 h-5 text-accent shrink-0 mt-0.5" />
+                    <div className="w-5 h-5 rounded-full bg-accent/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="w-3 h-3 text-accent" />
+                    </div>
                     <span className="text-sm text-foreground">{feature}</span>
                   </li>
                 ))}
@@ -106,7 +117,8 @@ export function PricingSection() {
               <Link to="/login" className="block">
                 <Button
                   variant={plan.highlighted ? "glow" : "outline"}
-                  className="w-full"
+                  className={`w-full ${plan.highlighted ? 'btn-glow-hover' : 'hover:bg-primary/5 hover:border-primary/30'}`}
+                  size="lg"
                 >
                   {plan.name === "Enterprise" ? "Contact Sales" : "Get Started"}
                 </Button>
