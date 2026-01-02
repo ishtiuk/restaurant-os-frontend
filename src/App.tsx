@@ -54,189 +54,190 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TimezoneProvider>
-        <TenantProvider>
-          <AppDataProvider>
+      <TenantProvider>
+        <PermissionsProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+              }}
+            >
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/login" element={<Login />} />
 
-            <PermissionsProvider>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner />
-                <BrowserRouter
-                  future={{
-                    v7_startTransition: true,
-                    v7_relativeSplatPath: true,
-                  }}
-                >
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/login" element={<Login />} />
-
-
-                    <Route element={<RequireAuth />}>
-                      <Route element={<AppLayout />}>
-                        <Route
-                          path="/dashboard"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Dashboard />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/items"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Items />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/sales"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Sales />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/tables"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Tables />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/purchases"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Purchases />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/suppliers"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Suppliers />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/customers"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Customers />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/staff"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Staff />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/finance"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Finance />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/finance/transactions"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <FinanceTransactions />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/finance/banks"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <BankAccounts />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/finance/mfs"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <MfsAccounts />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/expenses"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Expenses />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/reports"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <Reports />
-                            </Suspense>
-                          }
-                        />
-                        <Route
-                          path="/sales-history"
-                          element={
-                            <Suspense fallback={<PageLoader />}>
-                              <SalesHistory />
-                            </Suspense>
-                          }
-                        />
-
-                        {/* Settings is available to restaurant owner and superadmin */}
-                        <Route element={<RequireRole role={["owner", "superadmin"]} />}>
-                          <Route
-                            path="/settings"
-                            element={
-                              <Suspense fallback={<PageLoader />}>
-                                <Settings />
-                              </Suspense>
-                            }
-                          />
-                        </Route>
-
-                        <Route element={<RequireRole role="superadmin" />}>
-                          <Route
-                            path="/admin"
-                            element={
-                              <Suspense fallback={<PageLoader />}>
-                                <Admin />
-                              </Suspense>
-                            }
-                          />
-                        </Route>
-                      </Route>
-                    </Route>
-
+                <Route element={<RequireAuth />}>
+                  <Route
+                    element={
+                      <TimezoneProvider>
+                        <AppDataProvider>
+                          <AppLayout />
+                        </AppDataProvider>
+                      </TimezoneProvider>
+                    }
+                  >
                     <Route
-                      path="*"
+                      path="/dashboard"
                       element={
                         <Suspense fallback={<PageLoader />}>
-                          <NotFound />
+                          <Dashboard />
                         </Suspense>
                       }
                     />
-                  </Routes>
-                </BrowserRouter>
-              </TooltipProvider>
-            </PermissionsProvider>
+                    <Route
+                      path="/items"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Items />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/sales"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Sales />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/tables"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Tables />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/purchases"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Purchases />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/suppliers"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Suppliers />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/customers"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Customers />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/staff"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Staff />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/finance"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Finance />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/finance/transactions"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <FinanceTransactions />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/finance/banks"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <BankAccounts />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/finance/mfs"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <MfsAccounts />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/expenses"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Expenses />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/reports"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <Reports />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/sales-history"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <SalesHistory />
+                        </Suspense>
+                      }
+                    />
 
-          </AppDataProvider>
-        </TenantProvider>
-      </TimezoneProvider>
+                    {/* Settings is available to restaurant owner and superadmin */}
+                    <Route element={<RequireRole role={["owner", "superadmin"]} />}>
+                      <Route
+                        path="/settings"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <Settings />
+                          </Suspense>
+                        }
+                      />
+                    </Route>
+
+                    <Route element={<RequireRole role="superadmin" />}>
+                      <Route
+                        path="/admin"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <Admin />
+                          </Suspense>
+                        }
+                      />
+                    </Route>
+                  </Route>
+                </Route>
+
+                <Route
+                  path="*"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <NotFound />
+                    </Suspense>
+                  }
+                />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </PermissionsProvider>
+      </TenantProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

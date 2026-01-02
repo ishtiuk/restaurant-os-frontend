@@ -2,17 +2,28 @@
  * Format UTC date to user's selected timezone
  */
 export const formatWithTimezone = (
-  utcDate: string | Date,
+  utcDate: string | Date | null | undefined,
   timezone: string,
   options?: Intl.DateTimeFormatOptions
 ): string => {
+  // Handle null/undefined
+  if (!utcDate) {
+    return "N/A";
+  }
+
   // Parse UTC ISO string from backend
   // Backend now returns timestamps with 'Z' suffix (e.g., 2025-12-20T06:24:07Z)
   // Workaround for backward compatibility: append 'Z' if missing (handles old +00:00 format)
   const date = typeof utcDate === "string"
     ? new Date(utcDate.endsWith('Z') ? utcDate : utcDate + 'Z')
     : utcDate;
-  
+
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    console.warn(`Invalid date passed to formatWithTimezone: ${utcDate}`);
+    return "Invalid Date";
+  }
+
   // Use Intl.DateTimeFormat directly for explicit timezone conversion
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -24,7 +35,7 @@ export const formatWithTimezone = (
     hour12: true,
     ...options,
   });
-  
+
   return formatter.format(date);
 };
 
@@ -103,10 +114,10 @@ export const getStartOfDay = (date: Date, timezone: string): Date => {
   const day = parts.find((p) => p.type === "day")!.value;
 
   const dateStr = `${year}-${month}-${day}`;
-  
+
   // Use noon UTC as reference point (avoids DST issues at midnight)
   const noonUTC = new Date(`${dateStr}T12:00:00Z`);
-  
+
   // Get what time noon UTC shows in user's timezone
   const noonInUserTZ = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -114,18 +125,18 @@ export const getStartOfDay = (date: Date, timezone: string): Date => {
     minute: "2-digit",
     hour12: false,
   }).format(noonUTC);
-  
+
   // Extract hour (format: "HH:mm")
   const [hourStr] = noonInUserTZ.split(":");
   const hourInUserTZ = parseInt(hourStr, 10);
-  
+
   // Calculate: if noon UTC (12:00 UTC) shows as 18:00 in user's TZ (UTC+6),
   // then midnight in user's TZ (00:00) is hourInUserTZ hours before noon UTC
   // So: midnight in user's TZ = noon UTC - hourInUserTZ hours
   // Example: 12:00 UTC - 18 hours = 18:00 previous day UTC = 00:00 in UTC+6
   const hoursToSubtract = hourInUserTZ;
   const midnightUTC = new Date(noonUTC.getTime() - hoursToSubtract * 60 * 60 * 1000);
-  
+
   // Verify the date is correct (handle edge cases)
   const verifyDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -133,13 +144,13 @@ export const getStartOfDay = (date: Date, timezone: string): Date => {
     month: "2-digit",
     day: "2-digit",
   }).format(midnightUTC);
-  
+
   if (verifyDate !== dateStr) {
     // If date doesn't match, adjust by one day
     const adjustment = verifyDate < dateStr ? 24 * 60 * 60 * 1000 : -24 * 60 * 60 * 1000;
     return new Date(midnightUTC.getTime() + adjustment);
   }
-  
+
   return midnightUTC;
 };
 
