@@ -56,7 +56,7 @@ export function HeroSection() {
         <div className="absolute top-1/3 -left-32 w-[400px] h-[400px] bg-accent/10 rounded-full blur-[100px] animate-float" />
         <div className="absolute bottom-1/4 -right-32 w-[500px] h-[500px] bg-secondary/8 rounded-full blur-[100px]" />
         {/* Subtle grid pattern */}
-        <div 
+        <div
           className="absolute inset-0 opacity-[0.015]"
           style={{
             backgroundImage: `radial-gradient(circle at 1px 1px, hsl(var(--foreground)) 1px, transparent 0)`,
@@ -70,8 +70,8 @@ export function HeroSection() {
         <div className="text-center space-y-6 sm:space-y-8">
           {/* Eyebrow badge */}
           <div className="animate-fade-in">
-            <Badge 
-              variant="glass" 
+            <Badge
+              variant="glass"
               className="px-4 py-2 text-sm font-medium border-primary/20 bg-primary/5 backdrop-blur-xl"
             >
               <Sparkles className="w-3.5 h-3.5 mr-2 text-primary" />
@@ -95,18 +95,18 @@ export function HeroSection() {
           {/* CTA Buttons - Enhanced visual weight */}
           <div className="animate-fade-in stagger-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-2">
             <Link to="/login">
-              <Button 
-                size="lg" 
-                variant="glow" 
+              <Button
+                size="lg"
+                variant="glow"
                 className="text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto group btn-glow-hover"
               >
                 Start Free Trial
                 <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
               </Button>
             </Link>
-            <Button 
-              size="lg" 
-              variant="outline" 
+            <Button
+              size="lg"
+              variant="outline"
               className="text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto group border-border/50 hover:border-primary/30 hover:bg-primary/5"
             >
               <Play className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
@@ -130,7 +130,7 @@ export function HeroSection() {
         </div>
 
         {/* Hero Image Showcase */}
-        <div 
+        <div
           className="mt-12 sm:mt-16 lg:mt-20 relative animate-slide-up stagger-5 max-w-5xl mx-auto"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
@@ -141,27 +141,24 @@ export function HeroSection() {
             <div className="rounded-2xl bg-card/80 backdrop-blur-sm p-1.5 sm:p-2 relative overflow-hidden">
               {/* Subtle top highlight */}
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
-              
+
               {/* Screenshot container */}
               <div className="rounded-xl bg-muted overflow-hidden shadow-2xl relative group">
                 {/* Aspect ratio container - responsive */}
-                <div className="aspect-[4/3] sm:aspect-[16/10] relative">
+                <div className="aspect-[16/10] sm:aspect-video bg-black/90 relative flex items-center justify-center">
                   {screenshots.map((screenshot, index) => (
                     <div
                       key={screenshot.title}
-                      className={`absolute inset-0 transition-all duration-700 ease-out ${
-                        index === currentScreenshot 
-                          ? "opacity-100 scale-100" 
-                          : "opacity-0 scale-[1.02]"
-                      }`}
+                      className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentScreenshot ? "opacity-100" : "opacity-0"
+                        }`}
                     >
                       <img
                         src={screenshot.url}
                         alt={screenshot.title}
-                        className="w-full h-full object-cover object-top"
+                        className="w-full h-full object-contain"
                         loading={index === 0 ? "eager" : "lazy"}
                       />
-                      
+
                       {/* Caption Overlay - refined gradient */}
                       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 sm:p-6 lg:p-8 pt-16 sm:pt-20">
                         <div className="flex items-end justify-between gap-4">
@@ -173,7 +170,7 @@ export function HeroSection() {
                               {screenshot.description}
                             </p>
                           </div>
-                          <Badge 
+                          <Badge
                             className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-sm shrink-0"
                           >
                             {index + 1}/{screenshots.length}
@@ -190,11 +187,10 @@ export function HeroSection() {
                     <button
                       key={index}
                       onClick={() => setCurrentScreenshot(index)}
-                      className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
-                        index === currentScreenshot
+                      className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${index === currentScreenshot
                           ? "bg-white w-6 sm:w-8"
                           : "bg-white/30 hover:bg-white/50 w-1.5 sm:w-2"
-                      }`}
+                        }`}
                       aria-label={`Go to slide ${index + 1}`}
                     />
                   ))}
