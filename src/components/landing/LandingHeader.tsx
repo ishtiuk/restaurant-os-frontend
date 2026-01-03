@@ -54,7 +54,7 @@ export function LandingHeader() {
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-hero flex items-center justify-center shadow-lg shadow-primary/20 transition-transform duration-300 group-hover:scale-105">
               <Utensils className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
             </div>
-            <span className="text-lg sm:text-xl font-display font-bold gradient-text">RestaurantOSx</span>
+            <span className="text-lg sm:text-xl font-display font-bold gradient-text">RysTRO</span>
           </Link>
 
           {/* Desktop Navigation */}

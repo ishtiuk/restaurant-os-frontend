@@ -21,7 +21,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   paperSize: '80mm',
   invoicePrefix: 'INV-',
   footerText: 'ধন্যবাদ, আবার আসবেন',
-  restaurantName: 'RestaurantOSx',
+  restaurantName: 'RysTRO',
   restaurantNameBn: '',
   address: '123 Restaurant Street, Dhaka',
   phone: '01700-000000',

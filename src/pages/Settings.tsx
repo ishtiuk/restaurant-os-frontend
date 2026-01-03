@@ -1485,7 +1485,7 @@ export default function Settings() {
         <GlassCard className="p-6">
           <div className="text-center space-y-2">
             <p className="text-sm text-muted-foreground">
-              © 2024 RestaurantOSx. All rights reserved.
+              © 2024 RysTRO. All rights reserved.
             </p>
             <p className="text-sm text-muted-foreground">
               Powered by{" "}

@@ -165,7 +165,7 @@ export const TableBillReceipt: React.FC<TableBillReceiptProps> = ({
       {/* Footer */}
       <div className="slip-footer">
         <p><strong>{settings.footerText || 'ধন্যবাদ, আবার আসবেন'}</strong></p>
-        <p style={{ marginTop: '6px' }}>--- Powered by RestaurantOSx | Archex Tech ---</p>
+        <p style={{ marginTop: '6px' }}>--- Powered by RysTRO | Archex Tech ---</p>
       </div>
     </div>
   );

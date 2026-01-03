@@ -687,7 +687,7 @@ export default function Sales() {
               {/* Preview receipt */}
               <div className="p-4 rounded-lg bg-muted/30 font-mono text-sm max-h-[50vh] overflow-auto custom-scrollbar">
                 <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
-                  <h3 className="font-display font-bold text-lg">RestaurantOSx</h3>
+                  <h3 className="font-display font-bold text-lg">RysTRO</h3>
                   <p className="text-muted-foreground text-xs">
                     {formatWithTimezone(lastSale.createdAt, timezone)}
                   </p>

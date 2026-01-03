@@ -1,5 +1,5 @@
 /**
- * Base API client (RestaurantOSx)
+ * Base API client (RysTRO)
  */
 
 // When served from backend, use relative path
