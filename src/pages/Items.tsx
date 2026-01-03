@@ -60,6 +60,7 @@ export default function Items() {
   const [stockInput, setStockInput] = useState<number>(0);
   const [isPackagedItem, setIsPackagedItem] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState(false);
+  const [updatingStock, setUpdatingStock] = useState(false);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -256,10 +257,21 @@ export default function Items() {
   const handleSaveStock = async () => {
     if (!selectedItem) return;
     const updated = { ...selectedItem, stockQty: stockInput };
-    await upsertItem(updated);
-    setIsStockModalOpen(false);
-    setSelectedItem(null);
-    toast({ title: "Stock updated", description: `${updated.name}: ${updated.stockQty} ${updated.unit}` });
+    setUpdatingStock(true);
+    try {
+      await upsertItem(updated);
+      setIsStockModalOpen(false);
+      setSelectedItem(null);
+      toast({ title: "Stock updated", description: `${updated.name}: ${updated.stockQty} ${updated.unit}` });
+    } catch (error) {
+      toast({
+        title: "Failed to update stock",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingStock(false);
+    }
   };
 
   return (
@@ -825,8 +837,8 @@ export default function Items() {
                 <Button variant="outline" onClick={() => setIsStockModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button variant="glow" onClick={handleSaveStock}>
-                  Save Stock
+                <Button variant="glow" onClick={handleSaveStock} disabled={updatingStock}>
+                  {updatingStock ? "Updating..." : "Save Stock"}
                 </Button>
               </div>
             </div>

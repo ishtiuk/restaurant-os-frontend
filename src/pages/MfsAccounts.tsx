@@ -83,6 +83,7 @@ export default function MfsAccounts() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mfsToDelete, setMfsToDelete] = useState<MfsAccountResponse | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Fetch MFS accounts and balances
   useEffect(() => {
@@ -135,6 +136,7 @@ export default function MfsAccounts() {
   const confirmDeleteMfs = async () => {
     if (!mfsToDelete) return;
 
+    setDeleting(true);
     try {
       await financeApi.deleteMfsAccount(mfsToDelete.id);
 
@@ -156,6 +158,8 @@ export default function MfsAccounts() {
         description: error?.message || "Failed to delete MFS account",
         variant: "destructive",
       });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -306,8 +310,8 @@ export default function MfsAccounts() {
                     <Eye className="w-4 h-4 mr-1" />
                     Transactions
                   </Button>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => handleEditMfs(mfs)}
                   >
@@ -353,7 +357,7 @@ export default function MfsAccounts() {
               View all transactions for this MFS account including deposits, withdrawals, and transfers.
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedMfs && (
             <div className="space-y-4">
               {/* MFS Summary */}
@@ -426,8 +430,8 @@ export default function MfsAccounts() {
       }} />
 
       {/* Edit MFS Modal */}
-      <EditMfsAccount 
-        open={editMfsOpen} 
+      <EditMfsAccount
+        open={editMfsOpen}
         onOpenChange={(open) => {
           setEditMfsOpen(open);
           if (!open) {
@@ -470,9 +474,10 @@ export default function MfsAccounts() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteMfs}
+              disabled={deleting}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
-              Delete
+              {deleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

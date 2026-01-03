@@ -58,6 +58,7 @@ export default function BankAccounts() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bankToDelete, setBankToDelete] = useState<BankAccountResponse | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Fetch banks and balances
   useEffect(() => {
@@ -110,6 +111,7 @@ export default function BankAccounts() {
   const confirmDeleteBank = async () => {
     if (!bankToDelete) return;
 
+    setDeleting(true);
     try {
       await financeApi.deleteBankAccount(bankToDelete.id);
 
@@ -131,6 +133,8 @@ export default function BankAccounts() {
         description: error?.message || "Failed to delete bank account",
         variant: "destructive",
       });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -243,9 +247,8 @@ export default function BankAccounts() {
             <GlassCard key={bank.id} hover className={`p-6 ${!bank.is_active ? "opacity-60" : ""}`}>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                    bank.is_active ? "bg-purple-500/20" : "bg-muted"
-                  }`}>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bank.is_active ? "bg-purple-500/20" : "bg-muted"
+                    }`}>
                     <Building2 className={`w-6 h-6 ${bank.is_active ? "text-purple-400" : "text-muted-foreground"}`} />
                   </div>
                   <div>
@@ -284,8 +287,8 @@ export default function BankAccounts() {
                   <Eye className="w-4 h-4 mr-1" />
                   Transactions
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
                   onClick={() => handleEditBank(bank)}
                 >
@@ -303,18 +306,18 @@ export default function BankAccounts() {
             </GlassCard>
           ))}
 
-        {/* Add Bank Card */}
-        <GlassCard
-          hover
-          className="p-6 border-dashed cursor-pointer flex flex-col items-center justify-center min-h-[250px]"
-          onClick={() => setAddBankOpen(true)}
-        >
-          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-            <Plus className="w-8 h-8 text-muted-foreground" />
-          </div>
-          <p className="font-medium text-muted-foreground">Add New Bank Account</p>
-          <p className="text-sm text-muted-foreground mt-1">নতুন ব্যাংক যোগ করুন</p>
-        </GlassCard>
+          {/* Add Bank Card */}
+          <GlassCard
+            hover
+            className="p-6 border-dashed cursor-pointer flex flex-col items-center justify-center min-h-[250px]"
+            onClick={() => setAddBankOpen(true)}
+          >
+            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+              <Plus className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <p className="font-medium text-muted-foreground">Add New Bank Account</p>
+            <p className="text-sm text-muted-foreground mt-1">নতুন ব্যাংক যোগ করুন</p>
+          </GlassCard>
         </div>
       )}
 
@@ -330,7 +333,7 @@ export default function BankAccounts() {
               View all transactions for this bank account including deposits, withdrawals, and transfers.
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedBank && (
             <div className="space-y-4">
               {/* Bank Summary */}
@@ -401,8 +404,8 @@ export default function BankAccounts() {
       }} />
 
       {/* Edit Bank Modal */}
-      <EditBankAccount 
-        open={editBankOpen} 
+      <EditBankAccount
+        open={editBankOpen}
         onOpenChange={(open) => {
           setEditBankOpen(open);
           if (!open) {
@@ -445,9 +448,10 @@ export default function BankAccounts() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteBank}
+              disabled={deleting}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
-              Delete
+              {deleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
