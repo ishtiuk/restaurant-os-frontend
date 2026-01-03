@@ -31,7 +31,7 @@ export function LandingFooter() {
               <div className="w-10 h-10 rounded-xl bg-gradient-hero flex items-center justify-center glow-primary">
                 <Utensils className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="text-xl font-display font-bold gradient-text">RestaurantOS</span>
+              <span className="text-xl font-display font-bold gradient-text">Restauranflow</span>
             </Link>
             <p className="text-sm text-muted-foreground">
               The complete restaurant management solution for modern businesses.
@@ -92,7 +92,7 @@ export function LandingFooter() {
 
         <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © {currentYear} RestaurantOS. All rights reserved.
+            © {currentYear} Restauranflow. All rights reserved.
           </p>
           <div className="flex items-center gap-4">
             <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

@@ -21,8 +21,8 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   paperSize: '80mm',
   invoicePrefix: 'INV-',
   footerText: 'ধন্যবাদ, আবার আসবেন',
-  restaurantName: 'RestaurantOS',
-  restaurantNameBn: 'রেস্টুরেন্ট ওএস',
+  restaurantName: 'Restauranflow',
+  restaurantNameBn: '',
   address: '123 Restaurant Street, Dhaka',
   phone: '01700-000000',
   printerName: '', // Empty = use default printer
@@ -96,7 +96,7 @@ export const savePrintSettings = (settings: Partial<PrintSettings>) => {
 // Generate thermal print styles based on paper size
 const generateThermalStyles = (paperSize: ThermalPaperSize): string => {
   const config = PAPER_CONFIG[paperSize];
-  
+
   return `
     @page {
       size: ${config.widthMm}mm auto;
@@ -462,12 +462,12 @@ const isElectron = (): boolean => {
 // Get Electron API
 const getElectronAPI = (): ElectronAPI | null => {
   if (!isElectron()) return null;
-  
+
   // Try window.electron (exposed via preload script)
   if ((window as any).electron) {
     return (window as any).electron as ElectronAPI;
   }
-  
+
   // Try window.require (if contextIsolation is disabled - not recommended)
   if ((window as any).require) {
     try {
@@ -486,7 +486,7 @@ const getElectronAPI = (): ElectronAPI | null => {
       console.warn('Could not access Electron API:', e);
     }
   }
-  
+
   return null;
 };
 
@@ -501,7 +501,7 @@ export const printContent = async (elementId: string, options: PrintOptions = {}
   // Settings are synced to localStorage when saved in Settings page
   const settings = getPrintSettingsSync();
   const { title = 'Print', paperSize = settings.paperSize } = options;
-  
+
   const styles = generateThermalStyles(paperSize);
   const htmlContent = `
     <!DOCTYPE html>
@@ -543,20 +543,20 @@ export const printContent = async (elementId: string, options: PrintOptions = {}
   iframe.style.height = '0';
   iframe.style.border = 'none';
   iframe.style.visibility = 'hidden';
-  
+
   document.body.appendChild(iframe);
-  
+
   const iframeDoc = iframe.contentWindow?.document;
   if (!iframeDoc) {
     console.error('Could not access iframe document');
     document.body.removeChild(iframe);
     return;
   }
-  
+
   iframeDoc.open();
   iframeDoc.write(htmlContent);
   iframeDoc.close();
-  
+
   // Wait for content to render then print
   setTimeout(() => {
     try {

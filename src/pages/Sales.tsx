@@ -687,9 +687,8 @@ export default function Sales() {
               {/* Preview receipt */}
               <div className="p-4 rounded-lg bg-muted/30 font-mono text-sm max-h-[50vh] overflow-auto custom-scrollbar">
                 <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
-                  <h3 className="font-display font-bold text-lg">RestaurantOS</h3>
-                  <p className="text-muted-foreground text-xs">রেস্টুরেন্ট ওএস</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <h3 className="font-display font-bold text-lg">Restauranflow</h3>
+                  <p className="text-muted-foreground text-xs">
                     {formatWithTimezone(lastSale.createdAt, timezone)}
                   </p>
                   <Badge variant="outline" className="mt-2">

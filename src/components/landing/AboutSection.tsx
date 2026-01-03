@@ -21,10 +21,10 @@ export function AboutSection() {
                                 Empowering Restaurants to <span className="text-primary">Thrive</span>
                             </h2>
                             <p className="text-muted-foreground text-lg leading-relaxed">
-                                Founded in 2025, RestaurantOS was born from a simple observation: great food deserves great technology. We saw restaurant owners struggling with fragmented tools, messy spreadsheets, and outdated POS systems.
+                                Founded in 2025, Restauranflow was born from a simple observation: great food deserves great technology. We saw restaurant owners struggling with fragmented tools, messy spreadsheets, and outdated POS systems.
                             </p>
                             <p className="text-muted-foreground text-lg leading-relaxed">
-                                We built RestaurantOS to be the operating system for modern dining—seamlessly connecting orders, kitchen, inventory, and analytics in one intuitive platform.
+                                We built Restauranflow to be the operating system for modern dining—seamlessly connecting orders, kitchen, inventory, and analytics in one intuitive platform.
                             </p>
                         </div>
 

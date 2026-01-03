@@ -107,7 +107,7 @@ export function Sidebar({ className, onClose }: SidebarProps) {
             <Utensils className="w-6 h-6 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-display font-bold text-xl gradient-text">RestaurantOS</h1>
+            <h1 className="font-display font-bold text-xl gradient-text">Restauranflow</h1>
             <p className="text-xs text-muted-foreground">রেস্টুরেন্ট ম্যানেজমেন্ট সিস্টেম</p>
           </div>
         </div>

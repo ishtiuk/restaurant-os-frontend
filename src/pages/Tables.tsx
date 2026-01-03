@@ -1534,8 +1534,7 @@ export default function Tables() {
               {/* Preview bill */}
               <div className="p-4 rounded-lg bg-muted/30 space-y-2 font-mono max-h-[40vh] overflow-auto custom-scrollbar">
                 <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
-                  <h3 className="font-display font-bold text-xl">RestaurantOS</h3>
-                  <p className="text-sm text-muted-foreground mt-1">রেস্টুরেন্ট ওএস</p>
+                  <h3 className="font-display font-bold text-xl">Restauranflow</h3>
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatWithTimezone(new Date(), timezone)}
                   </p>
