@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -9,7 +10,30 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    mode === "development" && componentTagger(),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.ico", "robots.txt"],
+      manifest: {
+        name: "Restaurant OS",
+        short_name: "RestaurantOS",
+        description: "Offline-first restaurant management system",
+        theme_color: "#0f172a",
+        background_color: "#ffffff",
+        display: "standalone",
+        start_url: "/",
+        icons: [
+          {
+            src: "/pwa-icon.svg",
+            sizes: "192x192 512x512",
+            type: "image/svg+xml"
+          }
+        ]
+      }
+    })
+  ].filter(Boolean),
   build: {
     // Silence chunk size warnings and add light vendor splitting
     chunkSizeWarningLimit: 1500,

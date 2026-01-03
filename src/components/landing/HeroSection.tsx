@@ -9,27 +9,27 @@ const screenshots = [
   {
     title: "Insightful Dashboard",
     description: "Get a complete overview of your business metrics in real-time.",
-    url: "https://res.cloudinary.com/demdlwbdp/image/upload/v1767370424/restaurant-os/screenshots/restaurant-os/screenshots/dashboard.webp"
+    url: "https://res.cloudinary.com/demdlwbdp/image/upload/f_auto,q_auto/v1767370424/restaurant-os/screenshots/restaurant-os/screenshots/dashboard.webp"
   },
   {
     title: "Table Management",
     description: "Visual table layout to manage occupancy and reservations efficiently.",
-    url: "https://res.cloudinary.com/demdlwbdp/image/upload/v1767370425/restaurant-os/screenshots/restaurant-os/screenshots/tables.webp"
+    url: "https://res.cloudinary.com/demdlwbdp/image/upload/f_auto,q_auto/v1767370425/restaurant-os/screenshots/restaurant-os/screenshots/tables.webp"
   },
   {
     title: "POS & Billing",
     description: "Fast and intuitive point-of-sale system for seamless transactions.",
-    url: "https://res.cloudinary.com/demdlwbdp/image/upload/v1767370427/restaurant-os/screenshots/restaurant-os/screenshots/pos.webp"
+    url: "https://res.cloudinary.com/demdlwbdp/image/upload/f_auto,q_auto/v1767370427/restaurant-os/screenshots/restaurant-os/screenshots/pos.webp"
   },
   {
     title: "Advanced Reports",
     description: "Deep dive into sales trends, product performance, and more.",
-    url: "https://res.cloudinary.com/demdlwbdp/image/upload/v1767370429/restaurant-os/screenshots/restaurant-os/screenshots/reports.webp"
+    url: "https://res.cloudinary.com/demdlwbdp/image/upload/f_auto,q_auto/v1767370429/restaurant-os/screenshots/restaurant-os/screenshots/reports.webp"
   },
   {
     title: "Inventory Control",
     description: "Manage products, stock levels, and suppliers with ease.",
-    url: "https://res.cloudinary.com/demdlwbdp/image/upload/v1767370433/restaurant-os/screenshots/restaurant-os/screenshots/items.webp"
+    url: "https://res.cloudinary.com/demdlwbdp/image/upload/f_auto,q_auto/v1767370433/restaurant-os/screenshots/restaurant-os/screenshots/items.webp"
   },
 ];
 
@@ -188,8 +188,8 @@ export function HeroSection() {
                       key={index}
                       onClick={() => setCurrentScreenshot(index)}
                       className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${index === currentScreenshot
-                          ? "bg-white w-6 sm:w-8"
-                          : "bg-white/30 hover:bg-white/50 w-1.5 sm:w-2"
+                        ? "bg-white w-6 sm:w-8"
+                        : "bg-white/30 hover:bg-white/50 w-1.5 sm:w-2"
                         }`}
                       aria-label={`Go to slide ${index + 1}`}
                     />
