@@ -149,7 +149,7 @@ export function HeroSection() {
                 <div className="w-2.5 h-2.5 rounded-full bg-destructive/80" />
                 <div className="w-2.5 h-2.5 rounded-full bg-primary/80" />
                 <div className="w-2.5 h-2.5 rounded-full bg-accent/80" />
-                <span className="ml-3 text-xs text-muted-foreground/50 font-medium">Restauranflow — Dashboard</span>
+                <span className="ml-3 text-xs text-muted-foreground/50 font-medium">RestaurantOSx — Dashboard</span>
               </div>
 
               {/* Screenshot container */}

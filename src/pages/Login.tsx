@@ -82,7 +82,7 @@ export default function Login() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-hero mx-auto mb-4 flex items-center justify-center glow-primary">
             <Utensils className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-display font-bold gradient-text">Restauranflow</h1>
+          <h1 className="text-2xl font-display font-bold gradient-text">RestaurantOSx</h1>
           <p className="text-muted-foreground mt-1">রেস্টুরেন্ট ম্যানেজমেন্ট সিস্টেম</p>
         </div>
 

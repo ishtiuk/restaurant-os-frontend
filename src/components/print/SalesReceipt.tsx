@@ -139,7 +139,7 @@ export const SalesReceipt: React.FC<SalesReceiptProps> = ({
       {/* Footer */}
       <div className="slip-footer">
         <p><strong>{settings.footerText || 'ধন্যবাদ, আবার আসবেন'}</strong></p>
-        <p style={{ marginTop: '6px' }}>--- Powered by Restauranflow | Archex Tech ---</p>
+        <p style={{ marginTop: '6px' }}>--- Powered by RestaurantOSx | Archex Tech ---</p>
       </div>
     </div>
   );

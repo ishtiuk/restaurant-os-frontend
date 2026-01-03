@@ -1,5 +1,5 @@
 /**
- * Base API client (Restauranflow)
+ * Base API client (RestaurantOSx)
  */
 
 // When served from backend, use relative path

@@ -24,7 +24,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
             <div className="w-8 h-8 rounded-lg bg-gradient-hero flex items-center justify-center">
               <Utensils className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-display font-bold gradient-text">Restauranflow</span>
+            <span className="font-display font-bold gradient-text">RestaurantOSx</span>
           </div>
         </div>
 

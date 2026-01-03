@@ -17,8 +17,8 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt"],
       manifest: {
-        name: "Restauranflow",
-        short_name: "Restauranflow",
+        name: "RestaurantOSx",
+        short_name: "RestaurantOSx",
         description: "Offline-first restaurant management system",
         theme_color: "#0f172a",
         background_color: "#ffffff",
