@@ -61,32 +61,104 @@ export function AboutSection() {
                     </div>
 
                     {/* Right Column: Visual / Image */}
-                    <div className="relative animate-fade-in-right hidden lg:block">
-                        <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-border/50">
-                            <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 relative flex items-center justify-center">
-                                {/* Abstract Representation of "OS" */}
-                                <div className="relative z-10 text-center space-y-4">
-                                    <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-primary/20 backdrop-blur-xl border border-primary/30 text-primary">
-                                        <span className="text-4xl font-bold">R</span>
+                    <div className="relative animate-fade-in-right hidden lg:block perspective-1000">
+                        {/* Isometric Container */}
+                        <div className="relative transform transition-transform duration-700 hover:rotate-y-12 hover:rotate-x-6 rotate-y-6 rotate-x-3 preserve-3d">
+
+                            {/* Main Dashboard Card */}
+                            <div className="relative rounded-xl bg-card border border-border/50 shadow-2xl overflow-hidden aspect-square flex flex-col">
+                                {/* Header Mockup */}
+                                <div className="h-12 border-b border-border/50 bg-muted/30 flex items-center px-4 gap-3">
+                                    <div className="flex gap-1.5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                                        <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+                                        <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
                                     </div>
-                                    <div className="absolute -top-6 -right-6 w-16 h-16 rounded-2xl bg-accent/20 backdrop-blur-xl border border-accent/30 flex items-center justify-center animate-bounce duration-[3000ms]">
-                                        <Zap className="w-8 h-8 text-accent" />
-                                    </div>
-                                    <div className="absolute -bottom-4 -left-8 w-20 h-20 rounded-full bg-secondary/20 backdrop-blur-xl border border-secondary/30 flex items-center justify-center animate-pulse">
-                                        <Users className="w-10 h-10 text-secondary" />
-                                    </div>
+                                    <div className="h-2 w-24 bg-foreground/10 rounded-full ml-4" />
                                 </div>
 
-                                {/* Background Grid */}
-                                <div className="absolute inset-0 opacity-20"
-                                    style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }}>
+                                {/* Body Mockup */}
+                                <div className="flex-1 p-6 flex gap-6 bg-gradient-to-br from-background to-muted/20">
+                                    {/* Sidebar */}
+                                    <div className="w-12 flex flex-col gap-3 pt-2">
+                                        {[1, 2, 3, 4].map(i => (
+                                            <div key={i} className="w-8 h-8 rounded-lg bg-foreground/5" />
+                                        ))}
+                                    </div>
+
+                                    {/* Content Area */}
+                                    <div className="flex-1 space-y-4">
+                                        {/* Stats Row */}
+                                        <div className="flex gap-4">
+                                            <div className="flex-1 p-3 rounded-lg bg-primary/10 border border-primary/20">
+                                                <div className="h-2 w-12 bg-primary/20 rounded-full mb-2" />
+                                                <div className="h-6 w-16 bg-primary/40 rounded-full" />
+                                            </div>
+                                            <div className="flex-1 p-3 rounded-lg bg-accent/10 border border-accent/20">
+                                                <div className="h-2 w-12 bg-accent/20 rounded-full mb-2" />
+                                                <div className="h-6 w-16 bg-accent/40 rounded-full" />
+                                            </div>
+                                        </div>
+
+                                        {/* Chart Area */}
+                                        <div className="h-32 rounded-lg bg-muted/40 border border-border/40 p-3 relative overflow-hidden">
+                                            {/* Fake Chart Lines */}
+                                            <svg className="absolute inset-0 w-full h-full p-4 opacity-50" viewBox="0 0 100 50" preserveAspectRatio="none">
+                                                <path d="M0 40 Q25 20 50 30 T100 10" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary" />
+                                                <path d="M0 40 L0 50 L100 50 L100 10" fill="url(#gradient)" className="text-primary/10" />
+                                                <defs>
+                                                    <linearGradient id="gradient" x1="0" x2="0" y1="0" y2="1">
+                                                        <stop offset="0%" stopColor="currentColor" />
+                                                        <stop offset="100%" stopColor="transparent" />
+                                                    </linearGradient>
+                                                </defs>
+                                            </svg>
+                                        </div>
+
+                                        {/* List Items */}
+                                        <div className="space-y-2">
+                                            {[1, 2].map(i => (
+                                                <div key={i} className="h-10 rounded-lg bg-background border border-border/50 flex items-center px-3 gap-3">
+                                                    <div className="w-6 h-6 rounded-full bg-muted" />
+                                                    <div className="h-2 w-20 bg-muted-foreground/20 rounded-full" />
+                                                    <div className="ml-auto h-2 w-8 bg-muted-foreground/20 rounded-full" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        {/* Background offset border */}
-                        <div className="absolute -inset-4 border-2 border-dashed border-primary/20 rounded-3xl -z-10" />
-                    </div>
 
+                            {/* Floating Elements (3D Depth) */}
+                            <div className="absolute -right-8 top-20 p-3 rounded-xl bg-card border border-border shadow-xl animate-float" style={{ animationDelay: '1s' }}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                                        <span className="text-green-500 font-bold">$</span>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">Revenue</p>
+                                        <p className="font-bold text-sm">+24%</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="absolute -left-4 bottom-20 p-3 rounded-xl bg-card border border-border shadow-xl animate-float" style={{ animationDelay: '2s' }}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                                        <Users className="w-4 h-4 text-blue-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">Active Tables</p>
+                                        <p className="font-bold text-sm">12/15</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* Background Glow */}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-accent/10 blur-3xl -z-10 rounded-full transform scale-90" />
+                    </div>
                 </div>
             </div>
         </section>

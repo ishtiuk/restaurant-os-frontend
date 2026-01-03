@@ -59,6 +59,7 @@ export default function Items() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [stockInput, setStockInput] = useState<number>(0);
   const [isPackagedItem, setIsPackagedItem] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -107,10 +108,10 @@ export default function Items() {
       .join("")
       .toUpperCase()
       .slice(0, 2);
-  const random = Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, "0");
-  return `${categoryPrefix}${namePrefix}${random}`;
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0");
+    return `${categoryPrefix}${namePrefix}${random}`;
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,20 +164,20 @@ export default function Items() {
   const handleAddItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
     const name = formData.get("name") as string;
     const categoryId = formData.get("categoryId") as string;
     const isPackaged = formData.get("isPackaged") === "true";
-    
+
     // Use image preview (base64) or empty string
     let imageUrl = imagePreview || undefined;
-    
+
     // TODO: When backend media API is ready, upload file here:
     // if (selectedFile) {
     //   const response = await mediaApi.upload(selectedFile, "item");
     //   imageUrl = response.file_url;
     // }
-    
+
     const baseItem: Item = {
       id: isEditMode && selectedItem ? selectedItem.id : `ITEM-${Date.now()}`,
       name,
@@ -195,6 +196,7 @@ export default function Items() {
       updatedAt: new Date().toISOString(),
     };
 
+    setSubmitting(true);
     try {
       await upsertItem(baseItem, selectedFile);
       setIsAddModalOpen(false);
@@ -213,6 +215,8 @@ export default function Items() {
         description: "Failed to create item. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -266,8 +270,8 @@ export default function Items() {
           <h1 className="text-3xl font-display font-bold gradient-text">Items</h1>
           <p className="text-muted-foreground">আইটেম ও মেনু ম্যানেজমেন্ট • Menu Management</p>
         </div>
-        <Button 
-          variant="glow" 
+        <Button
+          variant="glow"
           className="w-full sm:w-auto"
           onClick={() => {
             setIsAddModalOpen(true);
@@ -519,7 +523,7 @@ export default function Items() {
           <p className="text-muted-foreground mb-4">
             কোনো আইটেম পাওয়া যায়নি • Try adjusting your filters
           </p>
-          <Button 
+          <Button
             variant="glow"
             onClick={() => setIsAddModalOpen(true)}
           >
@@ -530,9 +534,9 @@ export default function Items() {
       )}
 
       {/* Add Item Modal */}
-      <Dialog 
-        open={isAddModalOpen} 
-          onOpenChange={(open) => {
+      <Dialog
+        open={isAddModalOpen}
+        onOpenChange={(open) => {
           setIsAddModalOpen(open);
           if (!open) {
             setIsEditMode(false);
@@ -783,9 +787,9 @@ export default function Items() {
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="glow" className="flex-1">
+              <Button type="submit" variant="glow" className="flex-1" disabled={submitting}>
                 <Plus className="w-4 h-4 mr-2" />
-                {isEditMode ? "Save Changes" : "Create Item"}
+                {submitting ? (isEditMode ? "Saving..." : "Creating...") : (isEditMode ? "Save Changes" : "Create Item")}
               </Button>
             </div>
           </form>

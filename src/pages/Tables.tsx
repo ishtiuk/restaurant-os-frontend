@@ -79,7 +79,7 @@ const getElapsedTime = (createdAt: string): string => {
   const created = new Date(dateStr).getTime();
   const diffMs = now - created;
   const diffMins = Math.floor(diffMs / 60000);
-  
+
   if (diffMins < 1) return "Just now";
   if (diffMins < 60) return `${diffMins} min ago`;
   const hours = Math.floor(diffMins / 60);
@@ -93,7 +93,7 @@ const getTimeColorClass = (createdAt: string): string => {
   const now = new Date().getTime();
   const created = new Date(dateStr).getTime();
   const diffMins = Math.floor((now - created) / 60000);
-  
+
   if (diffMins < 20) return "text-accent";  // Green - fresh
   if (diffMins < 40) return "text-primary"; // Yellow - attention
   return "text-destructive";                // Red - urgent
@@ -188,6 +188,8 @@ export default function Tables() {
   const [voidReason, setVoidReason] = useState("");
   const [voidedItems, setVoidedItems] = useState<VoidedItem[]>([]); // Local to order modal
   const [allVoidedItems, setAllVoidedItems] = useState<VoidedItem[]>([]); // Global across all tables
+  const [sendingKOT, setSendingKOT] = useState(false);
+  const [goingToBilling, setGoingToBilling] = useState(false);
 
   // Fetch waiters on mount
   useEffect(() => {
@@ -225,7 +227,7 @@ export default function Tables() {
     } else {
       order = tableOrders.find((o) => o.tableId === selectedTable.id && o.status !== "completed") || null;
     }
-    
+
     // Recalculate VAT if order exists but VAT is 0 and products have VAT rates
     if (order && order.vatAmount === 0) {
       const recalculatedVat = order.items.reduce((sum, item) => {
@@ -234,7 +236,7 @@ export default function Tables() {
         const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
         return sum + itemVat;
       }, 0);
-      
+
       if (recalculatedVat > 0) {
         // Return order with recalculated VAT for display
         return {
@@ -243,7 +245,7 @@ export default function Tables() {
         };
       }
     }
-    
+
     return order;
   }, [selectedTable, tableOrders]);
 
@@ -272,7 +274,7 @@ export default function Tables() {
           const voidedItemsData = await tablesApi.listVoidedItems({
             order_id: currentOrder.id,
           });
-          
+
           // Map to VoidedItem format
           const voidedItemsFromOrder: VoidedItem[] = voidedItemsData.map(item => ({
             itemId: String(item.product_id),
@@ -308,7 +310,7 @@ export default function Tables() {
   const handleTableClick = async (table: RestaurantTable) => {
     setSelectedTable(table);
     setVoidedItems([]); // Reset voided items
-    
+
     if (table.status === "empty" || table.status === "reserved") {
       // For empty tables, just open the dialog with empty cart
       // Order will be created when user adds items and saves
@@ -379,7 +381,7 @@ export default function Tables() {
       const existing = prev.find((c) => c.itemId === item.id);
       // Only check stock for packaged items (ice cream, coke, etc.)
       // Cooked items (biryani, curry) don't need stock tracking
-      
+
       // Check stock BEFORE adding (for both new and existing items)
       if (item.isPackaged) {
         // If stock is 0, prevent adding
@@ -391,7 +393,7 @@ export default function Tables() {
           });
           return prev;
         }
-        
+
         if (existing) {
           // Check if adding 1 more would exceed available stock
           const newQuantity = existing.quantity + 1;
@@ -500,10 +502,10 @@ export default function Tables() {
   const updateQuantity = (itemId: string, delta: number) => {
     const cartItem = cart.find(c => c.itemId === itemId);
     if (!cartItem) return;
-    
+
     const newQty = cartItem.quantity + delta;
     const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
-    
+
     // If reducing below baseline (items already sent to kitchen) AND void management is enabled, show void reason dialog
     // Otherwise, allow normal quantity reduction (even if it goes below baseline)
     if (newQty < baselineQty && delta < 0 && isFeatureEnabled("void_management")) {
@@ -517,7 +519,7 @@ export default function Tables() {
       setShowVoidReasonDialog(true);
       return;
     }
-    
+
     // Normal quantity update
     setCart((prev) =>
       prev
@@ -545,9 +547,9 @@ export default function Tables() {
   const removeFromCart = (itemId: string) => {
     const cartItem = cart.find(c => c.itemId === itemId);
     if (!cartItem) return;
-    
+
     const baselineQty = baselineItems.find((b) => b.itemId === itemId)?.quantity ?? 0;
-    
+
     // If item was sent to kitchen and void management is enabled, show void reason dialog
     // Otherwise, allow normal removal (even if item was sent)
     if (baselineQty > 0 && isFeatureEnabled("void_management")) {
@@ -561,7 +563,7 @@ export default function Tables() {
       setShowVoidReasonDialog(true);
       return;
     }
-    
+
     // Normal removal for items not yet sent
     setCart((prev) => prev.filter((c) => c.itemId !== itemId));
   };
@@ -635,7 +637,7 @@ export default function Tables() {
       // Refresh order data to get updated void status
       // This will update tableOrders with the latest data including void status
       await refreshTables();
-      
+
       // Always refresh items after voiding to get updated stock
       // Stock restoration happens in backend for packaged items that were sent to kitchen
       if (refreshItems) {
@@ -646,56 +648,56 @@ export default function Tables() {
         }
       }
 
-    const baselineQty = baselineItems.find((b) => b.itemId === pendingVoid.itemId)?.quantity ?? 0;
-    const voidedQuantity = pendingVoid.action === 'delete' 
-      ? baselineQty 
-      : baselineQty - (pendingVoid.newQuantity ?? 0);
+      const baselineQty = baselineItems.find((b) => b.itemId === pendingVoid.itemId)?.quantity ?? 0;
+      const voidedQuantity = pendingVoid.action === 'delete'
+        ? baselineQty
+        : baselineQty - (pendingVoid.newQuantity ?? 0);
 
       // Add to voided items list (both local and global) for UI display
-    const newVoidedItem: VoidedItem = {
-      itemId: pendingVoid.itemId,
-      itemName: pendingVoid.itemName,
-      originalQuantity: baselineQty,
-      voidedQuantity,
-      reason: voidReason,
+      const newVoidedItem: VoidedItem = {
+        itemId: pendingVoid.itemId,
+        itemName: pendingVoid.itemName,
+        originalQuantity: baselineQty,
+        voidedQuantity,
+        reason: voidReason,
         voidedBy: user?.name || "Current User",
-      voidedAt: new Date().toISOString(),
+        voidedAt: new Date().toISOString(),
         tableNo: selectedTable?.tableNo || "Unknown",
         orderId: currentOrder.id,
-    };
-    setVoidedItems(prev => [...prev, newVoidedItem]);
+      };
+      setVoidedItems(prev => [...prev, newVoidedItem]);
       setAllVoidedItems(prev => [...prev, newVoidedItem]);
 
-    // Update cart
-    if (pendingVoid.action === 'delete') {
-      setCart((prev) => prev.filter((c) => c.itemId !== pendingVoid.itemId));
-      setBaselineItems((prev) => prev.filter((b) => b.itemId !== pendingVoid.itemId));
-    } else if (pendingVoid.newQuantity !== undefined) {
-      setCart((prev) =>
-        prev.map((c) =>
-          c.itemId === pendingVoid.itemId
-            ? { ...c, quantity: pendingVoid.newQuantity!, total: pendingVoid.newQuantity! * c.unitPrice }
-            : c
-        )
-      );
-      setBaselineItems((prev) =>
-        prev.map((b) =>
-          b.itemId === pendingVoid.itemId
-            ? { ...b, quantity: pendingVoid.newQuantity!, total: pendingVoid.newQuantity! * b.unitPrice }
-            : b
-        )
-      );
-    }
+      // Update cart
+      if (pendingVoid.action === 'delete') {
+        setCart((prev) => prev.filter((c) => c.itemId !== pendingVoid.itemId));
+        setBaselineItems((prev) => prev.filter((b) => b.itemId !== pendingVoid.itemId));
+      } else if (pendingVoid.newQuantity !== undefined) {
+        setCart((prev) =>
+          prev.map((c) =>
+            c.itemId === pendingVoid.itemId
+              ? { ...c, quantity: pendingVoid.newQuantity!, total: pendingVoid.newQuantity! * c.unitPrice }
+              : c
+          )
+        );
+        setBaselineItems((prev) =>
+          prev.map((b) =>
+            b.itemId === pendingVoid.itemId
+              ? { ...b, quantity: pendingVoid.newQuantity!, total: pendingVoid.newQuantity! * b.unitPrice }
+              : b
+          )
+        );
+      }
 
-    toast({
-      title: "Item voided",
-      description: `${pendingVoid.itemName} has been voided`,
-    });
+      toast({
+        title: "Item voided",
+        description: `${pendingVoid.itemName} has been voided`,
+      });
 
-    // Reset void dialog state
-    setShowVoidReasonDialog(false);
-    setPendingVoid(null);
-    setVoidReason("");
+      // Reset void dialog state
+      setShowVoidReasonDialog(false);
+      setPendingVoid(null);
+      setVoidReason("");
     } catch (error: any) {
       toast({
         title: "Failed to void item",
@@ -755,12 +757,12 @@ export default function Tables() {
     }
 
     const previousWaiterId = selectedWaiterId;
-    
+
     // Don't update if selecting the same waiter
     if (newWaiterId === previousWaiterId) {
       return;
     }
-    
+
     // Only update via API if there's an existing order
     if (currentOrder) {
       setUpdatingWaiter(true);
@@ -773,7 +775,7 @@ export default function Tables() {
 
         // Update optimistically
         setSelectedWaiterId(newWaiterId);
-        
+
         // Verify order still exists before updating
         if (!currentOrder.id) {
           throw new Error("Order ID is missing");
@@ -782,13 +784,13 @@ export default function Tables() {
         await tablesApi.updateWaiter(currentOrder.id, {
           waiter_id: newWaiterId || null,
         });
-        
+
         // Refresh tables and orders to get updated data
         await refreshTables();
-        
+
         // Find the selected waiter name for the toast
         const waiterName = selectedWaiter ? selectedWaiter.name : "Unassigned";
-        
+
         toast({
           title: "Waiter updated",
           description: `${waiterName} assigned to ${selectedTable?.tableNo}`,
@@ -796,7 +798,7 @@ export default function Tables() {
       } catch (error: any) {
         // Revert selection on error
         setSelectedWaiterId(previousWaiterId);
-        
+
         // Extract error message
         let errorMessage = "Please try again";
         if (error?.response?.data?.detail) {
@@ -806,7 +808,7 @@ export default function Tables() {
         } else if (typeof error === 'string') {
           errorMessage = error;
         }
-        
+
         toast({
           title: "Failed to update waiter",
           description: errorMessage,
@@ -831,10 +833,10 @@ export default function Tables() {
 
     // Waiter validation
     if (!selectedWaiterId) {
-      toast({ 
-        title: "Waiter required", 
+      toast({
+        title: "Waiter required",
         description: "Please assign a waiter before sending to kitchen",
-        variant: "destructive" 
+        variant: "destructive"
       });
       return;
     }
@@ -845,28 +847,38 @@ export default function Tables() {
       return;
     }
 
-    // Filter out items with quantity 0 (voided items) before sending to backend
-    const mergedItems = cart
-      .filter((item) => item.quantity > 0) // Exclude voided items (quantity 0)
-      .map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
-    await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems, waiterId: selectedWaiterId ?? undefined });
-    setBaselineItems(mergedItems);
+    setSendingKOT(true);
+    try {
+      // Filter out items with quantity 0 (voided items) before sending to backend
+      const mergedItems = cart
+        .filter((item) => item.quantity > 0) // Exclude voided items (quantity 0)
+        .map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
+      await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems, waiterId: selectedWaiterId ?? undefined });
+      setBaselineItems(mergedItems);
 
-    // Show KOT print dialog
-    const kotCount = (currentOrder?.kots?.length ?? 0) + 1;
-    setLastKot({
-      kotNumber: kotCount,
-      items: deltaItems,
-      time: new Date(),
-    });
-    setShowKotDialog(true);
+      // Show KOT print dialog
+      const kotCount = (currentOrder?.kots?.length ?? 0) + 1;
+      setLastKot({
+        kotNumber: kotCount,
+        items: deltaItems,
+        time: new Date(),
+      });
+      setShowKotDialog(true);
 
-    toast({
-      title: `✅ KOT #${kotCount} Printed Successfully`,
-      description: `${deltaItems.reduce((sum, i) => sum + i.quantity, 0)} item(s) for ${
-        selectedTable.tableNo
-      }. Please deliver slip to kitchen.`,
-    });
+      toast({
+        title: `✅ KOT #${kotCount} Printed Successfully`,
+        description: `${deltaItems.reduce((sum, i) => sum + i.quantity, 0)} item(s) for ${selectedTable.tableNo
+          }. Please deliver slip to kitchen.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to send KOT",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingKOT(false);
+    }
   };
 
   // Feature 1: Validate waiter selection before billing
@@ -879,33 +891,44 @@ export default function Tables() {
 
     // Waiter validation (only if there are items to bill)
     if ((cart.length > 0 || baselineItems.length > 0) && !selectedWaiterId) {
-      toast({ 
-        title: "Waiter required", 
+      toast({
+        title: "Waiter required",
         description: "Please assign a waiter before proceeding to billing",
-        variant: "destructive" 
+        variant: "destructive"
       });
       return;
     }
 
-    const deltaItems = getDeltaItems();
-    if (deltaItems.length > 0) {
-      // Filter out items with quantity 0 (voided items) before sending to backend
-      const mergedItems = cart
-        .filter((item) => item.quantity > 0) // Exclude voided items (quantity 0)
-        .map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
-      await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems });
-      setBaselineItems(mergedItems);
-    }
+    setGoingToBilling(true);
+    try {
+      const deltaItems = getDeltaItems();
+      if (deltaItems.length > 0) {
+        // Filter out items with quantity 0 (voided items) before sending to backend
+        const mergedItems = cart
+          .filter((item) => item.quantity > 0) // Exclude voided items (quantity 0)
+          .map((item) => ({ ...item, total: item.quantity * item.unitPrice }));
+        await saveTableOrder(selectedTable.id, mergedItems, { kotItems: deltaItems });
+        setBaselineItems(mergedItems);
+      }
 
-    await markTableBilling(selectedTable.id);
-    setSelectedTable((prev) => (prev ? { ...prev, status: "billing" } : prev));
-    setShowOrderDialog(false);
-    setShowBillDialog(true);
+      await markTableBilling(selectedTable.id);
+      setSelectedTable((prev) => (prev ? { ...prev, status: "billing" } : prev));
+      setShowOrderDialog(false);
+      setShowBillDialog(true);
+    } catch (error: any) {
+      toast({
+        title: "Failed to proceed to billing",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setGoingToBilling(false);
+    }
   };
 
   const handleFinalizeBill = () => {
     if (!selectedTable || !currentOrder) return;
-    
+
     // Check if all items are voided (cart is empty and no active items)
     const activeItems = currentOrder.items.filter(item => item.quantity > 0);
     if (activeItems.length === 0) {
@@ -916,13 +939,13 @@ export default function Tables() {
       });
       return;
     }
-    
+
     setShowFinalizeConfirm(true);
   };
 
   const confirmFinalizeBill = () => {
     if (!selectedTable || !currentOrder) return;
-    
+
     // Double-check: prevent finalizing if all items are voided
     const activeItems = currentOrder.items.filter(item => item.quantity > 0);
     if (activeItems.length === 0) {
@@ -933,16 +956,16 @@ export default function Tables() {
       });
       return;
     }
-    
+
     setShowFinalizeConfirm(false);
     setBillLoading(true);
-    
+
     // Calculate service charge if enabled
     // Service charge must be calculated on VAT-inclusive amount (itemsTotal), not VAT-exclusive subtotal
     // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
     const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
     const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
-    
+
     finalizeTableBill(selectedTable.id, billPayment, {
       discount: billDiscount,
       serviceCharge: serviceChargeAmount,
@@ -973,17 +996,17 @@ export default function Tables() {
   const confirmClearTable = async () => {
     if (!selectedTable || !currentOrder) return;
     setShowClearTableConfirm(false);
-    
+
     try {
       await tablesApi.cancelOrder(currentOrder.id);
       toast({
         title: `✅ Table ${selectedTable.tableNo} cleared`,
         description: "Order cancelled and table reset to empty",
       });
-      
+
       // Refresh tables to get updated status
       await refreshTables();
-      
+
       // Close dialogs and reset state
       setShowOrderDialog(false);
       setShowBillDialog(false);
@@ -1029,7 +1052,7 @@ export default function Tables() {
 
       setNewTable({ tableNo: "", capacity: 4, location: "" });
       setShowAddTableDialog(false);
-      
+
       // Refresh tables from API
       await refreshTables();
     } catch (err: any) {
@@ -1156,8 +1179,8 @@ export default function Tables() {
                   <User className="w-5 h-5 text-muted-foreground" />
                   <div className="flex-1 flex items-center gap-3">
                     <Label className="text-sm font-medium whitespace-nowrap">Assign Waiter *</Label>
-                    <Select 
-                      value={selectedWaiterId ?? ""} 
+                    <Select
+                      value={selectedWaiterId ?? ""}
                       onValueChange={handleWaiterChange}
                       disabled={updatingWaiter}
                     >
@@ -1171,8 +1194,8 @@ export default function Tables() {
                           <SelectItem value="none" disabled>No active waiters found</SelectItem>
                         ) : (
                           waiters.map((waiter) => (
-                            <SelectItem 
-                              key={waiter.id} 
+                            <SelectItem
+                              key={waiter.id}
                               value={waiter.id}
                               disabled={waiter.id === selectedWaiterId}
                             >
@@ -1226,7 +1249,7 @@ export default function Tables() {
                     {/* Stock Badge - Bottom Right Corner */}
                     <div className="absolute bottom-2 right-2">
                       {item.isPackaged ? (
-                        <Badge 
+                        <Badge
                           variant={item.stockQty === 0 ? "destructive" : item.stockQty <= 5 ? "secondary" : "default"}
                           className="text-xs font-semibold shadow-lg"
                         >
@@ -1252,9 +1275,9 @@ export default function Tables() {
                   const activeCartItems = cart.filter((item) => item.quantity > 0);
                   if (activeCartItems.length === 0) {
                     return (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <UtensilsCrossed className="w-8 h-8 mb-2 opacity-50" />
-                    <p className="text-sm">No items added</p>
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <UtensilsCrossed className="w-8 h-8 mb-2 opacity-50" />
+                        <p className="text-sm">No items added</p>
                         {/* Show Clear Table button only when all items are voided */}
                         {currentOrder && voidedItems.length > 0 && (
                           <Button
@@ -1267,121 +1290,121 @@ export default function Tables() {
                             Clear Table
                           </Button>
                         )}
-                  </div>
+                      </div>
                     );
                   }
                   return (
-                  <>
+                    <>
                       {activeCartItems.map((item) => {
-                      const baselineQty = baselineItems.find((b) => b.itemId === item.itemId)?.quantity ?? 0;
-                      const isSentItem = baselineQty > 0;
-                      
-                      return (
-                        <div key={item.itemId} className="p-2 rounded-lg bg-muted/30">
-                          <div className="flex justify-between items-start mb-1">
-                            <div className="font-medium text-sm truncate flex-1 flex items-center gap-1">
-                              <span>{item.itemName}</span>
-                              {isSentItem && (
-                                <Badge variant="outline" className="text-xs">Sent</Badge>
-                              )}
-                            </div>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6" 
-                              onClick={() => {
-                                // Only use void handler if feature is enabled AND item is sent to kitchen
-                                if (isFeatureEnabled("void_management") && isSentItem) {
-                                  handleVoidDelete(item.itemId);
-                                } else {
-                                  // Normal removal - works even for sent items when void management is disabled
-                                  removeFromCart(item.itemId);
-                                }
-                              }}
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1">
-                              {isFeatureEnabled("void_management") && isSentItem ? (
-                                // If void management is enabled and item is sent, use void handlers
-                                <>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleVoidReduce(item.itemId)}>
-                                    <Minus className="w-3 h-3" />
-                                  </Button>
-                                  <span className="w-6 text-center text-sm">{item.quantity}</span>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
-                                    <Plus className="w-3 h-3" />
-                                  </Button>
-                                </>
-                              ) : (
-                                // Normal quantity controls - works for all items when void management is disabled
-                                <>
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, -1)}>
-                                <Minus className="w-3 h-3" />
-                              </Button>
-                              <span className="w-6 text-center text-sm">{item.quantity}</span>
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
-                                <Plus className="w-3 h-3" />
-                              </Button>
-                                </>
-                              )}
-                            </div>
-                            <span className="text-sm font-semibold">{formatCurrency(item.total)}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        const baselineQty = baselineItems.find((b) => b.itemId === item.itemId)?.quantity ?? 0;
+                        const isSentItem = baselineQty > 0;
 
-                    {/* Feature 3: Voided Items Section - Only show if feature is enabled */}
-                    {isFeatureEnabled("void_management") && voidedItems.length > 0 && (
-                      <div className="mt-4 pt-3 border-t border-destructive/30">
-                        <h5 className="text-sm font-semibold text-destructive flex items-center gap-1 mb-3">
-                          <XCircle className="w-4 h-4" />
-                          Voided Items ({voidedItems.length})
-                        </h5>
-                        <div className="rounded-md border border-destructive/20 overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-destructive/10 hover:bg-destructive/15">
-                                <TableHead className="w-[200px] text-xs font-semibold">Item Name</TableHead>
-                                <TableHead className="w-[80px] text-xs font-semibold text-center">Original Qty</TableHead>
-                                <TableHead className="w-[80px] text-xs font-semibold text-center">Voided Qty</TableHead>
-                                <TableHead className="text-xs font-semibold">Reason</TableHead>
-                                <TableHead className="w-[120px] text-xs font-semibold">Voided By</TableHead>
-                                <TableHead className="w-[120px] text-xs font-semibold">Time</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                        {voidedItems.map((voided, idx) => (
-                                <TableRow key={idx} className="hover:bg-destructive/5">
-                                  <TableCell className="font-medium text-sm line-through text-muted-foreground">
-                                    {voided.itemName}
-                                  </TableCell>
-                                  <TableCell className="text-center text-sm">
-                                    {voided.originalQuantity}
-                                  </TableCell>
-                                  <TableCell className="text-center text-sm text-destructive font-semibold">
-                                    -{voided.voidedQuantity}
-                                  </TableCell>
-                                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={voided.reason}>
-                                    {voided.reason}
-                                  </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {voided.voidedBy}
-                                  </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {formatTime(new Date(voided.voidedAt), timezone)}
-                                  </TableCell>
+                        return (
+                          <div key={item.itemId} className="p-2 rounded-lg bg-muted/30">
+                            <div className="flex justify-between items-start mb-1">
+                              <div className="font-medium text-sm truncate flex-1 flex items-center gap-1">
+                                <span>{item.itemName}</span>
+                                {isSentItem && (
+                                  <Badge variant="outline" className="text-xs">Sent</Badge>
+                                )}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  // Only use void handler if feature is enabled AND item is sent to kitchen
+                                  if (isFeatureEnabled("void_management") && isSentItem) {
+                                    handleVoidDelete(item.itemId);
+                                  } else {
+                                    // Normal removal - works even for sent items when void management is disabled
+                                    removeFromCart(item.itemId);
+                                  }
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1">
+                                {isFeatureEnabled("void_management") && isSentItem ? (
+                                  // If void management is enabled and item is sent, use void handlers
+                                  <>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleVoidReduce(item.itemId)}>
+                                      <Minus className="w-3 h-3" />
+                                    </Button>
+                                    <span className="w-6 text-center text-sm">{item.quantity}</span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
+                                      <Plus className="w-3 h-3" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  // Normal quantity controls - works for all items when void management is disabled
+                                  <>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, -1)}>
+                                      <Minus className="w-3 h-3" />
+                                    </Button>
+                                    <span className="w-6 text-center text-sm">{item.quantity}</span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateQuantity(item.itemId, 1)}>
+                                      <Plus className="w-3 h-3" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                              <span className="text-sm font-semibold">{formatCurrency(item.total)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Feature 3: Voided Items Section - Only show if feature is enabled */}
+                      {isFeatureEnabled("void_management") && voidedItems.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-destructive/30">
+                          <h5 className="text-sm font-semibold text-destructive flex items-center gap-1 mb-3">
+                            <XCircle className="w-4 h-4" />
+                            Voided Items ({voidedItems.length})
+                          </h5>
+                          <div className="rounded-md border border-destructive/20 overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-destructive/10 hover:bg-destructive/15">
+                                  <TableHead className="w-[200px] text-xs font-semibold">Item Name</TableHead>
+                                  <TableHead className="w-[80px] text-xs font-semibold text-center">Original Qty</TableHead>
+                                  <TableHead className="w-[80px] text-xs font-semibold text-center">Voided Qty</TableHead>
+                                  <TableHead className="text-xs font-semibold">Reason</TableHead>
+                                  <TableHead className="w-[120px] text-xs font-semibold">Voided By</TableHead>
+                                  <TableHead className="w-[120px] text-xs font-semibold">Time</TableHead>
                                 </TableRow>
-                        ))}
-                            </TableBody>
-                          </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {voidedItems.map((voided, idx) => (
+                                  <TableRow key={idx} className="hover:bg-destructive/5">
+                                    <TableCell className="font-medium text-sm line-through text-muted-foreground">
+                                      {voided.itemName}
+                                    </TableCell>
+                                    <TableCell className="text-center text-sm">
+                                      {voided.originalQuantity}
+                                    </TableCell>
+                                    <TableCell className="text-center text-sm text-destructive font-semibold">
+                                      -{voided.voidedQuantity}
+                                    </TableCell>
+                                    <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={voided.reason}>
+                                      {voided.reason}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {voided.voidedBy}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {formatTime(new Date(voided.voidedAt), timezone)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </>
+                      )}
+                    </>
                   );
                 })()}
               </div>
@@ -1402,22 +1425,22 @@ export default function Tables() {
                 </div>
               </div>
 
-              <Button 
-                variant="glow" 
-                className="mt-3" 
-                onClick={handleSendKot} 
-                disabled={!hasDeltaItems || !selectedWaiterId}
+              <Button
+                variant="glow"
+                className="mt-3"
+                onClick={handleSendKot}
+                disabled={!hasDeltaItems || !selectedWaiterId || sendingKOT}
               >
                 <Check className="w-4 h-4 mr-2" />
-                Send to Kitchen (KOT)
+                {sendingKOT ? "Sending..." : "Send to Kitchen (KOT)"}
               </Button>
               <Button
                 variant="outline"
                 className="mt-2"
                 onClick={handleGoToBilling}
-                disabled={cart.length === 0 && baselineItems.length === 0}
+                disabled={cart.length === 0 && baselineItems.length === 0 || goingToBilling}
               >
-                Go to Billing
+                {goingToBilling ? "Processing..." : "Go to Billing"}
               </Button>
             </div>
           </div>
@@ -1438,7 +1461,7 @@ export default function Tables() {
                   You are about to {pendingVoid?.action === 'delete' ? 'remove' : 'reduce quantity of'}{' '}
                   <strong>{pendingVoid?.itemName}</strong> that has already been sent to the kitchen.
                 </div>
-                
+
                 <div className="flex flex-wrap gap-2">
                   {voidReasonSuggestions.map((suggestion) => (
                     <Button
@@ -1452,7 +1475,7 @@ export default function Tables() {
                     </Button>
                   ))}
                 </div>
-                
+
                 <div>
                   <Label>Reason (minimum 10 characters) *</Label>
                   <Textarea
@@ -1507,7 +1530,7 @@ export default function Tables() {
                   extraDiscount={billDiscount}
                 />
               </div>
-              
+
               {/* Preview bill */}
               <div className="p-4 rounded-lg bg-muted/30 space-y-2 font-mono max-h-[40vh] overflow-auto custom-scrollbar">
                 <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
@@ -1533,21 +1556,21 @@ export default function Tables() {
                 <div className="border-t-2 border-dashed border-border pt-2 mt-2 space-y-1">
                   {(() => {
                     // Calculate VAT from order items if vatAmount is 0 or missing
-                    const calculatedVat = currentOrder.vatAmount > 0 
-                      ? currentOrder.vatAmount 
+                    const calculatedVat = currentOrder.vatAmount > 0
+                      ? currentOrder.vatAmount
                       : currentOrder.items.reduce((sum, item) => {
-                          if (!item.vatRate || item.vatRate === 0) return sum;
-                          const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
-                          return sum + itemVat;
-                        }, 0);
-                    
+                        if (!item.vatRate || item.vatRate === 0) return sum;
+                        const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                        return sum + itemVat;
+                      }, 0);
+
                     // Round VAT to integer (real-world requirement in Bangladesh)
                     const displayVat = Math.round(calculatedVat);
-                    
+
                     // Calculate VAT-exclusive subtotal from items (sum of item totals - VAT)
                     const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
                     const displaySubtotal = itemsTotal - calculatedVat;
-                    
+
                     return (
                       <>
                         <div className="flex justify-between text-sm">
@@ -1577,22 +1600,22 @@ export default function Tables() {
                   )}
                   {(() => {
                     // Calculate VAT from order items
-                    const calculatedVat = currentOrder.vatAmount > 0 
-                      ? currentOrder.vatAmount 
+                    const calculatedVat = currentOrder.vatAmount > 0
+                      ? currentOrder.vatAmount
                       : currentOrder.items.reduce((sum, item) => {
-                          if (!item.vatRate || item.vatRate === 0) return sum;
-                          const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
-                          return sum + itemVat;
-                        }, 0);
+                        if (!item.vatRate || item.vatRate === 0) return sum;
+                        const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                        return sum + itemVat;
+                      }, 0);
                     const displayVat = Math.round(calculatedVat);
-                    
+
                     // Calculate VAT-exclusive subtotal
                     const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
                     const displaySubtotal = Math.round(itemsTotal - calculatedVat);
-                    
+
                     // Total = Subtotal + VAT
                     const displayTotal = displaySubtotal + displayVat;
-                    
+
                     return (
                       <div className="flex justify-between font-bold text-lg pt-2 border-t-2 border-border">
                         <span>Total</span>
@@ -1619,7 +1642,7 @@ export default function Tables() {
                     {billServiceCharge ? "Applied" : "Apply"}
                   </Button>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Discount:</span>
                   <Input
@@ -1671,20 +1694,20 @@ export default function Tables() {
                     <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
                       <span>New Total:</span>
                       <span className="text-primary">
-                          {formatCurrency(
+                        {formatCurrency(
                           (() => {
                             // Calculate correct total: Subtotal (VAT-exclusive) + VAT + Service Charge - Discount
                             const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
                             // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
                             const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
                             // Calculate VAT-exclusive subtotal and VAT
-                            const calculatedVat = currentOrder.vatAmount > 0 
-                              ? currentOrder.vatAmount 
+                            const calculatedVat = currentOrder.vatAmount > 0
+                              ? currentOrder.vatAmount
                               : currentOrder.items.reduce((sum, item) => {
-                                  if (!item.vatRate || item.vatRate === 0) return sum;
-                                  const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
-                                  return sum + itemVat;
-                                }, 0);
+                                if (!item.vatRate || item.vatRate === 0) return sum;
+                                const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
+                                return sum + itemVat;
+                              }, 0);
                             const displayVat = Math.round(calculatedVat);
                             const displaySubtotal = Math.round(itemsTotal - calculatedVat);
                             // Total = Subtotal (VAT-exclusive) + VAT + Service Charge - Discount
@@ -1717,9 +1740,9 @@ export default function Tables() {
               </div>
 
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  className="flex-1" 
+                <Button
+                  variant="outline"
+                  className="flex-1"
                   onClick={() => printContent('table-bill-print', { title: 'Bill' })}
                 >
                   <Receipt className="w-4 h-4 mr-2" />
@@ -1760,14 +1783,14 @@ export default function Tables() {
                   waiterName={selectedWaiterName ?? undefined}
                 />
               </div>
-              
+
               {/* Preview KOT Slip */}
               <div className="p-6 rounded-lg bg-muted/30 font-mono text-sm border-2 border-dashed border-border">
                 <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
                   <h3 className="font-display font-bold text-2xl">🍳 KITCHEN ORDER</h3>
                   <p className="text-lg font-bold mt-1">KOT #{lastKot.kotNumber}</p>
                 </div>
-                
+
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between text-base">
                     <span className="font-bold">Table:</span>
@@ -1807,17 +1830,17 @@ export default function Tables() {
 
               {/* Action Buttons */}
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  className="flex-1" 
+                <Button
+                  variant="outline"
+                  className="flex-1"
                   onClick={() => printContent('kot-slip-print', { title: 'KOT' })}
                 >
                   <Printer className="w-4 h-4 mr-2" />
                   Print KOT
                 </Button>
-                <Button 
-                  variant="default" 
-                  className="flex-1" 
+                <Button
+                  variant="default"
+                  className="flex-1"
                   onClick={() => setShowKotDialog(false)}
                 >
                   Done
@@ -1944,71 +1967,71 @@ export default function Tables() {
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 pt-2">
-              <div className="flex items-center gap-2 text-base">
-                <UtensilsCrossed className="w-5 h-5 text-primary" />
-                <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
-              </div>
-              <div className="bg-muted/30 rounded-lg p-4 space-y-2">
-                {currentOrder && (() => {
-                  // Calculate VAT from order items
-                  const calculatedVat = currentOrder.vatAmount > 0 
-                    ? currentOrder.vatAmount 
-                    : currentOrder.items.reduce((sum, item) => {
+                <div className="flex items-center gap-2 text-base">
+                  <UtensilsCrossed className="w-5 h-5 text-primary" />
+                  <span className="font-semibold">Table: {selectedTable?.tableNo}</span>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                  {currentOrder && (() => {
+                    // Calculate VAT from order items
+                    const calculatedVat = currentOrder.vatAmount > 0
+                      ? currentOrder.vatAmount
+                      : currentOrder.items.reduce((sum, item) => {
                         if (!item.vatRate || item.vatRate === 0) return sum;
                         const itemVat = (item.total * item.vatRate) / (100 + item.vatRate);
                         return sum + itemVat;
                       }, 0);
-                  const displayVat = Math.round(calculatedVat);
-                  
-                  // Calculate VAT-exclusive subtotal
-                  const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
-                  const displaySubtotal = Math.round(itemsTotal - calculatedVat);
-                  
-                  // Service charge is calculated on VAT-inclusive amount (itemsTotal)
-                  // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
-                  const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
-                  
-                  // Total = Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
-                  const calculatedTotal = displaySubtotal + displayVat + serviceChargeAmount - billDiscount;
-                  
-                  return (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Total Amount:</span>
-                        <span className="text-2xl font-display font-bold text-primary">
-                          {formatCurrency(calculatedTotal)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal:</span>
-                        <span>{formatCurrency(displaySubtotal)}</span>
-                      </div>
-                      {displayVat > 0 && (
+                    const displayVat = Math.round(calculatedVat);
+
+                    // Calculate VAT-exclusive subtotal
+                    const itemsTotal = currentOrder.items.reduce((sum, item) => sum + item.total, 0);
+                    const displaySubtotal = Math.round(itemsTotal - calculatedVat);
+
+                    // Service charge is calculated on VAT-inclusive amount (itemsTotal)
+                    // IMPORTANT: Don't round service charge to match POS Sales behavior (52.5, not 53)
+                    const serviceChargeAmount = billServiceCharge ? itemsTotal * 0.05 : 0;
+
+                    // Total = Subtotal (VAT-exclusive) + VAT (rounded) + Service Charge - Discount
+                    const calculatedTotal = displaySubtotal + displayVat + serviceChargeAmount - billDiscount;
+
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Total Amount:</span>
+                          <span className="text-2xl font-display font-bold text-primary">
+                            {formatCurrency(calculatedTotal)}
+                          </span>
+                        </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">VAT:</span>
-                          <span>{formatCurrency(displayVat)}</span>
+                          <span className="text-muted-foreground">Subtotal:</span>
+                          <span>{formatCurrency(displaySubtotal)}</span>
                         </div>
-                      )}
-                      {serviceChargeAmount > 0 && (
-                        <div className="flex justify-between text-sm text-primary">
-                          <span>Service Charge:</span>
-                          <span>+{formatCurrency(serviceChargeAmount)}</span>
-                        </div>
-                      )}
-                      {billDiscount > 0 && (
-                        <div className="flex justify-between text-sm text-accent">
-                          <span>Discount:</span>
-                          <span>-{formatCurrency(billDiscount)}</span>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-              <div className="flex items-start gap-2 pt-2">
-                <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
+                        {displayVat > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">VAT:</span>
+                            <span>{formatCurrency(displayVat)}</span>
+                          </div>
+                        )}
+                        {serviceChargeAmount > 0 && (
+                          <div className="flex justify-between text-sm text-primary">
+                            <span>Service Charge:</span>
+                            <span>+{formatCurrency(serviceChargeAmount)}</span>
+                          </div>
+                        )}
+                        {billDiscount > 0 && (
+                          <div className="flex justify-between text-sm text-accent">
+                            <span>Discount:</span>
+                            <span>-{formatCurrency(billDiscount)}</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                <div className="flex items-start gap-2 pt-2">
+                  <CheckCircle2 className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
                   <div className="text-sm">
-                  Table will be marked as <span className="font-semibold text-accent">free</span> after payment is processed.
+                    Table will be marked as <span className="font-semibold text-accent">free</span> after payment is processed.
                   </div>
                 </div>
               </div>

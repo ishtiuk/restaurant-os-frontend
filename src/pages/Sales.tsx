@@ -68,12 +68,13 @@ export default function Sales() {
   const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
-  
+
   // Delivery info
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [completing, setCompleting] = useState(false);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -94,7 +95,7 @@ export default function Sales() {
       const existing = prev.find((c) => c.itemId === item.id);
       // Only check stock for packaged items (ice cream, coke, etc.)
       // Cooked items (biryani, curry) don't need stock tracking
-      
+
       // Check stock BEFORE adding (for both new and existing items)
       if (item.isPackaged) {
         // If stock is 0, prevent adding
@@ -106,7 +107,7 @@ export default function Sales() {
           });
           return prev;
         }
-        
+
         if (existing) {
           // Check if adding 1 more would exceed available stock
           const newQuantity = existing.quantity + 1;
@@ -226,7 +227,7 @@ export default function Sales() {
   );
   const isDineIn = orderType === "dine-in";
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     const dineInTableNo = isDineIn ? tableNo : undefined;
 
     if (isDineIn) {
@@ -301,35 +302,37 @@ export default function Sales() {
       }),
     };
 
-    // Complete sale (deducts stock and saves)
-    completeSale(saleData)
-      .then((sale) => {
-        setLastSale(sale);
-        setShowReceipt(true);
-        setCart([]);
-        setDiscount(0);
-        setTableNo("");
-        
-        // Clear delivery info
-        if (orderType === "delivery") {
-          setCustomerName("");
-          setCustomerPhone("");
-          setDeliveryAddress("");
-          setDeliveryNotes("");
-        }
+    setCompleting(true);
+    try {
+      // Complete sale (deducts stock and saves)
+      const sale = await completeSale(saleData);
+      setLastSale(sale);
+      setShowReceipt(true);
+      setCart([]);
+      setDiscount(0);
+      setTableNo("");
 
-        toast({
-          title: "✅ Sale completed!",
-          description: `Total: ${formatCurrency(total)} • Stock updated`,
-        });
-      })
-      .catch((error) => {
-        toast({
-          title: "Sale failed",
-          description: error.message,
-          variant: "destructive",
-        });
+      // Clear delivery info
+      if (orderType === "delivery") {
+        setCustomerName("");
+        setCustomerPhone("");
+        setDeliveryAddress("");
+        setDeliveryNotes("");
+      }
+
+      toast({
+        title: "✅ Sale completed!",
+        description: `Total: ${formatCurrency(total)} • Stock updated`,
       });
+    } catch (error: any) {
+      toast({
+        title: "Sale failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setCompleting(false);
+    }
   };
 
   return (
@@ -390,7 +393,7 @@ export default function Sales() {
                   {/* Stock Badge - Bottom Right Corner */}
                   <div className="absolute bottom-2 right-2">
                     {item.isPackaged ? (
-                      <Badge 
+                      <Badge
                         variant={item.stockQty === 0 ? "destructive" : item.stockQty <= 5 ? "secondary" : "default"}
                         className="text-xs font-semibold shadow-lg"
                       >
@@ -445,7 +448,7 @@ export default function Sales() {
               className="mt-3 bg-muted/50"
             />
           )}
-          
+
           {orderType === "delivery" && (
             <div className="mt-2.5 space-y-1.5">
               <div className="grid grid-cols-2 gap-1.5">
@@ -652,10 +655,10 @@ export default function Sales() {
             size="xl"
             className="w-full animate-glow-pulse"
             onClick={handleCheckout}
-            disabled={cart.length === 0 || isDineIn}
+            disabled={cart.length === 0 || isDineIn || completing}
           >
             <Check className="w-5 h-5 mr-2" />
-            Complete Sale • {formatCurrency(total)}
+            {completing ? "Completing..." : `Complete Sale • ${formatCurrency(total)}`}
           </Button>
         </div>
       </GlassCard>
@@ -680,7 +683,7 @@ export default function Sales() {
                   deliveryNotes={lastSale.deliveryNotes}
                 />
               </div>
-              
+
               {/* Preview receipt */}
               <div className="p-4 rounded-lg bg-muted/30 font-mono text-sm max-h-[50vh] overflow-auto custom-scrollbar">
                 <div className="text-center mb-4 border-b-2 border-dashed border-border pb-3">
@@ -693,7 +696,7 @@ export default function Sales() {
                     {lastSale.orderType === 'takeaway' ? '🛍️ Takeaway' : '🚚 Delivery'}
                   </Badge>
                 </div>
-                
+
                 {/* Delivery Info */}
                 {lastSale.orderType === 'delivery' && lastSale.customerName && (
                   <div className="mb-3 p-2 rounded bg-muted/50 text-xs">
@@ -704,7 +707,7 @@ export default function Sales() {
                     {lastSale.deliveryNotes && <p>Notes: {lastSale.deliveryNotes}</p>}
                   </div>
                 )}
-                
+
                 <div className="border-t border-dashed border-border pt-3 space-y-1">
                   {lastSale.items.map((item: any, index: number) => (
                     <div key={`${item.itemId}-${index}`} className="flex justify-between">
@@ -753,9 +756,9 @@ export default function Sales() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  className="flex-1" 
+                <Button
+                  variant="outline"
+                  className="flex-1"
                   onClick={() => printContent('sales-receipt-print', { title: 'Receipt' })}
                 >
                   <Printer className="w-4 h-4 mr-2" />
