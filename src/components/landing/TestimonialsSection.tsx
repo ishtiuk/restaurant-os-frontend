@@ -33,7 +33,7 @@ const testimonials: Testimonial[] = [
 
 export function TestimonialsSection() {
   return (
-    <section id="about" className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+    <section id="testimonials" className="py-20 sm:py-28 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Subtle gradient background */}
       <div className="absolute inset-0 bg-gradient-to-b from-muted/20 via-transparent to-muted/20" />
       

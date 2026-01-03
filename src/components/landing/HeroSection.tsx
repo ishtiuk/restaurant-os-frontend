@@ -80,34 +80,39 @@ export function HeroSection() {
           </div>
 
           {/* Main headline - refined typography */}
-          <h1 className="animate-fade-in stagger-1 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold tracking-tight leading-[1.1]">
-            <span className="gradient-text-animated">Simplify Your</span>
-            <br />
-            <span className="text-foreground">Restaurant Operations</span>
+          <h1 className="animate-fade-in stagger-1 text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold tracking-tight leading-[1.1]">
+            <span className="gradient-text-animated">Simplify</span>{" "}
+            <span className="text-foreground">Your Restaurant</span>
+            <br className="hidden sm:block" />
+            <span className="text-foreground sm:hidden"> </span>
+            <span className="text-foreground">Operations</span>
           </h1>
 
           {/* Subheadline - better readability */}
-          <p className="animate-fade-in stagger-2 text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed px-4">
+          <p className="animate-fade-in stagger-2 text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed px-2 sm:px-4">
             The all-in-one POS system that helps you manage orders, track inventory,
             and grow your restaurant with powerful real-time analytics.
           </p>
 
           {/* CTA Buttons - Enhanced visual weight */}
           <div className="animate-fade-in stagger-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-2">
-            <Link to="/login">
-              <Button
-                size="lg"
-                variant="glow"
-                className="text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto group btn-glow-hover"
-              >
-                Start Free Trial
-                <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
-              </Button>
-            </Link>
+            <div className="flex flex-col items-center gap-1.5">
+              <Link to="/login">
+                <Button
+                  size="lg"
+                  variant="glow"
+                  className="text-base sm:text-lg px-8 sm:px-10 py-5 sm:py-6 w-full sm:w-auto group btn-glow-hover animate-glow-pulse"
+                >
+                  Start Free Trial
+                  <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
+                </Button>
+              </Link>
+              <span className="text-xs text-muted-foreground/70 sm:absolute sm:mt-14">Setup in under 5 minutes</span>
+            </div>
             <Button
               size="lg"
               variant="outline"
-              className="text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto group border-border/50 hover:border-primary/30 hover:bg-primary/5"
+              className="text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto group border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-300"
             >
               <Play className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
               Watch Demo
@@ -135,27 +140,32 @@ export function HeroSection() {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Outer glow container */}
-          <div className="relative rounded-2xl p-[1px] bg-gradient-to-b from-border/80 to-border/20 overflow-hidden">
+          {/* Outer glow container with perspective */}
+          <div className="relative rounded-2xl p-[1px] bg-gradient-to-b from-border/80 via-border/40 to-border/10 overflow-hidden shadow-2xl shadow-primary/5">
             {/* Inner card with premium styling */}
-            <div className="rounded-2xl bg-card/80 backdrop-blur-sm p-1.5 sm:p-2 relative overflow-hidden">
-              {/* Subtle top highlight */}
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
+            <div className="rounded-2xl bg-card/90 backdrop-blur-md p-1 sm:p-1.5 relative overflow-hidden">
+              {/* Window chrome - macOS style */}
+              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/30 bg-muted/30">
+                <div className="w-2.5 h-2.5 rounded-full bg-destructive/80" />
+                <div className="w-2.5 h-2.5 rounded-full bg-primary/80" />
+                <div className="w-2.5 h-2.5 rounded-full bg-accent/80" />
+                <span className="ml-3 text-xs text-muted-foreground/50 font-medium">RestaurantOS — Dashboard</span>
+              </div>
 
               {/* Screenshot container */}
-              <div className="rounded-xl bg-muted overflow-hidden shadow-2xl relative group">
-                {/* Aspect ratio container - responsive */}
-                <div className="aspect-[16/10] sm:aspect-video bg-black/90 relative flex items-center justify-center">
+              <div className="rounded-b-xl bg-muted overflow-hidden relative group">
+                {/* Aspect ratio container - tighter on mobile */}
+                <div className="aspect-[4/3] sm:aspect-video bg-black/90 relative flex items-center justify-center">
                   {screenshots.map((screenshot, index) => (
                     <div
                       key={screenshot.title}
-                      className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentScreenshot ? "opacity-100" : "opacity-0"
+                      className={`absolute inset-0 transition-opacity duration-700 ease-out ${index === currentScreenshot ? "opacity-100" : "opacity-0"
                         }`}
                     >
                       <img
                         src={screenshot.url}
                         alt={screenshot.title}
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-cover sm:object-contain"
                         loading={index === 0 ? "eager" : "lazy"}
                       />
 

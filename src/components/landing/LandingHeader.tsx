@@ -2,13 +2,29 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Utensils, Menu, X } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const navLinks = [
   { label: "Features", href: "#features" },
   { label: "Pricing", href: "#pricing" },
-  { label: "About", href: "#about" },
+  { label: "Testimonials", href: "#testimonials" },
 ];
+
+const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+  e.preventDefault();
+  const targetId = href.replace('#', '');
+  const element = document.getElementById(targetId);
+  if (element) {
+    const headerOffset = 80;
+    const elementPosition = element.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+    
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'smooth'
+    });
+  }
+};
 
 export function LandingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -47,7 +63,8 @@ export function LandingHeader() {
               <a
                 key={link.label}
                 href={link.href}
-                className="relative px-4 py-2 text-muted-foreground hover:text-foreground transition-colors font-medium text-sm group"
+                onClick={(e) => scrollToSection(e, link.href)}
+                className="relative px-4 py-2 text-muted-foreground hover:text-foreground transition-colors font-medium text-sm group cursor-pointer"
               >
                 {link.label}
                 {/* Hover underline */}
@@ -77,13 +94,11 @@ export function LandingHeader() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9"
+              className="h-9 w-9 flex items-center justify-center"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              <div className="relative w-5 h-5">
-                <Menu className={`w-5 h-5 absolute inset-0 transition-all duration-300 ${mobileMenuOpen ? 'opacity-0 rotate-90' : 'opacity-100 rotate-0'}`} />
-                <X className={`w-5 h-5 absolute inset-0 transition-all duration-300 ${mobileMenuOpen ? 'opacity-100 rotate-0' : 'opacity-0 -rotate-90'}`} />
-              </div>
+              <Menu className={`w-5 h-5 absolute transition-all duration-300 ${mobileMenuOpen ? 'opacity-0 rotate-90 scale-75' : 'opacity-100 rotate-0 scale-100'}`} />
+              <X className={`w-5 h-5 absolute transition-all duration-300 ${mobileMenuOpen ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-75'}`} />
             </Button>
           </div>
         </div>
@@ -99,8 +114,11 @@ export function LandingHeader() {
               <a
                 key={link.label}
                 href={link.href}
-                className="block text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors py-3 px-2 rounded-lg font-medium"
-                onClick={() => setMobileMenuOpen(false)}
+                className="block text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors py-3 px-2 rounded-lg font-medium cursor-pointer"
+                onClick={(e) => {
+                  scrollToSection(e, link.href);
+                  setMobileMenuOpen(false);
+                }}
                 style={{ animationDelay: `${i * 50}ms` }}
               >
                 {link.label}
